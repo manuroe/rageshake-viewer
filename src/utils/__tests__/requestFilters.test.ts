@@ -27,6 +27,16 @@ describe('getTimeRangeUs', () => {
     expect(getTimeRangeUs(rawLines, null, null)).toBeNull();
   });
 
+  it('returns null when a filter is set but raw lines have no valid timestamps', () => {
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 1, timestampUs: 0 }),
+      createParsedLogLine({ lineNumber: 2, timestampUs: 0 }),
+    ];
+
+    const range = getTimeRangeUs(rawLines, 'start', 'end');
+    expect(range).toBeNull();
+  });
+
   it('calculates correct range for ISO datetime filters', () => {
     const baseUs = 1700000000000000; // fixed reference point
     const rawLines = [
@@ -282,6 +292,37 @@ describe('filterSyncRequests', () => {
     expect(result).toHaveLength(1);
     expect(result[0].requestId).toBe('match');
   });
+
+  it('does not apply time filtering when raw log lines have no valid timestamps', () => {
+    const requests = [
+      createSyncRequest({
+        requestId: 'incomplete',
+        status: '',
+        responseLineNumber: 0,
+        sendLineNumber: 1,
+      }),
+      createSyncRequest({
+        requestId: 'complete',
+        status: '200',
+        responseLineNumber: 2,
+        sendLineNumber: 1,
+      }),
+    ];
+
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 1, timestampUs: 0 }),
+      createParsedLogLine({ lineNumber: 2, timestampUs: 0 }),
+    ];
+
+    const result = filterSyncRequests(
+      requests,
+      rawLines,
+      makeFilters({ showIncomplete: true, startTime: 'start', endTime: 'end' })
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.requestId).sort()).toEqual(['complete', 'incomplete']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -472,5 +513,36 @@ describe('filterHttpRequests', () => {
     ];
     const result = filterHttpRequests(requests, [], makeFilters());
     expect(result).toHaveLength(3);
+  });
+
+  it('does not apply time filtering when raw log lines have no valid timestamps', () => {
+    const requests = [
+      createHttpRequest({
+        requestId: 'pending',
+        status: '',
+        responseLineNumber: 0,
+        sendLineNumber: 1,
+      }),
+      createHttpRequest({
+        requestId: 'done',
+        status: '200',
+        responseLineNumber: 2,
+        sendLineNumber: 1,
+      }),
+    ];
+
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 1, timestampUs: 0 }),
+      createParsedLogLine({ lineNumber: 2, timestampUs: 0 }),
+    ];
+
+    const result = filterHttpRequests(
+      requests,
+      rawLines,
+      makeFilters({ showIncompleteHttp: true, startTime: 'start', endTime: 'end' })
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.requestId).sort()).toEqual(['done', 'pending']);
   });
 });

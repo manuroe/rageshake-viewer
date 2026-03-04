@@ -38,8 +38,10 @@ export function getTimeRangeUs(
   if (!startFilter && !endFilter) return null;
 
   const times = rawLogLines.map((l) => l.timestampUs).filter((t) => t > 0);
-  const minLogTimeUs: TimestampMicros = times.length > 0 ? (Math.min(...times) as TimestampMicros) : 0;
-  const maxLogTimeUs: TimestampMicros = times.length > 0 ? (Math.max(...times) as TimestampMicros) : 0;
+  if (times.length === 0) return null;
+
+  const minLogTimeUs: TimestampMicros = Math.min(...times) as TimestampMicros;
+  const maxLogTimeUs: TimestampMicros = Math.max(...times) as TimestampMicros;
 
   return calculateTimeRangeMicros(startFilter, endFilter, minLogTimeUs, maxLogTimeUs);
 }
