@@ -27,6 +27,16 @@ describe('getTimeRangeUs', () => {
     expect(getTimeRangeUs(rawLines, null, null)).toBeNull();
   });
 
+  it('returns null when a filter is set but raw lines have no valid timestamps', () => {
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 1, timestampUs: 0 }),
+      createParsedLogLine({ lineNumber: 2, timestampUs: 0 }),
+    ];
+
+    const range = getTimeRangeUs(rawLines, 'start', 'end');
+    expect(range).toBeNull();
+  });
+
   it('calculates correct range for ISO datetime filters', () => {
     const baseUs = 1700000000000000; // fixed reference point
     const rawLines = [
@@ -193,7 +203,7 @@ describe('filterSyncRequests', () => {
     expect(result[0].requestId).toBe('early');
   });
 
-  it('always includes incomplete requests regardless of time range', () => {
+  it('filters incomplete requests by send timestamp when time range is active', () => {
     const baseUs = 1700000000000000 as const;
     const rawLines = [
       createParsedLogLine({ lineNumber: 1, timestampUs: baseUs }),
@@ -207,12 +217,19 @@ describe('filterSyncRequests', () => {
         responseLineNumber: 2,
         sendLineNumber: 0,
       }),
-      // Incomplete — no responseLineNumber, should always pass through
+      // Incomplete, inside range (send line 1)
       createSyncRequest({
-        requestId: 'incomplete',
+        requestId: 'incomplete-inside',
         status: '',
         responseLineNumber: 0,
         sendLineNumber: 1,
+      }),
+      // Incomplete, outside range (send line 2)
+      createSyncRequest({
+        requestId: 'incomplete-outside',
+        status: '',
+        responseLineNumber: 0,
+        sendLineNumber: 2,
       }),
     ];
 
@@ -226,7 +243,7 @@ describe('filterSyncRequests', () => {
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0].requestId).toBe('incomplete');
+    expect(result[0].requestId).toBe('incomplete-inside');
   });
 
   it('combines multiple filters (connId + status + time)', () => {
@@ -274,6 +291,37 @@ describe('filterSyncRequests', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].requestId).toBe('match');
+  });
+
+  it('does not apply time filtering when raw log lines have no valid timestamps', () => {
+    const requests = [
+      createSyncRequest({
+        requestId: 'incomplete',
+        status: '',
+        responseLineNumber: 0,
+        sendLineNumber: 1,
+      }),
+      createSyncRequest({
+        requestId: 'complete',
+        status: '200',
+        responseLineNumber: 2,
+        sendLineNumber: 1,
+      }),
+    ];
+
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 1, timestampUs: 0 }),
+      createParsedLogLine({ lineNumber: 2, timestampUs: 0 }),
+    ];
+
+    const result = filterSyncRequests(
+      requests,
+      rawLines,
+      makeFilters({ showIncomplete: true, startTime: 'start', endTime: 'end' })
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.requestId).sort()).toEqual(['complete', 'incomplete']);
   });
 });
 
@@ -415,7 +463,7 @@ describe('filterHttpRequests', () => {
     expect(result.map((r) => r.requestId).sort()).toEqual(['first', 'second']);
   });
 
-  it('always includes incomplete requests regardless of time range', () => {
+  it('filters incomplete HTTP requests by send timestamp when time range is active', () => {
     const baseUs = 1700000000000000 as const;
     const rawLines = [
       createParsedLogLine({ lineNumber: 1, timestampUs: baseUs }),
@@ -428,12 +476,19 @@ describe('filterHttpRequests', () => {
         status: '200',
         responseLineNumber: 2,
       }),
-      // Incomplete — should survive any time filter
+      // Incomplete, inside range (send line 1)
       createHttpRequest({
-        requestId: 'pending',
+        requestId: 'pending-inside',
         status: '',
         responseLineNumber: 0,
         sendLineNumber: 1,
+      }),
+      // Incomplete, outside range (send line 2)
+      createHttpRequest({
+        requestId: 'pending-outside',
+        status: '',
+        responseLineNumber: 0,
+        sendLineNumber: 2,
       }),
     ];
 
@@ -446,9 +501,8 @@ describe('filterHttpRequests', () => {
       makeFilters({ showIncompleteHttp: true, startTime: startISO, endTime: endISO })
     );
 
-    // Only the pending request should survive — completed-outside is outside the window
     expect(result).toHaveLength(1);
-    expect(result[0].requestId).toBe('pending');
+    expect(result[0].requestId).toBe('pending-inside');
   });
 
   it('no filter returns all completed requests', () => {
@@ -459,5 +513,36 @@ describe('filterHttpRequests', () => {
     ];
     const result = filterHttpRequests(requests, [], makeFilters());
     expect(result).toHaveLength(3);
+  });
+
+  it('does not apply time filtering when raw log lines have no valid timestamps', () => {
+    const requests = [
+      createHttpRequest({
+        requestId: 'pending',
+        status: '',
+        responseLineNumber: 0,
+        sendLineNumber: 1,
+      }),
+      createHttpRequest({
+        requestId: 'done',
+        status: '200',
+        responseLineNumber: 2,
+        sendLineNumber: 1,
+      }),
+    ];
+
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 1, timestampUs: 0 }),
+      createParsedLogLine({ lineNumber: 2, timestampUs: 0 }),
+    ];
+
+    const result = filterHttpRequests(
+      requests,
+      rawLines,
+      makeFilters({ showIncompleteHttp: true, startTime: 'start', endTime: 'end' })
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.requestId).sort()).toEqual(['done', 'pending']);
   });
 });

@@ -427,8 +427,9 @@ describe('SyncView - stats-compact with active time window', () => {
 
     // Shown must never exceed total
     expect(shown).toBeLessThanOrEqual(total);
-    // 3 completed in window + 2 incomplete = 5 shown, 5 total
-    expect(shown).toBe(5);
+    // Incomplete requests are time-filtered by send timestamp; both pending are outside the window.
+    // shown = 3 completed in window; total still counts all incomplete for denominator consistency.
+    expect(shown).toBe(3);
     expect(total).toBe(5);
   });
 
