@@ -45,22 +45,22 @@ export function getTimeRangeUs(
 }
 
 /**
- * Return true when the request's response line falls inside the given microsecond range.
- * Requests with no response line (responseLineNumber === 0) are never excluded by the
- * time filter — they are always "in scope" (incomplete requests belong to every window).
+ * Return true when the request falls inside the given microsecond range.
+ * For completed requests we use the response timestamp; for incomplete requests
+ * (no response line) we fall back to the send timestamp.
  */
-function isResponseInTimeRange(
-  responseLineNumber: number,
+function isRequestInTimeRange(
+  request: Pick<HttpRequest, 'responseLineNumber' | 'sendLineNumber'>,
   rawLogLines: ParsedLogLine[],
   timeRangeUs: { startUs: TimestampMicros; endUs: TimestampMicros }
 ): boolean {
-  if (!responseLineNumber) return true; // incomplete — never filtered by time
-  const responseLine = rawLogLines.find((l) => l.lineNumber === responseLineNumber);
-  if (!responseLine || !responseLine.timestampUs) return true; // no timestamp data — keep it
-  return (
-    responseLine.timestampUs >= timeRangeUs.startUs &&
-    responseLine.timestampUs <= timeRangeUs.endUs
-  );
+  const lineNumber = request.responseLineNumber || request.sendLineNumber;
+  if (!lineNumber) return false;
+
+  const line = rawLogLines.find((l) => l.lineNumber === lineNumber);
+  if (!line || !line.timestampUs) return false;
+
+  return line.timestampUs >= timeRangeUs.startUs && line.timestampUs <= timeRangeUs.endUs;
 }
 
 /**
@@ -92,8 +92,8 @@ export function filterSyncRequests(
       if (!statusCodeFilter.has(statusKey)) return false;
     }
 
-    // Time filter (incomplete requests always pass)
-    if (timeRangeUs && !isResponseInTimeRange(r.responseLineNumber, rawLogLines, timeRangeUs)) {
+    // Time filter
+    if (timeRangeUs && !isRequestInTimeRange(r, rawLogLines, timeRangeUs)) {
       return false;
     }
 
@@ -128,8 +128,8 @@ export function filterHttpRequests(
       if (!r.uri.toLowerCase().includes(uriFilter.toLowerCase())) return false;
     }
 
-    // Time filter (incomplete requests always pass)
-    if (timeRangeUs && !isResponseInTimeRange(r.responseLineNumber, rawLogLines, timeRangeUs)) {
+    // Time filter
+    if (timeRangeUs && !isRequestInTimeRange(r, rawLogLines, timeRangeUs)) {
       return false;
     }
 
