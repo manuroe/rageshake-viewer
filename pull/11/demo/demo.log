@@ -1,0 +1,180 @@
+2026-01-15T10:00:00.000000Z  INFO [matrix-rust-sdk] THIS IS A DEMO LOG, NOT REAL SDK OUTPUT
+2026-01-15T10:00:00.100000Z  INFO [matrix-rust-sdk] Matrix Rust SDK initializing
+2026-01-15T10:00:00.120000Z DEBUG [matrix-rust-sdk] Loading client configuration from storage
+2026-01-15T10:00:00.245000Z DEBUG [matrix-rust-sdk] Found cached session, attempting restore
+2026-01-15T10:00:00.380000Z  INFO [matrix-rust-sdk] Connecting to homeserver: https://matrix.example.org
+2026-01-15T10:00:00.510000Z TRACE [matrix-rust-sdk] TLS handshake complete
+2026-01-15T10:00:00.520000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:00.850000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="32768" request_duration=850ms}
+2026-01-15T10:00:00.860000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-002" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:00.870000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-003" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:00.880000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:01.700000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="65536" request_duration=820ms}
+2026-01-15T10:00:00.620000Z  INFO [matrix-rust-sdk] send{request_id="req-001" method=POST uri="https://matrix.example.org/_matrix/client/v3/login" request_size="128"}
+2026-01-15T10:00:00.980000Z  INFO [matrix-rust-sdk] send{request_id="req-001" method=POST uri="https://matrix.example.org/_matrix/client/v3/login" request_size="128" status=200 response_size="512" request_duration=360ms}
+2026-01-15T10:00:01.010000Z  INFO [matrix-rust-sdk] Login successful, user @alice:example.org
+2026-01-15T10:00:01.150000Z DEBUG [matrix-rust-sdk] send{request_id="req-002" method=GET uri="https://matrix.example.org/_matrix/client/v3/capabilities" request_size="0"}
+2026-01-15T10:00:01.310000Z DEBUG [matrix-rust-sdk] send{request_id="req-002" method=GET uri="https://matrix.example.org/_matrix/client/v3/capabilities" request_size="0" status=200 response_size="1024" request_duration=160ms}
+2026-01-15T10:00:01.420000Z DEBUG [matrix-rust-sdk] send{request_id="req-003" method=GET uri="https://matrix.example.org/_matrix/client/v3/pushrules/" request_size="0"}
+2026-01-15T10:00:01.580000Z DEBUG [matrix-rust-sdk] send{request_id="req-003" method=GET uri="https://matrix.example.org/_matrix/client/v3/pushrules/" request_size="0" status=200 response_size="2048" request_duration=160ms}
+2026-01-15T10:00:01.620000Z  INFO [matrix-rust-sdk] Starting initial sync (conn_id="room-list")
+2026-01-15T10:00:01.700000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:03.100000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="98304" request_duration=1400ms}
+2026-01-15T10:00:03.180000Z  INFO [matrix-rust-sdk] Initial sync complete: 42 rooms, 1280 events
+2026-01-15T10:00:03.250000Z DEBUG [matrix-rust-sdk] Decrypting room keys from sync response
+2026-01-15T10:00:03.310000Z TRACE [matrix-rust-sdk] Processed 14 to-device messages
+2026-01-15T10:00:03.450000Z DEBUG [matrix-rust-sdk] send{request_id="req-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/user/@alice:example.org/filter" request_size="0"}
+2026-01-15T10:00:03.600000Z DEBUG [matrix-rust-sdk] send{request_id="req-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/user/@alice:example.org/filter" request_size="0" status=200 response_size="512" request_duration=150ms}
+2026-01-15T10:00:03.700000Z  INFO [matrix-rust-sdk] SDK ready, beginning long-poll sync loop
+2026-01-15T10:00:03.800000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-002" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:00:04.100000Z  INFO [matrix-rust-sdk] Sending room message to !room1:example.org
+2026-01-15T10:00:04.150000Z  INFO [matrix-rust-sdk] send{request_id="req-010" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-001" request_size="256"}
+2026-01-15T10:00:04.410000Z  INFO [matrix-rust-sdk] send{request_id="req-010" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-001" request_size="256" status=200 response_size="64" request_duration=260ms}
+2026-01-15T10:00:05.250000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-002" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="4096" request_duration=1450ms}
+2026-01-15T10:00:05.280000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-003" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:00:05.500000Z DEBUG [matrix-rust-sdk] Received new room event in !room1:example.org
+2026-01-15T10:00:05.600000Z TRACE [matrix-rust-sdk] Event content decrypted successfully
+2026-01-15T10:00:05.900000Z DEBUG [matrix-rust-sdk] send{request_id="req-011" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/typing/@alice:example.org" request_size="32"}
+2026-01-15T10:00:06.040000Z DEBUG [matrix-rust-sdk] send{request_id="req-011" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/typing/@alice:example.org" request_size="32" status=200 response_size="2" request_duration=140ms}
+2026-01-15T10:00:06.810000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-003" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="2048" request_duration=1530ms}
+2026-01-15T10:00:06.840000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:00:07.200000Z DEBUG [matrix-rust-sdk] send{request_id="req-012" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/messages?dir=b&limit=50" request_size="0"}
+2026-01-15T10:00:07.510000Z DEBUG [matrix-rust-sdk] send{request_id="req-012" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/messages?dir=b&limit=50" request_size="0" status=200 response_size="16384" request_duration=310ms}
+2026-01-15T10:00:09.000000Z  INFO [matrix-rust-sdk] send{request_id="req-013" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-002" request_size="512"}
+2026-01-15T10:00:09.280000Z  INFO [matrix-rust-sdk] send{request_id="req-013" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-002" request_size="512" status=200 response_size="64" request_duration=280ms}
+2026-01-15T10:00:12.400000Z TRACE [matrix-rust-sdk] Processing 3 timeline events
+2026-01-15T10:00:14.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-020" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/state" request_size="0"}
+2026-01-15T10:00:14.310000Z DEBUG [matrix-rust-sdk] send{request_id="req-020" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/state" request_size="0" status=200 response_size="8192" request_duration=310ms}
+2026-01-15T10:00:18.500000Z  INFO [matrix-rust-sdk] send{request_id="req-021" method=POST uri="https://matrix.example.org/_matrix/media/v3/upload?filename=screenshot.png" request_size="204800"}
+2026-01-15T10:00:19.800000Z  INFO [matrix-rust-sdk] send{request_id="req-021" method=POST uri="https://matrix.example.org/_matrix/media/v3/upload?filename=screenshot.png" request_size="204800" status=200 response_size="128" request_duration=1300ms}
+2026-01-15T10:00:19.850000Z  INFO [matrix-rust-sdk] Media uploaded: mxc://example.org/AbcDef123
+2026-01-15T10:00:22.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-022" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room3:example.org/event/$abc123:example.org" request_size="0"}
+2026-01-15T10:00:22.350000Z DEBUG [matrix-rust-sdk] send{request_id="req-022" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room3:example.org/event/$abc123:example.org" request_size="0" status=403 response_size="128" request_duration=350ms}
+2026-01-15T10:00:22.380000Z  WARN [matrix-rust-sdk] Access denied fetching event $abc123:example.org in !room3:example.org (403 Forbidden)
+2026-01-15T10:00:25.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-023" method=GET uri="https://matrix.example.org/_matrix/client/v3/profile/@bob:example.org" request_size="0"}
+2026-01-15T10:00:25.410000Z DEBUG [matrix-rust-sdk] send{request_id="req-023" method=GET uri="https://matrix.example.org/_matrix/client/v3/profile/@bob:example.org" request_size="0" status=404 response_size="128" request_duration=410ms}
+2026-01-15T10:00:25.430000Z  WARN [matrix-rust-sdk] User profile not found for @bob:example.org
+2026-01-15T10:00:28.000000Z  INFO [matrix-rust-sdk] send{request_id="req-030" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-003" request_size="256"}
+2026-01-15T10:00:28.500000Z  INFO [matrix-rust-sdk] send{request_id="req-030" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-003" request_size="256" status=429 response_size="256" request_duration=500ms}
+2026-01-15T10:00:28.550000Z  WARN [matrix-rust-sdk] Rate limited sending message to !room1:example.org, retry-after=5000ms
+2026-01-15T10:00:32.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-031" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/state/m.room.name" request_size="0"}
+2026-01-15T10:00:32.230000Z DEBUG [matrix-rust-sdk] send{request_id="req-031" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/state/m.room.name" request_size="0" status=200 response_size="128" request_duration=230ms}
+2026-01-15T10:00:34.000000Z  INFO [matrix-rust-sdk] Retrying rate-limited message
+2026-01-15T10:00:34.100000Z  INFO [matrix-rust-sdk] send{request_id="req-032" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-003" request_size="256"}
+2026-01-15T10:00:34.380000Z  INFO [matrix-rust-sdk] send{request_id="req-032" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-003" request_size="256" status=200 response_size="64" request_duration=280ms}
+2026-01-15T10:00:36.860000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="1024" request_duration=30020ms}
+2026-01-15T10:00:36.880000Z  WARN [matrix-rust-sdk] Sync request sync-004 exceeded timeout (30000ms), actual duration: 30020ms
+2026-01-15T10:00:36.890000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-005" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:00:37.200000Z DEBUG [matrix-rust-sdk] send{request_id="req-033" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/members?membership=join" request_size="0"}
+2026-01-15T10:00:37.480000Z DEBUG [matrix-rust-sdk] send{request_id="req-033" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/members?membership=join" request_size="0" status=200 response_size="4096" request_duration=280ms}
+2026-01-15T10:00:38.370000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-005" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="2048" request_duration=1480ms}
+2026-01-15T10:00:38.400000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-006" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:00:38.700000Z DEBUG [matrix-rust-sdk] Message echo confirmed in sync
+2026-01-15T10:00:39.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-034" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/context/$xyz789:example.org?limit=10" request_size="0"}
+2026-01-15T10:00:39.310000Z DEBUG [matrix-rust-sdk] send{request_id="req-034" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/context/$xyz789:example.org?limit=10" request_size="0" status=200 response_size="4096" request_duration=310ms}
+2026-01-15T10:00:40.020000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-006" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="3072" request_duration=1620ms}
+2026-01-15T10:00:40.050000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-007" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:00:40.600000Z  INFO [matrix-rust-sdk] Establishing second sync connection for background push
+2026-01-15T10:00:40.680000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-101" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:42.080000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-101" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="4096" request_duration=1400ms}
+2026-01-15T10:00:42.110000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-102" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:00:43.200000Z DEBUG [matrix-rust-sdk] Second connection bootstrapped
+2026-01-15T10:00:45.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-040" method=POST uri="https://matrix.example.org/_matrix/media/v3/upload?filename=photo.jpg" request_size="1048576"}
+2026-01-15T10:00:46.300000Z DEBUG [matrix-rust-sdk] send{request_id="req-040" method=POST uri="https://matrix.example.org/_matrix/media/v3/upload?filename=photo.jpg" request_size="1048576" status=500 response_size="256" request_duration=1300ms}
+2026-01-15T10:00:46.330000Z ERROR [matrix-rust-sdk] Media upload failed: internal server error (500)
+2026-01-15T10:00:46.360000Z  WARN [matrix-rust-sdk] Scheduling media upload retry in 3000ms
+2026-01-15T10:00:50.000000Z  INFO [matrix-rust-sdk] Retrying media upload (attempt 2)
+2026-01-15T10:00:50.100000Z DEBUG [matrix-rust-sdk] send{request_id="req-041" method=POST uri="https://matrix.example.org/_matrix/media/v3/upload?filename=photo.jpg" request_size="1048576"}
+2026-01-15T10:00:51.400000Z DEBUG [matrix-rust-sdk] send{request_id="req-041" method=POST uri="https://matrix.example.org/_matrix/media/v3/upload?filename=photo.jpg" request_size="1048576" status=200 response_size="128" request_duration=1300ms}
+2026-01-15T10:00:51.430000Z  INFO [matrix-rust-sdk] Media upload succeeded on retry: mxc://example.org/XyzAbc456
+2026-01-15T10:00:54.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-042" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/state/m.room.encryption" request_size="0"}
+2026-01-15T10:00:54.200000Z DEBUG [matrix-rust-sdk] send{request_id="req-042" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/state/m.room.encryption" request_size="0" status=200 response_size="256" request_duration=200ms}
+2026-01-15T10:00:57.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-043" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/upload" request_size="4096"}
+2026-01-15T10:00:57.280000Z DEBUG [matrix-rust-sdk] send{request_id="req-043" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/upload" request_size="4096" status=200 response_size="512" request_duration=280ms}
+2026-01-15T10:00:57.330000Z TRACE [matrix-rust-sdk] One-time keys uploaded successfully (50 keys)
+2026-01-15T10:01:00.500000Z DEBUG [matrix-rust-sdk] send{request_id="req-044" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/query" request_size="512"}
+2026-01-15T10:01:00.850000Z DEBUG [matrix-rust-sdk] send{request_id="req-044" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/query" request_size="512" status=200 response_size="8192" request_duration=350ms}
+2026-01-15T10:01:00.900000Z TRACE [matrix-rust-sdk] Fetched device keys for 3 users
+2026-01-15T10:01:04.000000Z  WARN [matrix-rust-sdk] Rate limit warning: approaching threshold for room message sends
+2026-01-15T10:01:04.500000Z DEBUG [matrix-rust-sdk] send{request_id="req-045" method=PUT uri="https://matrix.example.org/_matrix/client/v3/sendToDevice/m.room_key/txn-001" request_size="768"}
+2026-01-15T10:01:04.930000Z DEBUG [matrix-rust-sdk] send{request_id="req-045" method=PUT uri="https://matrix.example.org/_matrix/client/v3/sendToDevice/m.room_key/txn-001" request_size="768" status=200 response_size="2" request_duration=430ms}
+2026-01-15T10:01:07.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-046" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/messages?dir=b&limit=100" request_size="0"}
+2026-01-15T10:01:07.480000Z DEBUG [matrix-rust-sdk] send{request_id="req-046" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/messages?dir=b&limit=100" request_size="0" status=200 response_size="32768" request_duration=480ms}
+2026-01-15T10:01:10.070000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-007" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="512" request_duration=30020ms}
+2026-01-15T10:01:10.090000Z  WARN [matrix-rust-sdk] Sync request sync-007 exceeded timeout (30000ms), actual duration: 30020ms
+2026-01-15T10:01:10.100000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-008" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:10.400000Z  INFO [matrix-rust-sdk] send{request_id="req-050" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-004" request_size="256"}
+2026-01-15T10:01:10.880000Z  INFO [matrix-rust-sdk] send{request_id="req-050" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-004" request_size="256" status=200 response_size="64" request_duration=480ms}
+2026-01-15T10:01:12.130000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-102" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="1024" request_duration=30020ms}
+2026-01-15T10:01:12.150000Z  WARN [matrix-rust-sdk] Sync request sync-102 exceeded timeout (30000ms), actual duration: 30020ms
+2026-01-15T10:01:11.650000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-008" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="2048" request_duration=1550ms}
+2026-01-15T10:01:11.680000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-009" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:12.160000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-103" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:12.400000Z DEBUG [matrix-rust-sdk] send{request_id="req-051" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/members?membership=join" request_size="0"}
+2026-01-15T10:01:12.680000Z DEBUG [matrix-rust-sdk] send{request_id="req-051" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/members?membership=join" request_size="0" status=200 response_size="4096" request_duration=280ms}
+2026-01-15T10:01:13.220000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-009" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="512" request_duration=1540ms}
+2026-01-15T10:01:13.710000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-103" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="512" request_duration=1550ms}
+2026-01-15T10:01:13.250000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-010" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:13.740000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-104" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:13.900000Z DEBUG [matrix-rust-sdk] send{request_id="req-052" method=POST uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/read_markers" request_size="128"}
+2026-01-15T10:01:14.070000Z DEBUG [matrix-rust-sdk] send{request_id="req-052" method=POST uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/read_markers" request_size="128" status=200 response_size="2" request_duration=170ms}
+2026-01-15T10:01:14.750000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-010" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="1024" request_duration=1500ms}
+2026-01-15T10:01:15.240000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-104" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="256" request_duration=1500ms}
+2026-01-15T10:01:14.780000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-011" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:15.270000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-105" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:15.500000Z DEBUG [matrix-rust-sdk] send{request_id="req-053" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/claim" request_size="256"}
+2026-01-15T10:01:15.780000Z DEBUG [matrix-rust-sdk] send{request_id="req-053" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/claim" request_size="256" status=200 response_size="1024" request_duration=280ms}
+2026-01-15T10:01:15.820000Z TRACE [matrix-rust-sdk] Claimed one-time keys for 2 devices
+2026-01-15T10:01:18.000000Z  INFO [matrix-rust-sdk] send{request_id="req-054" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-005" request_size="192"}
+2026-01-15T10:01:18.280000Z  INFO [matrix-rust-sdk] send{request_id="req-054" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-005" request_size="192" status=200 response_size="64" request_duration=280ms}
+2026-01-15T10:01:21.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-055" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/state/m.room.member/@alice:example.org" request_size="0"}
+2026-01-15T10:01:21.220000Z DEBUG [matrix-rust-sdk] send{request_id="req-055" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/state/m.room.member/@alice:example.org" request_size="0" status=200 response_size="512" request_duration=220ms}
+2026-01-15T10:01:24.500000Z  INFO [matrix-rust-sdk] send{request_id="req-056" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/send/m.room.message/tx-006" request_size="192"}
+2026-01-15T10:01:24.730000Z  INFO [matrix-rust-sdk] send{request_id="req-056" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/send/m.room.message/tx-006" request_size="192" status=401 response_size="128" request_duration=230ms}
+2026-01-15T10:01:24.760000Z ERROR [matrix-rust-sdk] Authentication failed sending to !room2:example.org: 401 Unauthorized — access token expired
+2026-01-15T10:01:24.800000Z  WARN [matrix-rust-sdk] Access token expired, initiating token refresh
+2026-01-15T10:01:24.900000Z  INFO [matrix-rust-sdk] send{request_id="req-057" method=POST uri="https://matrix.example.org/_matrix/client/v3/refresh" request_size="128"}
+2026-01-15T10:01:25.700000Z  INFO [matrix-rust-sdk] send{request_id="req-057" method=POST uri="https://matrix.example.org/_matrix/client/v3/refresh" request_size="128" status=200 response_size="512" request_duration=800ms}
+2026-01-15T10:01:25.730000Z  INFO [matrix-rust-sdk] Access token refreshed successfully
+2026-01-15T10:01:25.800000Z  INFO [matrix-rust-sdk] Retrying message send with refreshed token
+2026-01-15T10:01:25.900000Z  INFO [matrix-rust-sdk] send{request_id="req-058" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/send/m.room.message/tx-006" request_size="192"}
+2026-01-15T10:01:26.150000Z  INFO [matrix-rust-sdk] send{request_id="req-058" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/send/m.room.message/tx-006" request_size="192" status=200 response_size="64" request_duration=250ms}
+2026-01-15T10:01:27.500000Z  INFO [matrix-rust-sdk] send{request_id="req-059" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room3:example.org/send/m.room.message/tx-007" request_size="256"}
+2026-01-15T10:01:27.830000Z  INFO [matrix-rust-sdk] send{request_id="req-059" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room3:example.org/send/m.room.message/tx-007" request_size="256" status=400 response_size="256" request_duration=330ms}
+2026-01-15T10:01:27.860000Z  WARN [matrix-rust-sdk] Bad request sending to !room3:example.org: 400 M_UNKNOWN — room encryption algorithm mismatch
+2026-01-15T10:01:30.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-060" method=GET uri="https://matrix.example.org/_matrix/client/v3/account/whoami" request_size="0"}
+2026-01-15T10:01:30.180000Z DEBUG [matrix-rust-sdk] send{request_id="req-060" method=GET uri="https://matrix.example.org/_matrix/client/v3/account/whoami" request_size="0" status=200 response_size="256" request_duration=180ms}
+2026-01-15T10:01:33.000000Z  WARN [matrix-rust-sdk] Detected potential connectivity issue: response latency increasing
+2026-01-15T10:01:38.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-061" method=GET uri="https://matrix.example.org/_matrix/client/v3/devices" request_size="0"}
+2026-01-15T10:01:38.220000Z DEBUG [matrix-rust-sdk] send{request_id="req-061" method=GET uri="https://matrix.example.org/_matrix/client/v3/devices" request_size="0" status=200 response_size="2048" request_duration=220ms}
+2026-01-15T10:01:41.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-062" method=GET uri="https://matrix.example.org/_matrix/client/v3/joined_rooms" request_size="0"}
+2026-01-15T10:01:41.210000Z DEBUG [matrix-rust-sdk] send{request_id="req-062" method=GET uri="https://matrix.example.org/_matrix/client/v3/joined_rooms" request_size="0" status=200 response_size="512" request_duration=210ms}
+2026-01-15T10:01:44.800000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-011" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="512" request_duration=30020ms}
+2026-01-15T10:01:44.820000Z  WARN [matrix-rust-sdk] Sync request sync-011 exceeded timeout (30000ms), actual duration: 30020ms
+2026-01-15T10:01:45.290000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-105" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="256" request_duration=30020ms}
+2026-01-15T10:01:45.310000Z  WARN [matrix-rust-sdk] Sync request sync-105 exceeded timeout (30000ms), actual duration: 30020ms
+2026-01-15T10:01:44.830000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-012" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:45.320000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-106" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:45.600000Z DEBUG [matrix-rust-sdk] send{request_id="req-063" method=POST uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/receipt/m.read/$latest:example.org" request_size="2"}
+2026-01-15T10:01:45.790000Z DEBUG [matrix-rust-sdk] send{request_id="req-063" method=POST uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/receipt/m.read/$latest:example.org" request_size="2" status=200 response_size="2" request_duration=190ms}
+2026-01-15T10:01:46.330000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-012" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="4096" request_duration=1500ms}
+2026-01-15T10:01:46.860000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-106" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="1024" request_duration=1540ms}
+2026-01-15T10:01:46.360000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-013" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:46.890000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-107" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:46.600000Z DEBUG [matrix-rust-sdk] send{request_id="req-064" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/upload" request_size="4096"}
+2026-01-15T10:01:46.880000Z DEBUG [matrix-rust-sdk] send{request_id="req-064" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/upload" request_size="4096" status=200 response_size="512" request_duration=280ms}
+2026-01-15T10:01:46.920000Z TRACE [matrix-rust-sdk] One-time keys replenished (50 keys)
+2026-01-15T10:01:47.900000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-013" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="2048" request_duration=1540ms}
+2026-01-15T10:01:48.390000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-107" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="512" request_duration=1500ms}
+2026-01-15T10:01:47.930000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-014" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:48.420000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-108" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:48.100000Z  INFO [matrix-rust-sdk] send{request_id="req-065" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-008" request_size="128"}
+2026-01-15T10:01:48.360000Z  INFO [matrix-rust-sdk] send{request_id="req-065" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-008" request_size="128" status=200 response_size="64" request_duration=260ms}
+2026-01-15T10:01:49.430000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-014" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="1024" request_duration=1500ms}
+2026-01-15T10:01:49.920000Z  INFO [matrix-rust-sdk] conn_id="encryption" send{request_id="sync-108" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="256" request_duration=1500ms}
+2026-01-15T10:01:49.460000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-015" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
+2026-01-15T10:01:50.960000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-015" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="3072" request_duration=1500ms}
+2026-01-15T10:01:50.990000Z  INFO [matrix-rust-sdk] Session stable, all background tasks healthy
+2026-01-15T10:01:51.000000Z TRACE [matrix-rust-sdk] Memory usage: heap 48MB, cache 12MB
+2026-01-15T10:01:51.020000Z DEBUG [matrix-rust-sdk] Persisting sync token to storage
+2026-01-15T10:01:51.050000Z TRACE [matrix-rust-sdk] Cleanup cycle complete
