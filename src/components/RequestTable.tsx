@@ -89,6 +89,15 @@ export interface RequestTableProps {
 }
 
 /**
+ * Returns a unique numeric key for a request row, derived from line numbers.
+ * Using line numbers (rather than requestId) ensures uniqueness even when
+ * multiple requests share the same requestId.
+ */
+function getRowKey(req: HttpRequest): number {
+  return (req.sendLineNumber || req.responseLineNumber) as number;
+}
+
+/**
  * Reusable request timeline table component.
  * Displays requests in a two-panel layout: sticky columns on the left, waterfall timeline on the right.
  *
@@ -464,7 +473,7 @@ export function RequestTable({
                 {/* Left panel - sticky columns */}
                 <div className={styles.timelineRowsLeft} ref={leftPanelRef}>
                   {displayedRequests.map((req) => {
-                    const rowKey = req.sendLineNumber || req.responseLineNumber;
+                    const rowKey = getRowKey(req);
                     return (
                     <div
                       key={`sticky-${rowKey}`}
@@ -528,7 +537,7 @@ export function RequestTable({
                       const defaultBarColor = isIncomplete ? 'var(--http-incomplete)' : getHttpStatusColor(statusCode);
                       const barColor = getBarColor ? getBarColor(req, defaultBarColor) : defaultBarColor;
 
-                      const rowKey = req.sendLineNumber || req.responseLineNumber;
+                      const rowKey = getRowKey(req);
                       return (
                         <div
                           key={`waterfall-${rowKey}`}

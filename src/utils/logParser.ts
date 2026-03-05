@@ -120,10 +120,32 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       }
       const bucket = recordsByRequestId.get(requestId)!;
 
-      // Find the last record for this requestId that hasn't received a response yet.
-      // This correctly pairs a response with its corresponding send line even when
-      // multiple requests share the same requestId.
-      let rec = [...bucket].reverse().find(r => !r.responseLineNumber);
+      // Pair this response with the best matching send by scanning the bucket
+      // backwards (most-recent first) in a single pass.
+      // Priority:
+      //   1. Last send with matching method+uri that has no response yet.
+      //   2. Last send with no method/uri (response arrived before its send line).
+      //   3. Last send with no response yet (any method/uri).
+      const respMethod = respMatch.groups.method;
+      const respUri = respMatch.groups.uri;
+      let rec: Partial<HttpRequest> | undefined;
+      let fallbackEmpty: Partial<HttpRequest> | undefined;
+      let fallbackAny: Partial<HttpRequest> | undefined;
+      for (let idx = bucket.length - 1; idx >= 0; idx--) {
+        const candidate = bucket[idx];
+        if (candidate.responseLineNumber) continue;
+        if (candidate.method === respMethod && candidate.uri === respUri) {
+          rec = candidate;
+          break;
+        }
+        if (!fallbackEmpty && !candidate.method) {
+          fallbackEmpty = candidate;
+        }
+        if (!fallbackAny) {
+          fallbackAny = candidate;
+        }
+      }
+      if (!rec) rec = fallbackEmpty ?? fallbackAny;
       if (!rec) {
         // Response with no matching send: create a new record.
         rec = {};
@@ -158,7 +180,14 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       // and we pair the send into it instead of creating a duplicate.
       // If all existing records already have a send, this is a new independent
       // request sharing the same requestId, so we create a fresh record.
-      let rec = [...bucket].reverse().find(r => !r.sendLineNumber) ?? null;
+      // Walk backwards to avoid array allocation.
+      let rec: Partial<HttpRequest> | null = null;
+      for (let j = bucket.length - 1; j >= 0; j--) {
+        if (!bucket[j].sendLineNumber) {
+          rec = bucket[j];
+          break;
+        }
+      }
       if (!rec) {
         rec = {};
         bucket.push(rec);
