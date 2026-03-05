@@ -3,7 +3,7 @@
  * Tests rendering, user interactions, and edge cases.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { RequestTable } from '../RequestTable';
 import type { RequestTableProps, ColumnDef } from '../RequestTable';
@@ -14,11 +14,19 @@ import { mockVirtualizer } from '../../test/mocks';
 // Mock the virtualizer hook used by WaterfallTimeline
 vi.mock('@tanstack/react-virtual', () => mockVirtualizer());
 
+// Spy on navigate to verify onExpand routing
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('react-router-dom')>();
+  return { ...mod, useNavigate: () => mockNavigate };
+});
+
 // Mock LogDisplayView to avoid deep rendering
 vi.mock('../../views/LogDisplayView', () => ({
-  LogDisplayView: vi.fn(({ onClose }) => (
+  LogDisplayView: vi.fn(({ onClose, onExpand }) => (
     <div data-testid="log-display-view">
       <button onClick={onClose}>Close</button>
+      <button onClick={onExpand}>Expand</button>
     </div>
   )),
 }));
@@ -364,6 +372,47 @@ describe('RequestTable', () => {
       const { container } = renderWithRouter(<RequestTable {...createProps()} />);
 
       expect(container.querySelector('.app')).toBeInTheDocument();
+    });
+  });
+
+  describe('expanded log viewer', () => {
+    beforeEach(() => {
+      mockNavigate.mockClear();
+    });
+
+    it('navigates to /logs with start_line and end_line on onExpand', async () => {
+      const req = createHttpRequest({
+        requestId: 'REQ-LOG',
+        sendLineNumber: 10,
+        responseLineNumber: 20,
+      });
+      const rawLines = Array.from({ length: 25 }, (_, i) =>
+        createParsedLogLine({ lineNumber: i, timestampUs: 1700000000000000 + i * 1000000 })
+      );
+      useLogStore.getState().setHttpRequests([req], rawLines);
+
+      renderWithRouter(<RequestTable {...createProps({ filteredRequests: [req], totalCount: 1 })} />);
+
+      // Open the log viewer programmatically (rowKey = sendLineNumber=10)
+      act(() => {
+        useLogStore.setState({
+          openLogViewerIds: new Set<number>([10]),
+          expandedRows: new Set<number>([10]),
+        });
+      });
+
+      // The mocked LogDisplayView should be visible
+      expect(await screen.findByTestId('log-display-view')).toBeInTheDocument();
+
+      // Click Expand
+      fireEvent.click(screen.getByText('Expand'));
+
+      // Should navigate to /logs with start_line and end_line params
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      const navigatedUrl: string = mockNavigate.mock.calls[0][0] as string;
+      expect(navigatedUrl).toContain('start_line=10');
+      expect(navigatedUrl).toContain('end_line=20');
+      expect(navigatedUrl).toMatch(/^\/logs\?/);
     });
   });
 
