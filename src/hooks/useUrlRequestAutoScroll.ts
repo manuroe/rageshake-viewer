@@ -40,15 +40,17 @@ export function useUrlRequestAutoScroll(
       if (requestExists) {
         scrolledIdRef.current = reqId;
         
-        if (!openLogViewerIds.has(reqId)) {
-          openLogViewer(reqId);
+        const matchedReq = filteredRequests.find(r => r.requestId === reqId);
+        const rowKey = (matchedReq?.sendLineNumber || matchedReq?.responseLineNumber) as number;
+
+        if (!openLogViewerIds.has(rowKey)) {
+          openLogViewer(rowKey);
         }
-        if (!expandedRows.has(reqId)) {
-          toggleRowExpansion(reqId);
+        if (!expandedRows.has(rowKey)) {
+          toggleRowExpansion(rowKey);
         }
 
         const requestIndex = filteredRequests.findIndex(r => r.requestId === reqId);
-        const request = filteredRequests.find(r => r.requestId === reqId);
 
         const checkAndScroll = () => {
           const leftPanel = leftPanelRef.current;
@@ -78,8 +80,8 @@ export function useUrlRequestAutoScroll(
           attemptScroll(0);
           
           // Also scroll the waterfall panel horizontally to show the request bar
-          if (onScrollToRequest && request) {
-            onScrollToRequest(request);
+          if (onScrollToRequest && matchedReq) {
+            onScrollToRequest(matchedReq);
           }
         };
 

@@ -229,7 +229,7 @@ export function RequestTable({
   }, [timelineWidth]);
 
   /** Handle click on request ID - toggle expansion or open log viewer */
-  const handleRequestClick = useCallback((requestId: string, req?: HttpRequest) => {
+  const handleRequestClick = useCallback((rowKey: number, requestId: string, req?: HttpRequest) => {
     // Remove request_id parameter from URL if clicking a different request,
     // while preserving all other query params (e.g., scale, timeout, status).
     const hashValue = window.location.hash.startsWith('#')
@@ -246,13 +246,13 @@ export function RequestTable({
     }
 
     // If clicking the same request that's already open, close it
-    if (openLogViewerIds.has(requestId) && expandedRows.has(requestId)) {
-      closeLogViewer(requestId);
-      toggleRowExpansion(requestId);
+    if (openLogViewerIds.has(rowKey) && expandedRows.has(rowKey)) {
+      closeLogViewer(rowKey);
+      toggleRowExpansion(rowKey);
       return;
     }
     // Open clicked request and close all others atomically
-    setActiveRequest(requestId);
+    setActiveRequest(rowKey);
     
     // Scroll waterfall to show the request if we have the request object
     if (req && waterfallContainerRef.current) {
@@ -333,13 +333,13 @@ export function RequestTable({
 
   /** Render the expanded log viewer for a request */
   const renderExpandedLogViewer = () => {
-    const expandedRequestId = Array.from(openLogViewerIds).find(id => expandedRows.has(id));
-    if (!expandedRequestId) return null;
+    const expandedRowKey = Array.from(openLogViewerIds).find(id => expandedRows.has(id));
+    if (expandedRowKey === undefined) return null;
 
-    const req = displayedRequests.find(r => r.requestId === expandedRequestId);
+    const req = displayedRequests.find(r => getRowKey(r) === expandedRowKey);
     if (!req) return null;
 
-    const reqIndex = displayedRequests.findIndex(r => r.requestId === expandedRequestId);
+    const reqIndex = displayedRequests.findIndex(r => getRowKey(r) === expandedRowKey);
     const prevRequest = reqIndex > 0 ? displayedRequests[reqIndex - 1] : null;
     const nextRequest = reqIndex < displayedRequests.length - 1 ? displayedRequests[reqIndex + 1] : null;
 
@@ -356,8 +356,8 @@ export function RequestTable({
     return (
       <div className={styles.expandedLogViewer}>
         <LogDisplayView
-          key={expandedRequestId}
-          requestFilter={`"${expandedRequestId}"`}
+          key={expandedRowKey}
+          requestFilter={`"${req.requestId}"`}
           defaultShowOnlyMatching
           defaultLineWrap
           logLines={rawLogLines.map(line => ({
@@ -368,16 +368,16 @@ export function RequestTable({
           nextRequestLineRange={nextRequestLineRange}
           onExpand={() => {
             const params = new URLSearchParams();
-            params.set('filter', `"${expandedRequestId}"`);
+            params.set('filter', `"${req.requestId}"`);
             const { startTime: storeStart, endTime: storeEnd } = useLogStore.getState();
             if (storeStart) params.set('start', storeStart);
             if (storeEnd) params.set('end', storeEnd);
             void navigate(`/logs?${params.toString()}`);
           }}
           onClose={() => {
-            closeLogViewer(expandedRequestId);
-            if (expandedRows.has(expandedRequestId)) {
-              toggleRowExpansion(expandedRequestId);
+            closeLogViewer(expandedRowKey);
+            if (expandedRows.has(expandedRowKey)) {
+              toggleRowExpansion(expandedRowKey);
             }
           }}
         />
@@ -478,7 +478,7 @@ export function RequestTable({
                     <div
                       key={`sticky-${rowKey}`}
                       data-row-id={`sticky-${rowKey}`}
-                      className={`${styles.requestRow} ${openLogViewerIds.has(req.requestId) ? styles.selected : ''} ${(expandedRows.has(req.requestId) && openLogViewerIds.has(req.requestId)) ? styles.expanded : ''} ${!req.status ? styles.incomplete : ''}`}
+                      className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${!req.status ? styles.incomplete : ''}`}
                       style={{ minHeight: '28px', cursor: 'pointer' }}
                       onMouseEnter={() => handleRowMouseEnter(rowKey)}
                       onMouseLeave={() => handleRowMouseLeave(rowKey)}
@@ -495,7 +495,7 @@ export function RequestTable({
                                 data-testid={`request-id-${req.requestId}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleRequestClick(req.requestId, req);
+                                  handleRequestClick(rowKey, req.requestId, req);
                                 }}
                               >
                                 {col.getValue(req)}
@@ -542,7 +542,7 @@ export function RequestTable({
                         <div
                           key={`waterfall-${rowKey}`}
                           data-row-id={`waterfall-${rowKey}`}
-                          className={`${styles.requestRow} ${openLogViewerIds.has(req.requestId) ? styles.selected : ''} ${(expandedRows.has(req.requestId) && openLogViewerIds.has(req.requestId)) ? styles.expanded : ''} ${isIncomplete ? styles.incomplete : ''}`}
+                          className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${isIncomplete ? styles.incomplete : ''}`}
                           style={{ minHeight: '28px', cursor: 'pointer' }}
                           onMouseEnter={() => handleRowMouseEnter(rowKey)}
                           onMouseLeave={() => handleRowMouseLeave(rowKey)}

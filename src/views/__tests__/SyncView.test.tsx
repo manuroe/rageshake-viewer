@@ -125,7 +125,7 @@ describe('SyncView - ID Parameter Deep Linking', () => {
 
     await waitFor(() => {
       const { openLogViewerIds } = useLogStore.getState();
-      expect(openLogViewerIds.has('SYNC-5')).toBe(true);
+      expect(openLogViewerIds.has(10)).toBe(true); // SYNC-5: sendLineNumber = 5*2 = 10
     }, { timeout: 2000 });
   });
 
@@ -143,7 +143,7 @@ describe('SyncView - ID Parameter Deep Linking', () => {
 
     await waitFor(() => {
       const { expandedRows } = useLogStore.getState();
-      expect(expandedRows.has('SYNC-7')).toBe(true);
+      expect(expandedRows.has(14)).toBe(true); // SYNC-7: sendLineNumber = 7*2 = 14
     }, { timeout: 2000 });
   });
 
@@ -246,8 +246,8 @@ describe('SyncView - ID Parameter Deep Linking', () => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     const { openLogViewerIds, expandedRows } = useLogStore.getState();
-    expect(openLogViewerIds.has('SYNC-9')).toBe(false);
-    expect(expandedRows.has('SYNC-9')).toBe(false);
+    expect(openLogViewerIds.has(18)).toBe(false); // SYNC-9: sendLineNumber = 9*2 = 18
+    expect(expandedRows.has(18)).toBe(false);
     expect(mockScrollTo).not.toHaveBeenCalled();
   });
 
@@ -270,7 +270,7 @@ describe('SyncView - ID Parameter Deep Linking', () => {
 
     await waitFor(() => {
       const { openLogViewerIds } = useLogStore.getState();
-      expect(openLogViewerIds.has('SYNC:SPECIAL/CHARS')).toBe(true);
+      expect(openLogViewerIds.has(2)).toBe(true); // SYNC:SPECIAL/CHARS: sendLineNumber = 2
     }, { timeout: 2000 });
   });
 
@@ -306,7 +306,7 @@ describe('SyncView - ID Parameter Deep Linking', () => {
     // Wait for initial request to open
     await waitFor(() => {
       const { openLogViewerIds } = useLogStore.getState();
-      expect(openLogViewerIds.has('SYNC-2')).toBe(true);
+      expect(openLogViewerIds.has(4)).toBe(true); // SYNC-2: sendLineNumber = 2*2 = 4
     }, { timeout: 2000 });
 
     // Wait for all animations/effects to settle
@@ -343,7 +343,7 @@ describe('SyncView - ID Parameter Deep Linking', () => {
     // Wait for initial request to open
     await waitFor(() => {
       const { openLogViewerIds } = useLogStore.getState();
-      expect(openLogViewerIds.has('SYNC-3')).toBe(true);
+      expect(openLogViewerIds.has(6)).toBe(true); // SYNC-3: sendLineNumber = 3*2 = 6
     }, { timeout: 2000 });
 
     const originalHash = window.location.hash;

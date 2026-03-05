@@ -301,72 +301,72 @@ describe('logStore', () => {
 
   describe('toggleRowExpansion', () => {
     it('adds requestId to expandedRows when not present', () => {
-      useLogStore.getState().toggleRowExpansion('REQ-1');
+      useLogStore.getState().toggleRowExpansion(1);
       const state = useLogStore.getState();
 
-      expect(state.expandedRows.has('REQ-1')).toBe(true);
+      expect(state.expandedRows.has(1)).toBe(true);
     });
 
     it('removes requestId from expandedRows when already present', () => {
-      useLogStore.getState().toggleRowExpansion('REQ-1');
-      useLogStore.getState().toggleRowExpansion('REQ-1');
+      useLogStore.getState().toggleRowExpansion(1);
+      useLogStore.getState().toggleRowExpansion(1);
       const state = useLogStore.getState();
 
-      expect(state.expandedRows.has('REQ-1')).toBe(false);
+      expect(state.expandedRows.has(1)).toBe(false);
     });
 
     it('maintains other expanded rows when toggling', () => {
-      useLogStore.getState().toggleRowExpansion('REQ-1');
-      useLogStore.getState().toggleRowExpansion('REQ-2');
-      useLogStore.getState().toggleRowExpansion('REQ-1');
+      useLogStore.getState().toggleRowExpansion(1);
+      useLogStore.getState().toggleRowExpansion(2);
+      useLogStore.getState().toggleRowExpansion(1);
       const state = useLogStore.getState();
 
-      expect(state.expandedRows.has('REQ-1')).toBe(false);
-      expect(state.expandedRows.has('REQ-2')).toBe(true);
+      expect(state.expandedRows.has(1)).toBe(false);
+      expect(state.expandedRows.has(2)).toBe(true);
     });
   });
 
   describe('setActiveRequest', () => {
     it('clears all expanded rows and opens only the specified one', () => {
-      useLogStore.getState().toggleRowExpansion('REQ-1');
-      useLogStore.getState().toggleRowExpansion('REQ-2');
+      useLogStore.getState().toggleRowExpansion(1);
+      useLogStore.getState().toggleRowExpansion(2);
 
-      useLogStore.getState().setActiveRequest('REQ-3');
+      useLogStore.getState().setActiveRequest(3);
       const state = useLogStore.getState();
 
       expect(state.expandedRows.size).toBe(1);
-      expect(state.expandedRows.has('REQ-3')).toBe(true);
+      expect(state.expandedRows.has(3)).toBe(true);
     });
 
     it('also opens log viewer for the request', () => {
-      useLogStore.getState().openLogViewer('REQ-1');
+      useLogStore.getState().openLogViewer(1);
 
-      useLogStore.getState().setActiveRequest('REQ-2');
+      useLogStore.getState().setActiveRequest(2);
       const state = useLogStore.getState();
 
       expect(state.openLogViewerIds.size).toBe(1);
-      expect(state.openLogViewerIds.has('REQ-2')).toBe(true);
+      expect(state.openLogViewerIds.has(2)).toBe(true);
     });
   });
 
   describe('log viewer actions', () => {
     it('openLogViewer adds requestId to set', () => {
-      useLogStore.getState().openLogViewer('REQ-1');
-      useLogStore.getState().openLogViewer('REQ-2');
+      useLogStore.getState().openLogViewer(1);
+      useLogStore.getState().openLogViewer(2);
       const state = useLogStore.getState();
 
-      expect(state.openLogViewerIds.has('REQ-1')).toBe(true);
-      expect(state.openLogViewerIds.has('REQ-2')).toBe(true);
+      expect(state.openLogViewerIds.has(1)).toBe(true);
+      expect(state.openLogViewerIds.has(2)).toBe(true);
     });
 
     it('closeLogViewer removes requestId from set', () => {
-      useLogStore.getState().openLogViewer('REQ-1');
-      useLogStore.getState().openLogViewer('REQ-2');
-      useLogStore.getState().closeLogViewer('REQ-1');
+      useLogStore.getState().openLogViewer(1);
+      useLogStore.getState().openLogViewer(2);
+      useLogStore.getState().closeLogViewer(1);
       const state = useLogStore.getState();
 
-      expect(state.openLogViewerIds.has('REQ-1')).toBe(false);
-      expect(state.openLogViewerIds.has('REQ-2')).toBe(true);
+      expect(state.openLogViewerIds.has(1)).toBe(false);
+      expect(state.openLogViewerIds.has(2)).toBe(true);
     });
   });
 

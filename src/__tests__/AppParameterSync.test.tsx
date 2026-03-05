@@ -18,7 +18,7 @@ import { render, waitFor, act } from '@testing-library/react';
 import { useLogStore } from '../stores/logStore';
 import App from '../App';
 import { getHashParam } from '../test/uriTestHelpers';
-import { createHttpRequests, createParsedLogLines } from '../test/fixtures';
+import { createHttpRequest, createHttpRequests, createParsedLogLines } from '../test/fixtures';
 
 // Mock error boundary to prevent test failures from error display
 vi.mock('../components/ErrorBoundary', () => ({
@@ -152,7 +152,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
   });
 
   describe('URL → Store: Parsing request_id= parameter', () => {
-    it('parses request_id= parameter and sets activeRequest', async () => {
+    it('opens log viewer for request matching request_id= parameter', async () => {
       const requests = createHttpRequests(5);
       const logLines = createParsedLogLines(10);
       useLogStore.getState().setHttpRequests(requests, logLines);
@@ -163,14 +163,15 @@ describe('App.tsx - URL Parameter Synchronization', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        // setActiveRequest opens the log viewer and expands the row
-        expect(state.openLogViewerIds.has('REQ-2')).toBe(true);
-        expect(state.expandedRows.has('REQ-2')).toBe(true);
-      });
+        // useUrlRequestAutoScroll opens by rowKey (sendLineNumber): REQ-2 → sendLineNumber = 2*2 = 4
+        expect(state.openLogViewerIds.has(4)).toBe(true);
+        expect(state.expandedRows.has(4)).toBe(true);
+      }, { timeout: 2000 });
     });
 
     it('decodes URL-encoded request_id parameter', async () => {
-      const requests = createHttpRequests(5);
+      const specialReq = createHttpRequest({ requestId: 'REQ:SPECIAL/ID', sendLineNumber: 100 });
+      const requests = [...createHttpRequests(5), specialReq];
       const logLines = createParsedLogLines(10);
       useLogStore.getState().setHttpRequests(requests, logLines);
 
@@ -181,8 +182,9 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().openLogViewerIds.has('REQ:SPECIAL/ID')).toBe(true);
-      });
+        // REQ:SPECIAL/ID has sendLineNumber=100, so rowKey=100
+        expect(useLogStore.getState().openLogViewerIds.has(100)).toBe(true);
+      }, { timeout: 2000 });
     });
   });
 
@@ -203,10 +205,11 @@ describe('App.tsx - URL Parameter Synchronization', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        // Both should be applied
+        // Both should be applied: uriFilter from App.tsx, and log viewer from useUrlRequestAutoScroll
         expect(state.uriFilter).toBe('sync');
-        expect(state.openLogViewerIds.has('REQ-5')).toBe(true);
-      });
+        // REQ-5 → sendLineNumber = 5*2 = 10, so rowKey = 10
+        expect(state.openLogViewerIds.has(10)).toBe(true);
+      }, { timeout: 2000 });
     });
 
     it('handles filter=, status=, and time range together', async () => {

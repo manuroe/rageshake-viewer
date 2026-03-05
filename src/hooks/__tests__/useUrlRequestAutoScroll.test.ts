@@ -73,7 +73,7 @@ describe('useUrlRequestAutoScroll', () => {
   describe('auto-open behavior', () => {
     it('opens log viewer and expands row when request_id matches', () => {
       window.location.hash = '#?request_id=REQ-MATCH';
-      const req = createHttpRequest({ requestId: 'REQ-MATCH' });
+      const req = createHttpRequest({ requestId: 'REQ-MATCH', sendLineNumber: 42 });
       const { div } = makeMockLeftPanel();
       const leftRef = { current: div };
 
@@ -84,13 +84,14 @@ describe('useUrlRequestAutoScroll', () => {
         )
       );
 
-      expect(useLogStore.getState().openLogViewerIds.has('REQ-MATCH')).toBe(true);
-      expect(useLogStore.getState().expandedRows.has('REQ-MATCH')).toBe(true);
+      // rowKey = sendLineNumber = 42
+      expect(useLogStore.getState().openLogViewerIds.has(42)).toBe(true);
+      expect(useLogStore.getState().expandedRows.has(42)).toBe(true);
     });
 
     it('does not re-open on re-render when same request_id was already scrolled', () => {
       window.location.hash = '#?request_id=REQ-DUP';
-      const req = createHttpRequest({ requestId: 'REQ-DUP' });
+      const req = createHttpRequest({ requestId: 'REQ-DUP', sendLineNumber: 44 });
       const { div } = makeMockLeftPanel();
       const leftRef = { current: div };
 
@@ -101,22 +102,22 @@ describe('useUrlRequestAutoScroll', () => {
         )
       );
 
-      // First render should open it
-      expect(useLogStore.getState().openLogViewerIds.has('REQ-DUP')).toBe(true);
+      // First render should open it (rowKey = 44)
+      expect(useLogStore.getState().openLogViewerIds.has(44)).toBe(true);
 
       // Re-render without changing hash — scrolledIdRef.current prevents re-opening
       rerender();
       // Just verify it doesn't crash
-      expect(useLogStore.getState().openLogViewerIds.has('REQ-DUP')).toBe(true);
+      expect(useLogStore.getState().openLogViewerIds.has(44)).toBe(true);
     });
 
     it('does not call openLogViewer or toggleRowExpansion if already open/expanded', () => {
       window.location.hash = '#?request_id=REQ-PREOPEN';
-      const req = createHttpRequest({ requestId: 'REQ-PREOPEN' });
+      const req = createHttpRequest({ requestId: 'REQ-PREOPEN', sendLineNumber: 46 });
 
-      // Pre-open and pre-expand
-      useLogStore.getState().openLogViewer('REQ-PREOPEN');
-      useLogStore.getState().toggleRowExpansion('REQ-PREOPEN');
+      // Pre-open and pre-expand by rowKey
+      useLogStore.getState().openLogViewer(46);
+      useLogStore.getState().toggleRowExpansion(46);
 
       const { div } = makeMockLeftPanel();
       const leftRef = { current: div };
@@ -129,8 +130,8 @@ describe('useUrlRequestAutoScroll', () => {
       );
 
       // Should still have them open
-      expect(useLogStore.getState().openLogViewerIds.has('REQ-PREOPEN')).toBe(true);
-      expect(useLogStore.getState().expandedRows.has('REQ-PREOPEN')).toBe(true);
+      expect(useLogStore.getState().openLogViewerIds.has(46)).toBe(true);
+      expect(useLogStore.getState().expandedRows.has(46)).toBe(true);
     });
   });
 
@@ -140,7 +141,7 @@ describe('useUrlRequestAutoScroll', () => {
 
       // Create 50 requests before the target so requestIndex = 50, making scrollTarget >> 4
       const reqs: HttpRequest[] = [...createHttpRequests(50)];
-      const targetReq = createHttpRequest({ requestId: 'REQ-SCROLL' });
+      const targetReq = createHttpRequest({ requestId: 'REQ-SCROLL', sendLineNumber: 200 });
       reqs.push(targetReq);
 
       const { div, scrollToSpy } = makeMockLeftPanel();
@@ -155,7 +156,7 @@ describe('useUrlRequestAutoScroll', () => {
       );
 
       // The request is found and 1000ms timeout is registered
-      expect(useLogStore.getState().openLogViewerIds.has('REQ-SCROLL')).toBe(true);
+      expect(useLogStore.getState().openLogViewerIds.has(targetReq.sendLineNumber)).toBe(true);
 
       // Advance 1000ms → checkAndScroll fires → attemptScroll(0) called
       act(() => {
@@ -232,8 +233,8 @@ describe('useUrlRequestAutoScroll', () => {
     it('clears expanded and open state when no request_id in hash', () => {
       window.location.hash = '';
       useLogStore.setState({
-        expandedRows: new Set(['ROW-1', 'ROW-2']),
-        openLogViewerIds: new Set(['ROW-1']),
+        expandedRows: new Set([1, 2]),
+        openLogViewerIds: new Set([1]),
       });
 
       const leftRef = { current: null } as React.RefObject<HTMLDivElement | null>;
@@ -250,8 +251,8 @@ describe('useUrlRequestAutoScroll', () => {
     it('preserves expanded state on unmount when request_id is still in hash', () => {
       window.location.hash = '#?request_id=PRESERVE';
       useLogStore.setState({
-        expandedRows: new Set(['PRESERVE']),
-        openLogViewerIds: new Set(['PRESERVE']),
+        expandedRows: new Set([99]),
+        openLogViewerIds: new Set([99]),
       });
 
       const leftRef = { current: null } as React.RefObject<HTMLDivElement | null>;
@@ -262,7 +263,7 @@ describe('useUrlRequestAutoScroll', () => {
       unmount();
 
       // request_id is in hash → state should NOT be cleared
-      expect(useLogStore.getState().expandedRows.has('PRESERVE')).toBe(true);
+      expect(useLogStore.getState().expandedRows.has(99)).toBe(true);
     });
   });
 });
