@@ -243,20 +243,20 @@ describe('logParser', () => {
     });
 
     describe('regression: duplicate request_id', () => {
-      it('uses the last send line number when the same request_id is sent twice', () => {
-        // If the client retransmits with the same ID, only the last send's line
-        // number is recorded (the Map is keyed by request_id and sendLineNumber
-        // is always overwritten). All other stable fields retain their first value.
+      it('creates a separate record for each request when the same request_id is sent twice', () => {
+        // When the client reuses the same request_id for two distinct requests,
+        // both should appear as independent records in the parsed output.
         const send1 = SEND_LINE.replace('REQ-62', 'DUPE');
         const send2 = SEND_LINE.replace('REQ-62', 'DUPE');
         const content = [send1, send2].join('\n');
 
         const result = parseAllHttpRequests(content);
 
-        // Only one record in the result even though the same ID appeared twice
-        expect(result.httpRequests).toHaveLength(1);
-        // sendLineNumber should be from the second send (line 2)
-        expect(result.httpRequests[0].sendLineNumber).toBe(2);
+        // Both records should appear
+        expect(result.httpRequests).toHaveLength(2);
+        // Chronological order: first send at line 1, second at line 2
+        expect(result.httpRequests[0].sendLineNumber).toBe(1);
+        expect(result.httpRequests[1].sendLineNumber).toBe(2);
       });
     });
 

@@ -236,8 +236,10 @@ describe('RequestTable', () => {
       })} />);
 
       // Get the first row in the left panel
-      const leftRow = container.querySelector('[data-row-id="sticky-REQ-0"]');
-      const rightRow = container.querySelector('[data-row-id="waterfall-REQ-0"]');
+      // Row keys now use sendLineNumber || responseLineNumber (not requestId).
+      // For REQ-0 with sendLineNumber=0 (falsy), rowKey = responseLineNumber=1.
+      const leftRow = container.querySelector('[data-row-id="sticky-1"]');
+      const rightRow = container.querySelector('[data-row-id="waterfall-1"]');
 
       expect(leftRow).toBeInTheDocument();
       expect(rightRow).toBeInTheDocument();
@@ -272,8 +274,10 @@ describe('RequestTable', () => {
         totalCount: 2 
       })} />);
 
-      const leftRow = container.querySelector('[data-row-id="sticky-REQ-1"]');
-      const rightRow = container.querySelector('[data-row-id="waterfall-REQ-1"]');
+      // Row keys use sendLineNumber || responseLineNumber.
+      // REQ-1 has sendLineNumber=2, so rowKey=2.
+      const leftRow = container.querySelector('[data-row-id="sticky-2"]');
+      const rightRow = container.querySelector('[data-row-id="waterfall-2"]');
 
       // Simulate hover on waterfall row
       fireEvent.mouseEnter(rightRow!);

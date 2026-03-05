@@ -67,7 +67,11 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   }
 
   const lines = logContent.split('\n');
-  const records = new Map<string, Partial<HttpRequest>>();
+  // Map from requestId to all in-progress records for that ID.
+  // Multiple requests can share the same requestId; each gets its own record.
+  const recordsByRequestId = new Map<string, Partial<HttpRequest>[]>();
+  // Flat list preserving insertion order for final output.
+  const allRecordsList: Partial<HttpRequest>[] = [];
   const rawLogLines: ParsedLogLine[] = [];
   let linesWithTimestamps = 0;
 
@@ -111,11 +115,22 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       const durationUnit = respMatch.groups.duration_unit;
       const durationMs = Math.round(durationVal * (durationUnit === 's' ? 1000.0 : 1.0));
 
-      if (!records.has(requestId)) {
-        records.set(requestId, {});
+      if (!recordsByRequestId.has(requestId)) {
+        recordsByRequestId.set(requestId, []);
+      }
+      const bucket = recordsByRequestId.get(requestId)!;
+
+      // Find the last record for this requestId that hasn't received a response yet.
+      // This correctly pairs a response with its corresponding send line even when
+      // multiple requests share the same requestId.
+      let rec = [...bucket].reverse().find(r => !r.responseLineNumber);
+      if (!rec) {
+        // Response with no matching send: create a new record.
+        rec = {};
+        bucket.push(rec);
+        allRecordsList.push(rec);
       }
 
-      const rec = records.get(requestId)!;
       rec.requestId = requestId;
       rec.method = rec.method || respMatch.groups.method;
       rec.uri = rec.uri || respMatch.groups.uri;
@@ -132,15 +147,28 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     if (sendMatch && sendMatch.groups) {
       const requestId = sendMatch.groups.id;
 
-      if (!records.has(requestId)) {
-        records.set(requestId, {});
+      if (!recordsByRequestId.has(requestId)) {
+        recordsByRequestId.set(requestId, []);
+      }
+      const bucket = recordsByRequestId.get(requestId)!;
+
+      // Find the last record for this requestId that has NO sendLineNumber.
+      // This handles out-of-order logs where a response line appears before
+      // its matching send: in that case the response already created a record,
+      // and we pair the send into it instead of creating a duplicate.
+      // If all existing records already have a send, this is a new independent
+      // request sharing the same requestId, so we create a fresh record.
+      let rec = [...bucket].reverse().find(r => !r.sendLineNumber) ?? null;
+      if (!rec) {
+        rec = {};
+        bucket.push(rec);
+        allRecordsList.push(rec);
       }
 
-      const rec = records.get(requestId)!;
       rec.requestId = requestId;
-      rec.method = rec.method || sendMatch.groups.method;
-      rec.uri = rec.uri || sendMatch.groups.uri;
-      rec.requestSizeString = rec.requestSizeString || sendMatch.groups.req_size;
+      rec.method = sendMatch.groups.method;
+      rec.uri = sendMatch.groups.uri;
+      rec.requestSizeString = sendMatch.groups.req_size;
       rec.sendLineNumber = i + 1;
     }
   }
@@ -155,7 +183,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   }
 
   // Filter and convert to array - include any request with at least a send or response line
-  const allRequests = Array.from(records.values()).filter(
+  const allRequests = allRecordsList.filter(
     (rec): rec is HttpRequest =>
       !!rec.uri && (!!rec.sendLineNumber || !!rec.responseLineNumber)
   ) as HttpRequest[];

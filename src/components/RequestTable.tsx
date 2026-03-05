@@ -262,17 +262,17 @@ export function RequestTable({
   }, [openLogViewerIds, expandedRows, closeLogViewer, toggleRowExpansion, setActiveRequest, rawLogLines, minTime, totalDuration, timelineWidth, msPerPixel]);
 
   /** Handle mouse enter on a row - highlight both panels */
-  const handleRowMouseEnter = (requestId: string) => {
-    const leftRow = document.querySelector(`[data-row-id="sticky-${requestId}"]`);
-    const rightRow = document.querySelector(`[data-row-id="waterfall-${requestId}"]`);
+  const handleRowMouseEnter = (rowKey: number) => {
+    const leftRow = document.querySelector(`[data-row-id="sticky-${rowKey}"]`);
+    const rightRow = document.querySelector(`[data-row-id="waterfall-${rowKey}"]`);
     leftRow?.classList.add('row-hovered');
     rightRow?.classList.add('row-hovered');
   };
 
   /** Handle mouse leave on a row - remove highlight */
-  const handleRowMouseLeave = (requestId: string) => {
-    const leftRow = document.querySelector(`[data-row-id="sticky-${requestId}"]`);
-    const rightRow = document.querySelector(`[data-row-id="waterfall-${requestId}"]`);
+  const handleRowMouseLeave = (rowKey: number) => {
+    const leftRow = document.querySelector(`[data-row-id="sticky-${rowKey}"]`);
+    const rightRow = document.querySelector(`[data-row-id="waterfall-${rowKey}"]`);
     leftRow?.classList.remove('row-hovered');
     rightRow?.classList.remove('row-hovered');
   };
@@ -463,14 +463,16 @@ export function RequestTable({
               <div className={styles.timelineContentWrapper}>
                 {/* Left panel - sticky columns */}
                 <div className={styles.timelineRowsLeft} ref={leftPanelRef}>
-                  {displayedRequests.map((req) => (
+                  {displayedRequests.map((req) => {
+                    const rowKey = req.sendLineNumber || req.responseLineNumber;
+                    return (
                     <div
-                      key={`sticky-${req.requestId}`}
-                      data-row-id={`sticky-${req.requestId}`}
+                      key={`sticky-${rowKey}`}
+                      data-row-id={`sticky-${rowKey}`}
                       className={`${styles.requestRow} ${openLogViewerIds.has(req.requestId) ? styles.selected : ''} ${(expandedRows.has(req.requestId) && openLogViewerIds.has(req.requestId)) ? styles.expanded : ''} ${!req.status ? styles.incomplete : ''}`}
                       style={{ minHeight: '28px', cursor: 'pointer' }}
-                      onMouseEnter={() => handleRowMouseEnter(req.requestId)}
-                      onMouseLeave={() => handleRowMouseLeave(req.requestId)}
+                      onMouseEnter={() => handleRowMouseEnter(rowKey)}
+                      onMouseLeave={() => handleRowMouseLeave(rowKey)}
                       onClick={() => handleWaterfallRowClick(req)}
                     >
                       <div className={styles.requestRowSticky}>
@@ -503,7 +505,8 @@ export function RequestTable({
                         })}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Right panel - waterfall */}
@@ -525,14 +528,15 @@ export function RequestTable({
                       const defaultBarColor = isIncomplete ? 'var(--http-incomplete)' : getHttpStatusColor(statusCode);
                       const barColor = getBarColor ? getBarColor(req, defaultBarColor) : defaultBarColor;
 
+                      const rowKey = req.sendLineNumber || req.responseLineNumber;
                       return (
                         <div
-                          key={`waterfall-${req.requestId}`}
-                          data-row-id={`waterfall-${req.requestId}`}
+                          key={`waterfall-${rowKey}`}
+                          data-row-id={`waterfall-${rowKey}`}
                           className={`${styles.requestRow} ${openLogViewerIds.has(req.requestId) ? styles.selected : ''} ${(expandedRows.has(req.requestId) && openLogViewerIds.has(req.requestId)) ? styles.expanded : ''} ${isIncomplete ? styles.incomplete : ''}`}
                           style={{ minHeight: '28px', cursor: 'pointer' }}
-                          onMouseEnter={() => handleRowMouseEnter(req.requestId)}
-                          onMouseLeave={() => handleRowMouseLeave(req.requestId)}
+                          onMouseEnter={() => handleRowMouseEnter(rowKey)}
+                          onMouseLeave={() => handleRowMouseLeave(rowKey)}
                           onClick={() => handleWaterfallRowClick(req)}
                         >
                           <div style={{ position: 'relative', overflow: 'visible' }}>

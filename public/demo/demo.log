@@ -4,12 +4,12 @@
 2026-01-15T10:00:00.245000Z DEBUG [matrix-rust-sdk] Found cached session, attempting restore
 2026-01-15T10:00:00.380000Z  INFO [matrix-rust-sdk] Connecting to homeserver: https://matrix.example.org
 2026-01-15T10:00:00.510000Z TRACE [matrix-rust-sdk] TLS handshake complete
-2026-01-15T10:00:00.520000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
-2026-01-15T10:00:00.850000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="32768" request_duration=850ms}
-2026-01-15T10:00:00.860000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-002" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
-2026-01-15T10:00:00.870000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-003" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
-2026-01-15T10:00:00.880000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
-2026-01-15T10:00:01.700000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-pre-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="65536" request_duration=820ms}
+2026-01-15T10:00:00.520000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="pre-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:00.850000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="pre-001" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="32768" request_duration=850ms}
+2026-01-15T10:00:00.860000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="pre-002" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:00.870000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="pre-003" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:00.880000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="pre-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0"}
+2026-01-15T10:00:01.700000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="pre-004" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="65536" request_duration=820ms}
 2026-01-15T10:00:00.620000Z  INFO [matrix-rust-sdk] send{request_id="req-001" method=POST uri="https://matrix.example.org/_matrix/client/v3/login" request_size="128"}
 2026-01-15T10:00:00.980000Z  INFO [matrix-rust-sdk] send{request_id="req-001" method=POST uri="https://matrix.example.org/_matrix/client/v3/login" request_size="128" status=200 response_size="512" request_duration=360ms}
 2026-01-15T10:00:01.010000Z  INFO [matrix-rust-sdk] Login successful, user @alice:example.org
@@ -89,6 +89,8 @@
 2026-01-15T10:00:51.430000Z  INFO [matrix-rust-sdk] Media upload succeeded on retry: mxc://example.org/XyzAbc456
 2026-01-15T10:00:54.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-042" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/state/m.room.encryption" request_size="0"}
 2026-01-15T10:00:54.200000Z DEBUG [matrix-rust-sdk] send{request_id="req-042" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/state/m.room.encryption" request_size="0" status=200 response_size="256" request_duration=200ms}
+2026-01-15T10:00:54.300000Z DEBUG [matrix-rust-sdk] send{request_id="req-066" method=GET uri="https://matrix.example.org/_matrix/client/v3/profile/@alice:example.org" request_size="0"}
+2026-01-15T10:00:54.520000Z DEBUG [matrix-rust-sdk] send{request_id="req-066" method=GET uri="https://matrix.example.org/_matrix/client/v3/profile/@alice:example.org" request_size="0" status=200 response_size="384" request_duration=220ms}
 2026-01-15T10:00:57.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-043" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/upload" request_size="4096"}
 2026-01-15T10:00:57.280000Z DEBUG [matrix-rust-sdk] send{request_id="req-043" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/upload" request_size="4096" status=200 response_size="512" request_duration=280ms}
 2026-01-15T10:00:57.330000Z TRACE [matrix-rust-sdk] One-time keys uploaded successfully (50 keys)
@@ -178,3 +180,6 @@
 2026-01-15T10:01:51.000000Z TRACE [matrix-rust-sdk] Memory usage: heap 48MB, cache 12MB
 2026-01-15T10:01:51.020000Z DEBUG [matrix-rust-sdk] Persisting sync token to storage
 2026-01-15T10:01:51.050000Z TRACE [matrix-rust-sdk] Cleanup cycle complete
+2026-01-15T10:01:51.100000Z  INFO [matrix-rust-sdk] Request ID counter reset after reconnect; IDs may be reused from this point
+2026-01-15T10:01:51.360000Z DEBUG [matrix-rust-sdk] send{request_id="req-066" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/query" request_size="256"}
+2026-01-15T10:01:51.600000Z DEBUG [matrix-rust-sdk] send{request_id="req-066" method=POST uri="https://matrix.example.org/_matrix/client/v3/keys/query" request_size="256" status=200 response_size="2048" request_duration=240ms}
