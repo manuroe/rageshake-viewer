@@ -82,7 +82,8 @@ describe('App routing fallback', () => {
         const state = useLogStore.getState();
         expect(state.uriFilter).toBe('sync');
         // request_id should trigger auto-open
-        expect(state.openLogViewerIds.has('REQ-5')).toBe(true);
+        // REQ-5: sendLineNumber = 5*2 = 10 → rowKey = 10
+        expect(state.openLogViewerIds.has(10)).toBe(true);
       });
     });
 
@@ -111,7 +112,8 @@ describe('App routing fallback', () => {
         expect(state.timelineScale).toBe(25);
         expect(state.startTime).not.toBeNull();
         expect(state.endTime).not.toBeNull();
-        expect(state.openLogViewerIds.has('REQ-3')).toBe(true);
+        // REQ-3: sendLineNumber = 3*2 = 6 → rowKey = 6
+        expect(state.openLogViewerIds.has(6)).toBe(true);
       });
     });
 
@@ -131,7 +133,8 @@ describe('App routing fallback', () => {
         expect(state.uriFilter).toBe('sync');
         expect(state.statusCodeFilter?.has('500')).toBe(true);
         expect(state.timelineScale).toBe(30);
-        expect(state.openLogViewerIds.has('REQ-2')).toBe(true);
+        // REQ-2: sendLineNumber = 2*2 = 4 → rowKey = 4
+        expect(state.openLogViewerIds.has(4)).toBe(true);
       });
     });
   });

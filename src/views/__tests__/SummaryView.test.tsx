@@ -848,6 +848,69 @@ describe('SummaryView', () => {
       // The HTTP Requests Over Time heading should show "1 incomplete"
       expect(screen.getByText(/1 incomplete/)).toBeInTheDocument();
     });
+
+    it('aggregates upload/download bytes across duplicate request IDs and skips requests with missing timestamps', () => {
+      const BASE_B = 1_705_000_000_000_000 as TimestampMicros;
+      const lines = [
+        createParsedLogLine({ lineNumber: 100, timestampUs: BASE_B }),
+        createParsedLogLine({ lineNumber: 101, timestampUs: (BASE_B + 1_000_000) as TimestampMicros }),
+        createParsedLogLine({ lineNumber: 102, timestampUs: (BASE_B + 2_000_000) as TimestampMicros }),
+        createParsedLogLine({ lineNumber: 103, timestampUs: (BASE_B + 3_000_000) as TimestampMicros }),
+      ];
+
+      const completedA = createHttpRequest({
+        requestId: 'REQ-DUPE',
+        requestSize: 100,
+        responseSize: 200,
+        sendLineNumber: 100,
+        responseLineNumber: 101,
+      });
+      const completedB = createHttpRequest({
+        requestId: 'REQ-DUPE',
+        requestSize: 300,
+        responseSize: 400,
+        sendLineNumber: 101,
+        responseLineNumber: 102,
+      });
+      const incomplete = createHttpRequest({
+        requestId: 'REQ-INCOMPLETE',
+        status: '',
+        requestSize: 50,
+        responseSize: 0,
+        sendLineNumber: 103,
+        responseLineNumber: 0,
+      });
+      const completedMissingTimestamp = createHttpRequest({
+        requestId: 'REQ-MISSING-RESP-TS',
+        requestSize: 999,
+        responseSize: 999,
+        sendLineNumber: 100,
+        responseLineNumber: 999,
+      });
+      const incompleteMissingTimestamp = createHttpRequest({
+        requestId: 'REQ-MISSING-SEND-TS',
+        status: '',
+        requestSize: 999,
+        responseSize: 0,
+        sendLineNumber: 998,
+        responseLineNumber: 0,
+      });
+
+      useLogStore
+        .getState()
+        .setHttpRequests(
+          [completedA, completedB, incomplete, completedMissingTimestamp, incompleteMissingTimestamp],
+          lines
+        );
+
+      renderSummaryView();
+
+      // Included: completedA + completedB + incomplete => upload 450B, download 600B.
+      // Excluded: requests whose mapped send/response timestamp line does not exist.
+      expect(
+        screen.getByText(/HTTP Requests Over Time: 3 requests \(1 incomplete\) — ↑ 450 B \/ ↓ 600 B/)
+      ).toBeInTheDocument();
+    });
   });
 
   // ============================================================================

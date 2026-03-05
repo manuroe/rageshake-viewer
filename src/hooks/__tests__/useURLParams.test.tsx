@@ -136,6 +136,38 @@ describe('useURLParams', () => {
 
       expect(result.current.filter).toBe('/_matrix/client');
     });
+
+    it('reads lineRange from start_line and end_line params', () => {
+      const { result } = renderHook(() => useURLParams(), {
+        wrapper: createWrapper(['/?start_line=100&end_line=200']),
+      });
+
+      expect(result.current.lineRange).toEqual({ start: 100, end: 200 });
+    });
+
+    it('returns null lineRange when start_line/end_line params are absent', () => {
+      const { result } = renderHook(() => useURLParams(), {
+        wrapper: createWrapper(['/']),
+      });
+
+      expect(result.current.lineRange).toBeNull();
+    });
+
+    it('returns null lineRange when start_line is NaN', () => {
+      const { result } = renderHook(() => useURLParams(), {
+        wrapper: createWrapper(['/?start_line=invalid&end_line=200']),
+      });
+
+      expect(result.current.lineRange).toBeNull();
+    });
+
+    it('returns null lineRange when end_line is NaN', () => {
+      const { result } = renderHook(() => useURLParams(), {
+        wrapper: createWrapper(['/?start_line=100&end_line=bad']),
+      });
+
+      expect(result.current.lineRange).toBeNull();
+    });
   });
 
   describe('writing params', () => {
@@ -300,6 +332,30 @@ describe('useURLParams', () => {
       });
 
       expect(result.current.timeout).toBeNull();
+    });
+
+    it('setLineRange sets start_line and end_line params', () => {
+      const { result } = renderHook(() => useURLParams(), {
+        wrapper: createWrapper(['/']),
+      });
+
+      act(() => {
+        result.current.setLineRange({ start: 50, end: 100 });
+      });
+
+      expect(result.current.lineRange).toEqual({ start: 50, end: 100 });
+    });
+
+    it('setLineRange with null clears start_line and end_line params', () => {
+      const { result } = renderHook(() => useURLParams(), {
+        wrapper: createWrapper(['/?start_line=50&end_line=100']),
+      });
+
+      act(() => {
+        result.current.setLineRange(null);
+      });
+
+      expect(result.current.lineRange).toBeNull();
     });
   });
 

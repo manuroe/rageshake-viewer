@@ -380,16 +380,28 @@ export function SummaryView() {
 
     // Sum uploaded and downloaded bytes over all charted requests (completed + incomplete in range)
     // to match the set represented by the chart and the request count headline.
-    const httpRequestById = new Map(allHttpRequests.map(r => [r.requestId, r]));
+    // Iterate allHttpRequests directly to avoid requestId-keyed map deduplication issues when
+    // multiple requests share the same requestId.
     let totalUploadBytes = 0;
     let totalDownloadBytes = 0;
-    httpRequestsWithTimestamps.forEach(({ requestId }) => {
-      const req = httpRequestById.get(requestId);
-      if (req) {
-        totalUploadBytes += req.requestSize;
-        totalDownloadBytes += req.responseSize;
+    for (const req of allHttpRequests) {
+      if (req.responseLineNumber) {
+        // Completed request: mirrors completedRequestsWithTimestamps filter
+        const ts = lineNumberToTimestamp.get(req.responseLineNumber);
+        if (!ts || ts === 0) continue;
+        if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
+          totalUploadBytes += req.requestSize;
+          totalDownloadBytes += req.responseSize;
+        }
+      } else if (!req.status && req.sendLineNumber) {
+        // Incomplete request: mirrors incompleteRequestsWithTimestamps filter
+        const ts = lineNumberToTimestamp.get(req.sendLineNumber);
+        if (!ts || ts === 0) continue;
+        if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
+          totalUploadBytes += req.requestSize;
+        }
       }
-    });
+    }
 
     return {
       totalLogLines: filteredLogLines.length,

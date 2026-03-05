@@ -20,9 +20,11 @@ interface LogDisplayViewProps {
   prevRequestLineRange?: { start: number; end: number };
   nextRequestLineRange?: { start: number; end: number };
   logLines?: ParsedLogLine[];
+  /** When set, only lines whose lineNumber falls within [start, end] are shown. */
+  lineRange?: { start: number; end: number };
 }
 
-export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines }: LogDisplayViewProps) {
+export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
   const { rawLogLines } = useLogStore();
   
   // Use passed logLines if provided, otherwise use all raw log lines from store
@@ -84,9 +86,17 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
 
   // Build the filtered lines based on filter query and context
   const filteredLines = useMemo(() => {
-    const allLines = displayLogLines.map((line, index) => ({ line, index }));
+    let allLines = displayLogLines.map((line, index) => ({ line, index }));
 
-    // If no filter, show all lines
+    // Pre-scope to line range when specified (e.g., a single request's lines)
+    if (lineRange) {
+      allLines = allLines.filter(({ line }) => {
+        const ln = line.lineNumber ?? 0;
+        return ln >= lineRange.start && ln <= lineRange.end;
+      });
+    }
+
+    // If no filter, show all (range-scoped) lines
     if (!filterQuery.trim()) return allLines;
 
     // If filter is set but no matches, show empty
@@ -96,7 +106,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     const linesToShow = expandWithContext(filterMatchingLineIndices, displayLogLines.length, contextLines);
 
     return allLines.filter(({ index }) => linesToShow.has(index));
-  }, [displayLogLines, filterQuery, contextLines, filterMatchingLineIndices]);
+  }, [displayLogLines, lineRange, filterQuery, contextLines, filterMatchingLineIndices]);
 
   // Search determines highlighting within visible lines
   // Returns a Set of original line indices (not filtered indices) that match the search

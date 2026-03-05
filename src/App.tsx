@@ -59,7 +59,11 @@ function AppContent() {
     store.setStatusCodeFilter(status);
     store.setUriFilter(filter);
     store.setSelectedTimeout(!isNaN(timeout ?? NaN) ? timeout : null);
-    store.setActiveRequest(requestId); // null clears selection (reactive)
+    // When request_id is absent, clear the selection.
+    // When present, each view's useUrlRequestAutoScroll handles opening by rowKey.
+    if (requestId === null) {
+      store.setActiveRequest(null);
+    }
   }, [searchParams, rawLogLines.length]);
 
   // Track last route for "continue where you left off"

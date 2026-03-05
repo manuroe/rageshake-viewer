@@ -243,20 +243,96 @@ describe('logParser', () => {
     });
 
     describe('regression: duplicate request_id', () => {
-      it('uses the last send line number when the same request_id is sent twice', () => {
-        // If the client retransmits with the same ID, only the last send's line
-        // number is recorded (the Map is keyed by request_id and sendLineNumber
-        // is always overwritten). All other stable fields retain their first value.
+      it('creates a separate record for each request when the same request_id is sent twice', () => {
+        // When the client reuses the same request_id for two distinct requests,
+        // both should appear as independent records in the parsed output.
         const send1 = SEND_LINE.replace('REQ-62', 'DUPE');
         const send2 = SEND_LINE.replace('REQ-62', 'DUPE');
         const content = [send1, send2].join('\n');
 
         const result = parseAllHttpRequests(content);
 
-        // Only one record in the result even though the same ID appeared twice
-        expect(result.httpRequests).toHaveLength(1);
-        // sendLineNumber should be from the second send (line 2)
-        expect(result.httpRequests[0].sendLineNumber).toBe(2);
+        // Both records should appear
+        expect(result.httpRequests).toHaveLength(2);
+        // Chronological order: first send at line 1, second at line 2
+        expect(result.httpRequests[0].sendLineNumber).toBe(1);
+        expect(result.httpRequests[1].sendLineNumber).toBe(2);
+      });
+
+      it('pairs responses by method/uri when duplicate request_id sends are in-flight', () => {
+        const sendA = SEND_LINE
+          .replace('REQ-62', 'DUPE-MATCH')
+          .replace('method=POST', 'method=GET')
+          .replace('/sync"', '/profile"');
+        const sendB = SEND_LINE
+          .replace('REQ-62', 'DUPE-MATCH')
+          .replace('/sync"', '/keys/query"');
+        const responseA = RESPONSE_LINE
+          .replace('REQ-63', 'DUPE-MATCH')
+          .replace('method=POST', 'method=GET')
+          .replace('/sync"', '/profile"');
+        const responseB = RESPONSE_LINE
+          .replace('REQ-63', 'DUPE-MATCH')
+          .replace('/sync"', '/keys/query"');
+
+        // If pairing were purely "last unmatched", responseA would incorrectly attach to sendB.
+        const content = [sendA, sendB, responseA, responseB].join('\n');
+        const result = parseAllHttpRequests(content);
+
+        expect(result.httpRequests).toHaveLength(2);
+
+        const byUri = new Map(result.httpRequests.map(req => [req.uri, req]));
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/profile')?.sendLineNumber).toBe(1);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/profile')?.responseLineNumber).toBe(3);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/keys/query')?.sendLineNumber).toBe(2);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/keys/query')?.responseLineNumber).toBe(4);
+      });
+
+      it('falls back to the most recent unmatched send when response method/uri does not match', () => {
+        const sendA = SEND_LINE
+          .replace('REQ-62', 'DUPE-FALLBACK')
+          .replace('/sync"', '/path-a"');
+        const sendB = SEND_LINE
+          .replace('REQ-62', 'DUPE-FALLBACK')
+          .replace('/sync"', '/path-b"');
+        const unknownResponse = RESPONSE_LINE
+          .replace('REQ-63', 'DUPE-FALLBACK')
+          .replace('method=POST', 'method=DELETE')
+          .replace('/sync"', '/path-unknown"');
+
+        const result = parseAllHttpRequests([sendA, sendB, unknownResponse].join('\n'));
+
+        expect(result.httpRequests).toHaveLength(2);
+        expect(result.httpRequests[0].sendLineNumber).toBe(1);
+        expect(result.httpRequests[0].responseLineNumber).toBe(0);
+        expect(result.httpRequests[1].sendLineNumber).toBe(2);
+        expect(result.httpRequests[1].responseLineNumber).toBe(3);
+      });
+
+      it('does not attach a send to an incompatible response-only record', () => {
+        const responseA = RESPONSE_LINE
+          .replace('REQ-63', 'DUPE-SEND-PAIR')
+          .replace('method=POST', 'method=GET')
+          .replace('/sync"', '/a"');
+        const responseB = RESPONSE_LINE
+          .replace('REQ-63', 'DUPE-SEND-PAIR')
+          .replace('/sync"', '/b"');
+        const sendC = SEND_LINE
+          .replace('REQ-62', 'DUPE-SEND-PAIR')
+          .replace('/sync"', '/c"');
+
+        const result = parseAllHttpRequests([responseA, responseB, sendC].join('\n'));
+
+        // Keep both response-only records intact; create a new send-only record for /c.
+        expect(result.httpRequests).toHaveLength(3);
+
+        const byUri = new Map(result.httpRequests.map(req => [req.uri, req]));
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/a')?.responseLineNumber).toBe(1);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/a')?.sendLineNumber).toBe(0);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/b')?.responseLineNumber).toBe(2);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/b')?.sendLineNumber).toBe(0);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/c')?.sendLineNumber).toBe(3);
+        expect(byUri.get('https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/c')?.responseLineNumber).toBe(0);
       });
     });
 

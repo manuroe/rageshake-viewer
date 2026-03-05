@@ -67,7 +67,12 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   }
 
   const lines = logContent.split('\n');
-  const records = new Map<string, Partial<HttpRequest>>();
+  // Map from requestId to all in-progress records for that ID.
+  // Multiple requests can share the same requestId; each gets its own record.
+  const recordsByRequestId = new Map<string, Partial<HttpRequest>[]>();
+  // Flat list of all request records in discovery (insertion) order;
+  // final output may be reordered later.
+  const allRecordsList: Partial<HttpRequest>[] = [];
   const rawLogLines: ParsedLogLine[] = [];
   let linesWithTimestamps = 0;
 
@@ -111,11 +116,44 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       const durationUnit = respMatch.groups.duration_unit;
       const durationMs = Math.round(durationVal * (durationUnit === 's' ? 1000.0 : 1.0));
 
-      if (!records.has(requestId)) {
-        records.set(requestId, {});
+      if (!recordsByRequestId.has(requestId)) {
+        recordsByRequestId.set(requestId, []);
+      }
+      const bucket = recordsByRequestId.get(requestId)!;
+
+      // Pair this response with the best matching send by scanning the bucket
+      // backwards (most-recent first) in a single pass.
+      // Priority:
+      //   1. Last send with matching method+uri that has no response yet.
+      //   2. Last send with no method/uri (response arrived before its send line).
+      //   3. Last send with no response yet (any method/uri).
+      const respMethod = respMatch.groups.method;
+      const respUri = respMatch.groups.uri;
+      let rec: Partial<HttpRequest> | undefined;
+      let fallbackEmpty: Partial<HttpRequest> | undefined;
+      let fallbackAny: Partial<HttpRequest> | undefined;
+      for (let idx = bucket.length - 1; idx >= 0; idx--) {
+        const candidate = bucket[idx];
+        if (candidate.responseLineNumber) continue;
+        if (candidate.method === respMethod && candidate.uri === respUri) {
+          rec = candidate;
+          break;
+        }
+        if (!fallbackEmpty && !candidate.method) {
+          fallbackEmpty = candidate;
+        }
+        if (!fallbackAny) {
+          fallbackAny = candidate;
+        }
+      }
+      if (!rec) rec = fallbackEmpty ?? fallbackAny;
+      if (!rec) {
+        // Response with no matching send: create a new record.
+        rec = {};
+        bucket.push(rec);
+        allRecordsList.push(rec);
       }
 
-      const rec = records.get(requestId)!;
       rec.requestId = requestId;
       rec.method = rec.method || respMatch.groups.method;
       rec.uri = rec.uri || respMatch.groups.uri;
@@ -132,15 +170,43 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     if (sendMatch && sendMatch.groups) {
       const requestId = sendMatch.groups.id;
 
-      if (!records.has(requestId)) {
-        records.set(requestId, {});
+      if (!recordsByRequestId.has(requestId)) {
+        recordsByRequestId.set(requestId, []);
+      }
+      const bucket = recordsByRequestId.get(requestId)!;
+
+      // Pair this send with the best compatible response-only record by scanning
+      // backwards (most-recent first) in a single pass.
+      // Priority:
+      //   1. Last response-only record with matching method+uri.
+      //   2. Last response-only record with no method/uri yet.
+      //   3. Otherwise create a new record.
+      const sendMethod = sendMatch.groups.method;
+      const sendUri = sendMatch.groups.uri;
+      let rec: Partial<HttpRequest> | null = null;
+      let fallbackEmpty: Partial<HttpRequest> | null = null;
+      for (let j = bucket.length - 1; j >= 0; j--) {
+        const candidate = bucket[j];
+        if (candidate.sendLineNumber) continue;
+        if (candidate.method === sendMethod && candidate.uri === sendUri) {
+          rec = candidate;
+          break;
+        }
+        if (!fallbackEmpty && !candidate.method && !candidate.uri) {
+          fallbackEmpty = candidate;
+        }
+      }
+      if (!rec) rec = fallbackEmpty;
+      if (!rec) {
+        rec = {};
+        bucket.push(rec);
+        allRecordsList.push(rec);
       }
 
-      const rec = records.get(requestId)!;
       rec.requestId = requestId;
-      rec.method = rec.method || sendMatch.groups.method;
-      rec.uri = rec.uri || sendMatch.groups.uri;
-      rec.requestSizeString = rec.requestSizeString || sendMatch.groups.req_size;
+      rec.method = sendMatch.groups.method;
+      rec.uri = sendMatch.groups.uri;
+      rec.requestSizeString = sendMatch.groups.req_size;
       rec.sendLineNumber = i + 1;
     }
   }
@@ -155,7 +221,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   }
 
   // Filter and convert to array - include any request with at least a send or response line
-  const allRequests = Array.from(records.values()).filter(
+  const allRequests = allRecordsList.filter(
     (rec): rec is HttpRequest =>
       !!rec.uri && (!!rec.sendLineNumber || !!rec.responseLineNumber)
   ) as HttpRequest[];

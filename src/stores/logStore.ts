@@ -34,11 +34,11 @@ interface LogStore {
   timelineScale: number;
   
   // UI state
-  expandedRows: Set<string>;
+  expandedRows: Set<number>;
   
   // Log display state
   rawLogLines: ParsedLogLine[];
-  openLogViewerIds: Set<string>;
+  openLogViewerIds: Set<number>;
   lastRoute: string | null;
   
   // Error state
@@ -61,13 +61,13 @@ interface LogStore {
   // Global actions
   setTimeFilter: (startTime: string | null, endTime: string | null) => void;
   setTimelineScale: (scale: number) => void;
-  toggleRowExpansion: (requestId: string) => void;
-  setActiveRequest: (requestId: string | null) => void; // Opens one request, closes all others; null clears selection
+  toggleRowExpansion: (rowKey: number) => void;
+  setActiveRequest: (rowKey: number | null) => void; // Opens one request, closes all others; null clears selection
   clearData: () => void;
   
   // Log viewer actions
-  openLogViewer: (requestId: string) => void;
-  closeLogViewer: (requestId: string) => void;
+  openLogViewer: (rowKey: number) => void;
+  closeLogViewer: (rowKey: number) => void;
 
   // Navigation memory
   setLastRoute: (route: string) => void;
