@@ -537,4 +537,73 @@ describe('logStore', () => {
       expect(useLogStore.getState().filteredHttpRequests).toHaveLength(1);
     });
   });
+
+  describe('detectedPlatform', () => {
+    it('is null initially', () => {
+      expect(useLogStore.getState().detectedPlatform).toBeNull();
+    });
+
+    it('detects android when a line contains "MainActivity"', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, message: 'MainActivity: App started' }),
+        createParsedLogLine({ lineNumber: 1, message: 'Matrix Rust SDK initializing' }),
+      ];
+      useLogStore.getState().setRequests([], [], rawLines);
+      expect(useLogStore.getState().detectedPlatform).toBe('android');
+    });
+
+    it('detects ios when a line contains "swift" (case-insensitive)', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, message: 'Swift app launched' }),
+        createParsedLogLine({ lineNumber: 1, message: 'Matrix Rust SDK initializing' }),
+      ];
+      useLogStore.getState().setRequests([], [], rawLines);
+      expect(useLogStore.getState().detectedPlatform).toBe('ios');
+    });
+
+    it('detects ios for uppercase SWIFT', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, message: 'SWIFT: bridge initialized' }),
+      ];
+      useLogStore.getState().setRequests([], [], rawLines);
+      expect(useLogStore.getState().detectedPlatform).toBe('ios');
+    });
+
+    it('returns null when both android and ios markers are present', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, message: 'swift bridge init' }),
+        createParsedLogLine({ lineNumber: 1, message: 'MainActivity: started' }),
+      ];
+      useLogStore.getState().setRequests([], [], rawLines);
+      expect(useLogStore.getState().detectedPlatform).toBeNull();
+    });
+
+    it('returns null when no platform strings are found', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, message: 'Matrix Rust SDK initializing' }),
+        createParsedLogLine({ lineNumber: 1, message: 'Loading client configuration from storage' }),
+      ];
+      useLogStore.getState().setRequests([], [], rawLines);
+      expect(useLogStore.getState().detectedPlatform).toBeNull();
+    });
+
+    it('is reset to null by clearData', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, message: 'MainActivity: started' }),
+      ];
+      useLogStore.getState().setRequests([], [], rawLines);
+      expect(useLogStore.getState().detectedPlatform).toBe('android');
+
+      useLogStore.getState().clearData();
+      expect(useLogStore.getState().detectedPlatform).toBeNull();
+    });
+
+    it('also detects platform from setHttpRequests', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, message: 'swift matrix sdk loaded' }),
+      ];
+      useLogStore.getState().setHttpRequests([], rawLines);
+      expect(useLogStore.getState().detectedPlatform).toBe('ios');
+    });
+  });
 });

@@ -1,4 +1,5 @@
 2026-01-15T10:00:00.000000Z  INFO [matrix-rust-sdk] THIS IS A DEMO LOG, NOT REAL SDK OUTPUT
+2026-01-15T10:00:00.050000Z  INFO [android] MainActivity: Android host app started, initializing Matrix SDK
 2026-01-15T10:00:00.100000Z  INFO [matrix-rust-sdk] Matrix Rust SDK initializing
 2026-01-15T10:00:00.120000Z DEBUG [matrix-rust-sdk] Loading client configuration from storage
 2026-01-15T10:00:00.245000Z DEBUG [matrix-rust-sdk] Found cached session, attempting restore
