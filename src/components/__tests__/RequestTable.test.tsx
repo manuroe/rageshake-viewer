@@ -380,7 +380,7 @@ describe('RequestTable', () => {
       mockNavigate.mockClear();
     });
 
-    it('navigates to /logs with start_line and end_line on onExpand', async () => {
+    it('navigates to /logs with filter=requestId on onExpand', async () => {
       const req = createHttpRequest({
         requestId: 'REQ-LOG',
         sendLineNumber: 10,
@@ -407,12 +407,13 @@ describe('RequestTable', () => {
       // Click Expand
       fireEvent.click(screen.getByText('Expand'));
 
-      // Should navigate to /logs with start_line and end_line params
+      // Should navigate to /logs with filter set to the request ID, without start_line/end_line params
       expect(mockNavigate).toHaveBeenCalledTimes(1);
       const navigatedUrl: string = mockNavigate.mock.calls[0][0] as string;
-      expect(navigatedUrl).toContain('start_line=10');
-      expect(navigatedUrl).toContain('end_line=20');
       expect(navigatedUrl).toMatch(/^\/logs\?/);
+      expect(navigatedUrl).toContain('filter=REQ-LOG');
+      expect(navigatedUrl).not.toContain('start_line');
+      expect(navigatedUrl).not.toContain('end_line');
     });
   });
 

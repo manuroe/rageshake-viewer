@@ -8,7 +8,7 @@ import { calculateTimeRangeMicros } from '../utils/timeUtils';
 
 export function LogsView() {
   const { rawLogLines, startTime, endTime, uriFilter } = useLogStore();
-  const { setUriFilter, lineRange } = useURLParams();
+  const { setUriFilter } = useURLParams();
   
   // Get filter from store (synced from URL via App.tsx)
   const filterPrefill = uriFilter ?? '';
@@ -99,7 +99,6 @@ export function LogsView() {
           onFilterChange={handleFilterChange}
           prevRequestLineRange={prevRequestLineRange}
           nextRequestLineRange={nextRequestLineRange}
-          lineRange={lineRange ?? undefined}
         />
       </div>
     </div>

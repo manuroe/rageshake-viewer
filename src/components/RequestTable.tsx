@@ -368,8 +368,7 @@ export function RequestTable({
           nextRequestLineRange={nextRequestLineRange}
           onExpand={() => {
             const params = new URLSearchParams();
-            params.set('start_line', String(req.sendLineNumber!));
-            params.set('end_line', String(req.responseLineNumber ?? req.sendLineNumber!));
+            params.set('filter', req.requestId);
             const { startTime: storeStart, endTime: storeEnd } = useLogStore.getState();
             if (storeStart) params.set('start', storeStart);
             if (storeEnd) params.set('end', storeEnd);
