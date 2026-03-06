@@ -106,24 +106,6 @@ export function useURLParams() {
     });
   }, [updateParams]);
 
-  // Read line range params
-  const startLineParam = searchParams.get('start_line');
-  const endLineParam = searchParams.get('end_line');
-  const startLine = startLineParam !== null ? parseInt(startLineParam, 10) : null;
-  const endLine = endLineParam !== null ? parseInt(endLineParam, 10) : null;
-  const lineRange: { start: number; end: number } | null =
-    startLine !== null && !Number.isNaN(startLine) && endLine !== null && !Number.isNaN(endLine)
-      ? { start: startLine, end: endLine }
-      : null;
-
-  // Set line range (for scoping LogsView to a specific request)
-  const setLineRange = useCallback((range: { start: number; end: number } | null) => {
-    updateParams({
-      ['start_line']: range !== null ? range.start.toString() : null,
-      ['end_line']: range !== null ? range.end.toString() : null,
-    });
-  }, [updateParams]);
-
   return {
     // Read values
     start,
@@ -133,7 +115,6 @@ export function useURLParams() {
     filter,
     requestId,
     timeout,
-    lineRange,
     // Write functions
     setTimeFilter,
     setScale,
@@ -141,6 +122,5 @@ export function useURLParams() {
     setUriFilter,
     setRequestId,
     setTimeoutFilter,
-    setLineRange,
   };
 }
