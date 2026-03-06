@@ -113,6 +113,17 @@
     text-decoration: underline;
 }
 
+/* Sentry Alert Section */
+.sentrySectionAlert {
+    composes: summarySection;
+    border-left: 3px solid var(--color-error);
+    background: var(--color-error-light);
+}
+
+.sentrySectionAlert h2 {
+    color: var(--color-error);
+}
+
 /* Log Activity Chart */
 .activityChartContainer {
     margin-top: 4px;

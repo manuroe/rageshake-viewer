@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { HttpRequest, SyncRequest, ParsedLogLine } from '../types/log.types';
+import type { HttpRequest, SyncRequest, ParsedLogLine, SentryEvent } from '../types/log.types';
 import { wrapError, type AppError } from '../utils/errorHandling';
 import { DEFAULT_MS_PER_PIXEL } from '../utils/timelineUtils';
 import { filterSyncRequests, filterHttpRequests } from '../utils/requestFilters';
@@ -43,6 +43,9 @@ interface LogStore {
 
   // Detected platform from log content
   detectedPlatform: 'android' | 'ios' | null;
+
+  // Sentry events detected during parsing
+  sentryEvents: SentryEvent[];
   
   // Error state
   error: AppError | null;
@@ -64,6 +67,7 @@ interface LogStore {
   // Global actions
   setTimeFilter: (startTime: string | null, endTime: string | null) => void;
   setTimelineScale: (scale: number) => void;
+  setSentryEvents: (events: SentryEvent[]) => void;
   toggleRowExpansion: (rowKey: number) => void;
   setActiveRequest: (rowKey: number | null) => void; // Opens one request, closes all others; null clears selection
   clearData: () => void;
@@ -134,6 +138,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
   openLogViewerIds: new Set(),
   lastRoute: null,
   detectedPlatform: null,
+  sentryEvents: [],
   error: null,
 
   setRequests: (requests, connIds, rawLines) => {
@@ -205,6 +210,10 @@ export const useLogStore = create<LogStore>((set, get) => ({
     set({ timelineScale: scale });
   },
 
+  setSentryEvents: (events) => {
+    set({ sentryEvents: events });
+  },
+
   toggleRowExpansion: (requestId) => {
     const expandedRows = new Set(get().expandedRows);
     if (expandedRows.has(requestId)) {
@@ -269,6 +278,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       rawLogLines: [],
       openLogViewerIds: new Set(),
       detectedPlatform: null,
+      sentryEvents: [],
     });
   },
   
