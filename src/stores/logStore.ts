@@ -40,6 +40,9 @@ interface LogStore {
   rawLogLines: ParsedLogLine[];
   openLogViewerIds: Set<number>;
   lastRoute: string | null;
+
+  // Detected platform from log content
+  detectedPlatform: 'android' | 'ios' | null;
   
   // Error state
   error: AppError | null;
@@ -81,6 +84,22 @@ interface LogStore {
   getDisplayTime: (lineNumber: number) => string;
 }
 
+/** Scan parsed log lines to detect the host platform (Android or iOS). */
+function detectPlatform(rawLines: ParsedLogLine[]): 'android' | 'ios' | null {
+  const limit = Math.min(rawLines.length, 10000);
+  let foundAndroid = false;
+  let foundIos = false;
+  for (let i = 0; i < limit; i++) {
+    const msg = rawLines[i].message;
+    if (!foundAndroid && msg.includes('MainActivity')) foundAndroid = true;
+    if (!foundIos && /swift/i.test(msg)) foundIos = true;
+    if (foundAndroid && foundIos) return null;
+  }
+  if (foundAndroid) return 'android';
+  if (foundIos) return 'ios';
+  return null;
+}
+
 export const useLogStore = create<LogStore>((set, get) => ({
   // Sync-specific state
   allRequests: [],
@@ -114,6 +133,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
   rawLogLines: [],
   openLogViewerIds: new Set(),
   lastRoute: null,
+  detectedPlatform: null,
   error: null,
 
   setRequests: (requests, connIds, rawLines) => {
@@ -124,6 +144,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
         connectionIds: connIds,
         selectedConnId: defaultConn,
         rawLogLines: rawLines,
+        detectedPlatform: detectPlatform(rawLines),
         error: null
       });
       get().filterRequests();
@@ -151,7 +172,8 @@ export const useLogStore = create<LogStore>((set, get) => ({
   setHttpRequests: (requests, rawLines) => {
     set({ 
       allHttpRequests: requests,
-      rawLogLines: rawLines
+      rawLogLines: rawLines,
+      detectedPlatform: detectPlatform(rawLines),
     });
     get().filterHttpRequests();
   },
@@ -246,6 +268,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       expandedRows: new Set(),
       rawLogLines: [],
       openLogViewerIds: new Set(),
+      detectedPlatform: null,
     });
   },
   
