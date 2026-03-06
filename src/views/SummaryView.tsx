@@ -27,6 +27,8 @@ export function SummaryView() {
   } = useLogStore();
   const { setTimeFilter } = useURLParams();
 
+  const summaryTitle = `Summary${detectedPlatform ? ` - ${detectedPlatform === 'ios' ? 'iOS' : 'Android'}` : ''}`;
+
   // Local zoom state (in microseconds)
   const [localStartTime, setLocalStartTime] = useState<TimestampMicros | null>(null);
   const [localEndTime, setLocalEndTime] = useState<TimestampMicros | null>(null);
@@ -429,7 +431,7 @@ export function SummaryView() {
       <div className="app">
         <div className="header-compact">
           <BurgerMenu />
-          <h1 className="header-title">Summary{detectedPlatform ? ` - ${detectedPlatform === 'ios' ? 'iOS' : 'Android'}` : ''}</h1>
+          <h1 className="header-title">{summaryTitle}</h1>
         </div>
         <div className="content">
           <p>No logs loaded. Please upload a log file to see the summary.</p>
@@ -443,7 +445,7 @@ export function SummaryView() {
       <div className="header-compact">
         <div className="header-left">
           <BurgerMenu />
-          <h1 className="header-title">Summary{detectedPlatform ? ` - ${detectedPlatform === 'ios' ? 'iOS' : 'Android'}` : ''}</h1>
+          <h1 className="header-title">{summaryTitle}</h1>
         </div>
         
         <div className="header-right">
