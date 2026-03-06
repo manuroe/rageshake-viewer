@@ -8,6 +8,8 @@ import { findMatchingIndices, expandWithContext, highlightText as highlightTextU
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useMatchNavigation } from '../hooks/useMatchNavigation';
 import { SearchInput } from '../components/SearchInput';
+import type { SearchInputHandle } from '../components/SearchInput';
+import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
 import styles from './LogDisplayView.module.css';
 
 interface LogDisplayViewProps {
@@ -26,12 +28,25 @@ interface LogDisplayViewProps {
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
   const { rawLogLines } = useLogStore();
+  const shortcutCtx = useKeyboardShortcutContextOptional();
   
   // Use passed logLines if provided, otherwise use all raw log lines from store
   const displayLogLines = logLines || rawLogLines;
 
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [filterQueryInput, setFilterQueryInput] = useState(requestFilter);
+
+  // Ref for programmatic focus (Cmd+/ shortcut)
+  const searchInputRef = useRef<SearchInputHandle>(null);
+
+  // Register Cmd+/ → focus search when this view is mounted
+  useEffect(() => {
+    if (!shortcutCtx) return;
+    const unregister = shortcutCtx.registerFocusSearch(() => {
+      searchInputRef.current?.focus();
+    });
+    return unregister;
+  }, [shortcutCtx]);
   
   // Track when we're syncing from prop to avoid calling onFilterChange
   const isSyncingFromProp = useRef(false);
@@ -69,6 +84,26 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [stripPrefix, setStripPrefix] = useState(true);
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
+
+  // Cmd+Shift+W → toggle line wrap; Cmd+Shift+P → toggle strip prefix
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Skip when an input is focused
+      const el = document.activeElement;
+      const tag = el?.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (el as HTMLElement)?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.key === 'w') {
+        e.preventDefault();
+        setLineWrap((v) => !v);
+      } else if (e.key === 'p') {
+        e.preventDefault();
+        setStripPrefix((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, []);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -271,10 +306,11 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       <div className={styles.logToolbar}>
         <div className={styles.logToolbarLeft}>
           <SearchInput
+            ref={searchInputRef}
             value={searchQueryInput}
             onChange={setSearchQueryInput}
             placeholder="Search logs..."
-            title="Search and highlight in filtered results"
+            title="Search and highlight in filtered results (/)"
             expandOnFocus={false}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -322,7 +358,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           )}
         </div>
         <div className={styles.logToolbarRight}>
-          <label className={styles.logToolbarOption}>
+          <label className={styles.logToolbarOption} title="Toggle line wrap (w)">
             <input
               type="checkbox"
               checked={lineWrap}
@@ -330,7 +366,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
             Line wrap
           </label>
-          <label className={styles.logToolbarOption}>
+          <label className={styles.logToolbarOption} title="Toggle strip prefix (p)">
             <input
               type="checkbox"
               checked={stripPrefix}

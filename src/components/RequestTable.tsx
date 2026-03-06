@@ -9,6 +9,8 @@ import { TimeRangeSelector } from './TimeRangeSelector';
 import { TimelineScaleSelector } from './TimelineScaleSelector';
 import { StatusFilterDropdown } from './StatusFilterDropdown';
 import { SearchInput } from './SearchInput';
+import type { SearchInputHandle } from './SearchInput';
+import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { getWaterfallPosition, getWaterfallBarWidth, calculateTimelineWidth } from '../utils/timelineUtils';
 import { LogDisplayView } from '../views/LogDisplayView';
@@ -146,6 +148,19 @@ export function RequestTable({
   // URI filter state with debouncing
   const [uriFilterInput, setUriFilterInput] = useState(uriFilter ?? '');
   const debouncedUriFilter = useDebouncedValue(uriFilterInput, 300);
+
+  // Ref for Cmd+F shortcut (focus URI filter)
+  const filterInputRef = useRef<SearchInputHandle>(null);
+  const shortcutCtx = useKeyboardShortcutContextOptional();
+
+  // Register Cmd+F → focus URI filter while this RequestTable is mounted
+  useEffect(() => {
+    if (!shortcutCtx || !showUriFilter) return;
+    const unregister = shortcutCtx.registerFocusFilter(() => {
+      filterInputRef.current?.focus();
+    });
+    return unregister;
+  }, [shortcutCtx, showUriFilter]);
 
   // Sync debounced URI filter to URL
   useEffect(() => {
@@ -429,11 +444,12 @@ export function RequestTable({
         <div className="header-right">
           {showUriFilter && (
             <SearchInput
+              ref={filterInputRef}
               value={uriFilterInput}
               onChange={setUriFilterInput}
               onClear={handleUriFilterClear}
               placeholder="Filter URI..."
-              title="Filter requests by URI (case-insensitive substring match)"
+              title="Filter requests by URI (⌘+/)"
               aria-label="Filter requests by URI"
             />
           )}

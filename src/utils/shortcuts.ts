@@ -1,0 +1,133 @@
+/**
+ * Keyboard shortcut definitions.
+ *
+ * Conventions:
+ * - Navigation uses Vim-style go-to chords: press `g` then a letter
+ * - Actions use modifier keys (Cmd/Ctrl) to avoid conflicts with text inputs
+ * - Plain keys without modifiers are only active when no input is focused
+ */
+
+export type ShortcutCategory =
+  | 'navigation'
+  | 'search'
+  | 'filter'
+  | 'session'
+  | 'theme'
+  | 'ui';
+
+export interface ShortcutDef {
+  /** Human-readable key label(s), e.g. "g → s" or "Cmd+/" */
+  label: string;
+  /** Short description of the action */
+  description: string;
+  /** Category for grouping in the help overlay */
+  category: ShortcutCategory;
+  /**
+   * If true, this shortcut only works when no input element is focused
+   * (non-modifier shortcuts). Default: false (modifier-based shortcuts
+   * work regardless of focus).
+   */
+  requiresNoInputFocus?: boolean;
+}
+
+export const SHORTCUT_CATEGORIES: Record<ShortcutCategory, string> = {
+  navigation: 'Navigation',
+  search: 'Search',
+  filter: 'Filter',
+  session: 'Session',
+  theme: 'Theme',
+  ui: 'UI',
+};
+
+/** All shortcut definitions, keyed by a unique action name */
+export const SHORTCUTS = {
+  goSummary: {
+    label: 'g → s',
+    description: 'Go to Summary',
+    category: 'navigation',
+    requiresNoInputFocus: true,
+  },
+  goLogs: {
+    label: 'g → l',
+    description: 'Go to All Logs',
+    category: 'navigation',
+    requiresNoInputFocus: true,
+  },
+  goHttp: {
+    label: 'g → h',
+    description: 'Go to HTTP Requests',
+    category: 'navigation',
+    requiresNoInputFocus: true,
+  },
+  goSync: {
+    label: 'g → y',
+    description: 'Go to Sync Requests',
+    category: 'navigation',
+    requiresNoInputFocus: true,
+  },
+  focusSearch: {
+    label: '/',
+    description: 'Focus search input',
+    category: 'search',
+    requiresNoInputFocus: true,
+  },
+  focusFilter: {
+    label: 'Cmd+/',
+    description: 'Focus filter input',
+    category: 'filter',
+    requiresNoInputFocus: false,
+  },
+  toggleLineWrap: {
+    label: 'w',
+    description: 'Toggle line wrap (Logs view)',
+    category: 'filter',
+    requiresNoInputFocus: true,
+  },
+  toggleStripPrefix: {
+    label: 'p',
+    description: 'Toggle strip prefix (Logs view)',
+    category: 'filter',
+    requiresNoInputFocus: true,
+  },
+  newSession: {
+    label: 'Cmd+R',
+    description: 'Refresh page for a new session (browser default)',
+    category: 'session',
+    requiresNoInputFocus: false,
+  },
+  toggleTheme: {
+    label: 't',
+    description: 'Cycle theme (light → dark → system)',
+    category: 'theme',
+    requiresNoInputFocus: true,
+  },
+  showHelp: {
+    label: '?',
+    description: 'Show keyboard shortcuts help',
+    category: 'ui',
+    requiresNoInputFocus: true,
+  },
+  dismiss: {
+    label: 'Escape',
+    description: 'Dismiss overlay / close panel',
+    category: 'ui',
+    requiresNoInputFocus: false,
+  },
+} satisfies Record<string, ShortcutDef>;
+
+export type ShortcutAction = keyof typeof SHORTCUTS;
+
+/** Returns true if the currently focused element is a text input */
+export function isInputFocused(): boolean {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return true;
+  if ((el as HTMLElement).isContentEditable) return true;
+  return false;
+}
+
+/** Display label for the Cmd key depending on platform */
+export const metaKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? navigator.userAgent)
+  ? '⌘'
+  : 'Ctrl';
