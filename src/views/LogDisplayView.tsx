@@ -36,14 +36,24 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [filterQueryInput, setFilterQueryInput] = useState(requestFilter);
 
-  // Ref for programmatic focus (Cmd+/ shortcut)
+  // Ref for programmatic focus ("/" shortcut)
   const searchInputRef = useRef<SearchInputHandle>(null);
+  const filterInputRef = useRef<SearchInputHandle>(null);
 
-  // Register Cmd+/ → focus search when this view is mounted
+  // Register "/" → focus search when this view is mounted
   useEffect(() => {
     if (!shortcutCtx) return;
     const unregister = shortcutCtx.registerFocusSearch(() => {
       searchInputRef.current?.focus();
+    });
+    return unregister;
+  }, [shortcutCtx]);
+
+  // Register "Cmd+/" (and "Cmd+F") → focus filter when this view is mounted
+  useEffect(() => {
+    if (!shortcutCtx) return;
+    const unregister = shortcutCtx.registerFocusFilter(() => {
+      filterInputRef.current?.focus();
     });
     return unregister;
   }, [shortcutCtx]);
@@ -85,7 +95,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [stripPrefix, setStripPrefix] = useState(true);
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
 
-  // Cmd+Shift+W → toggle line wrap; Cmd+Shift+P → toggle strip prefix
+  // w → toggle line wrap; p → toggle strip prefix (plain keys, only when no input focused)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       // Skip when an input is focused
@@ -375,6 +385,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             Strip prefix
           </label>
           <SearchInput
+            ref={filterInputRef}
             value={filterQueryInput}
             onChange={setFilterQueryInput}
             placeholder="Filter logs..."

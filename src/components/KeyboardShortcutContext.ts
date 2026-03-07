@@ -12,12 +12,12 @@ export interface KeyboardShortcutContextValue {
   /** The chord leader key currently waiting for a second key (e.g. 'g'), or null */
   pendingChord: string | null;
   /**
-   * Register a handler to be called when Cmd+/ is pressed (focus search).
+   * Register a handler to be called when `/` is pressed (focus search).
    * Returns an unregister function.
    */
   registerFocusSearch: (fn: () => void) => () => void;
   /**
-   * Register a handler to be called when Cmd+F is pressed (focus filter).
+   * Register a handler to be called when Cmd+/ or Cmd+F is pressed (focus filter).
    * Returns an unregister function.
    */
   registerFocusFilter: (fn: () => void) => () => void;

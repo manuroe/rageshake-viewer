@@ -108,18 +108,24 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
 
       // --- Modifier-based shortcuts (work even when input is focused) ---
 
-      // Cmd+/ → focus filter
+      // Cmd+/ → focus filter (only when a filter handler is registered)
       if (meta && !shift && e.key === '/') {
-        e.preventDefault();
-        focusFilterHandlerRef.current?.();
-        return;
+        const handler = focusFilterHandlerRef.current;
+        if (handler) {
+          e.preventDefault();
+          handler();
+          return;
+        }
       }
 
-      // Cmd+F → focus filter (alias)
+      // Cmd+F → focus filter alias (only when a filter handler is registered)
       if (meta && !shift && e.key === 'f') {
-        e.preventDefault();
-        focusFilterHandlerRef.current?.();
-        return;
+        const handler = focusFilterHandlerRef.current;
+        if (handler) {
+          e.preventDefault();
+          handler();
+          return;
+        }
       }
 
       // Escape → close help overlay

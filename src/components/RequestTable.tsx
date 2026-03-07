@@ -11,6 +11,7 @@ import { StatusFilterDropdown } from './StatusFilterDropdown';
 import { SearchInput } from './SearchInput';
 import type { SearchInputHandle } from './SearchInput';
 import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
+import { metaKey } from '../utils/shortcuts';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { getWaterfallPosition, getWaterfallBarWidth, calculateTimelineWidth } from '../utils/timelineUtils';
 import { LogDisplayView } from '../views/LogDisplayView';
@@ -449,7 +450,7 @@ export function RequestTable({
               onChange={setUriFilterInput}
               onClear={handleUriFilterClear}
               placeholder="Filter URI..."
-              title="Filter requests by URI (⌘+/)"
+              title={`Filter requests by URI (${metaKey}+/)`}
               aria-label="Filter requests by URI"
             />
           )}

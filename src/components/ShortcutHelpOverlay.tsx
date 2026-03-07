@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { SHORTCUTS, SHORTCUT_CATEGORIES, metaKey, type ShortcutCategory } from '../utils/shortcuts';
 import { useKeyboardShortcutContext } from './KeyboardShortcutContext';
@@ -81,18 +81,6 @@ const CATEGORY_ORDER: ShortcutCategory[] = [
 
 export function ShortcutHelpOverlay() {
   const { showHelp, toggleHelp } = useKeyboardShortcutContext();
-
-  // Close on Escape
-  useEffect(() => {
-    if (!showHelp) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        toggleHelp();
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [showHelp, toggleHelp]);
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {

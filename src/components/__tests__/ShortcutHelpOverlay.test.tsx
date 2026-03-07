@@ -58,11 +58,11 @@ describe('ShortcutHelpOverlay', () => {
     expect(toggleHelp).toHaveBeenCalledTimes(1);
   });
 
-  it('calls toggleHelp when Escape is pressed', () => {
+  it('does not call toggleHelp on Escape (handled by KeyboardShortcutProvider)', () => {
     const toggleHelp = vi.fn();
     renderWithCtx(makeCtx({ showHelp: true, toggleHelp }), <ShortcutHelpOverlay />);
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(toggleHelp).toHaveBeenCalledTimes(1);
+    expect(toggleHelp).not.toHaveBeenCalled();
   });
 
   it('shows navigation shortcuts in the overlay', () => {
