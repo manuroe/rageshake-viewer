@@ -9,6 +9,7 @@ import { HttpActivityChart, type HttpRequestWithTimestamp } from '../components/
 import { calculateTimeRangeMicros, formatTimestamp, formatDuration } from '../utils/timeUtils';
 import { formatBytes } from '../utils/sizeUtils';
 import { getHttpStatusBadgeClass } from '../utils/httpStatusColors';
+import { stripMatrixClientPath } from '../utils/uriUtils';
 import type { LogLevel, ParsedLogLine, SentryEvent } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import styles from './SummaryView.module.css';
@@ -703,21 +704,6 @@ export function SummaryView() {
                     </thead>
                     <tbody>
                       {(() => {
-                        // Find the common prefix for all URIs
-                        const uris = stats.topFailedUrls.map(item => item.uri);
-                        function getCommonPrefix(arr: string[]): string {
-                          if (!arr.length) return '';
-                          let prefix = arr[0];
-                          for (let i = 1; i < arr.length; i++) {
-                            while (arr[i].indexOf(prefix) !== 0) {
-                              prefix = prefix.slice(0, -1);
-                              if (!prefix) return '';
-                            }
-                          }
-                          // Remove trailing slash for cleaner display
-                          return prefix.replace(/\/$/, '');
-                        }
-                        const commonPrefix = getCommonPrefix(uris);
                         return stats.topFailedUrls.map((item, idx) => (
                           <tr key={idx}>
                             <td>
@@ -742,9 +728,7 @@ export function SummaryView() {
                                 }}
                                 style={{ textAlign: 'left', whiteSpace: 'normal' }}
                               >
-                                {commonPrefix && item.uri !== commonPrefix
-                                  ? '/' + item.uri.replace(commonPrefix, '').replace(/^\//, '')
-                                  : item.uri}
+                                {stripMatrixClientPath(item.uri)}
                               </button>
                             </td>
                             <td>
@@ -815,22 +799,7 @@ export function SummaryView() {
                 </thead>
                 <tbody>
                   {(() => {
-                    // Find the common prefix for all URIs
                     const filtered = stats.slowestHttpRequests;
-                    const uris = filtered.map(req => req.uri);
-                    function getCommonPrefix(arr: string[]): string {
-                      if (!arr.length) return '';
-                      let prefix = arr[0];
-                      for (let i = 1; i < arr.length; i++) {
-                        while (arr[i].indexOf(prefix) !== 0) {
-                          prefix = prefix.slice(0, -1);
-                          if (!prefix) return '';
-                        }
-                      }
-                      // Remove trailing slash for cleaner display
-                      return prefix.replace(/\/$/, '');
-                    }
-                    const commonPrefix = getCommonPrefix(uris);
                     return filtered.map((req) => {
                       const badgeClass = req.status ? `badge${getHttpStatusBadgeClass(req.status)}` : 'badgeIncomplete';
                       return (
@@ -851,9 +820,7 @@ export function SummaryView() {
                           </a>
                         </td>
                         <td className={styles.uriCell}>
-                          {commonPrefix && req.uri !== commonPrefix
-                            ? '/' + req.uri.replace(commonPrefix, '').replace(/^\//, '')
-                            : req.uri}
+                          {stripMatrixClientPath(req.uri)}
                         </td>
                         <td>
                           <span className={`${tableStyles.badge} ${tableStyles[badgeClass]}`}>
