@@ -122,17 +122,22 @@ export function isInputFocused(): boolean {
   const el = document.activeElement;
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
-  if (tag === 'input' || tag === 'textarea') return true;
-  if ((el as HTMLElement).isContentEditable) return true;
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  if (el instanceof HTMLElement) {
+    if (el.isContentEditable) return true;
+    const role = el.getAttribute('role');
+    if (role && role.toLowerCase() === 'textbox') return true;
+  }
   return false;
 }
 
+/** True when running on an Apple platform (Mac / iOS) */
+const isApplePlatform =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+
 /** Display label for the Cmd key depending on platform */
-export const metaKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? navigator.userAgent)
-  ? '⌘'
-  : 'Ctrl';
+export const metaKey = isApplePlatform ? '⌘' : 'Ctrl';
 
 /** Display label for the Option/Alt key depending on platform */
-export const optionKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? navigator.userAgent)
-  ? '⌥'
-  : 'Alt';
+export const optionKey = isApplePlatform ? '⌥' : 'Alt';

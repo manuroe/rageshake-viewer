@@ -134,7 +134,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
       }
 
       // Cmd+F → focus filter alias (only when a filter handler is registered)
-      if (meta && !shift && e.key === 'f') {
+      if (meta && !shift && e.key.toLowerCase() === 'f') {
         const handler = focusFilterHandlerRef.current;
         if (handler) {
           e.preventDefault();
@@ -152,6 +152,9 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
         return;
       }
 
+      // Block all other shortcuts while the help overlay is open
+      if (showHelp) return;
+
       // --- Plain-key shortcuts (only when no input is focused) ---
       if (isInputFocused()) return;
 
@@ -163,7 +166,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
       }
 
       // Chord leader: g
-      if (e.key === 'g' && !meta && !shift) {
+      if (e.key === 'g' && !meta && !shift && !e.altKey) {
         e.preventDefault();
         startChordRef.current('g');
         return;
@@ -183,7 +186,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
         return;
       }
     },
-    [cycleTheme],
+    [cycleTheme, showHelp],
   );
 
   const { startChord } = useKeyboardShortcuts({

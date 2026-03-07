@@ -134,11 +134,13 @@ describe('KeyboardShortcutProvider', () => {
     expect(screen.getByTestId('show-help').textContent).toBe('true');
   });
 
-  it('? key toggles help overlay closed when already open', () => {
+  it('? key does not close help overlay when already open (use Escape)', () => {
     renderProvider();
     act(() => { fireKey('?'); });
+    expect(screen.getByTestId('show-help').textContent).toBe('true');
     act(() => { fireKey('?'); });
-    expect(screen.getByTestId('show-help').textContent).toBe('false');
+    // overlay remains open — only Escape closes it
+    expect(screen.getByTestId('show-help').textContent).toBe('true');
   });
 
   it('? key does nothing when an input element is focused', () => {
