@@ -17,6 +17,8 @@ import { urlToTimeFormat } from './utils/timeUtils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_MS_PER_PIXEL } from './utils/timelineUtils';
 import { parseStatusParam } from './hooks/useURLParams';
+import { KeyboardShortcutProvider } from './components/KeyboardShortcutProvider';
+import { ShortcutHelpOverlay, ChordToast } from './components/ShortcutHelpOverlay';
 
 function AppContent() {
   const [searchParams] = useSearchParams();
@@ -84,13 +86,17 @@ function AppContent() {
   }, [rawLogLines.length, location.pathname, navigate]);
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/summary" element={<SummaryView />} />
-      <Route path="/logs" element={<LogsView />} />
-      <Route path="/http_requests" element={<HttpRequestsView />} />
-      <Route path="/http_requests/sync" element={<SyncView />} />
-    </Routes>
+    <KeyboardShortcutProvider>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/summary" element={<SummaryView />} />
+        <Route path="/logs" element={<LogsView />} />
+        <Route path="/http_requests" element={<HttpRequestsView />} />
+        <Route path="/http_requests/sync" element={<SyncView />} />
+      </Routes>
+      <ShortcutHelpOverlay />
+      <ChordToast />
+    </KeyboardShortcutProvider>
   );
 }
 

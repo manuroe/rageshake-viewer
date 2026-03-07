@@ -1,0 +1,165 @@
+/* ShortcutHelpOverlay Component Styles */
+
+/* Dark backdrop */
+.backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Subtle fade-in */
+    animation: fadeIn 120ms ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* Modal panel */
+.panel {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: 24px 28px;
+    width: min(560px, calc(100vw - 32px));
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideUp 140ms ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(8px); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.title {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.closeButton {
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--font-size-xl);
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: color var(--transition-default), background var(--transition-default);
+}
+
+.closeButton:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+/* Category sections */
+.section {
+    margin-bottom: 18px;
+}
+
+.section:last-child {
+    margin-bottom: 0;
+}
+
+.categoryTitle {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 8px;
+}
+
+/* Shortcut rows */
+.shortcutRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    gap: 16px;
+}
+
+.shortcutDescription {
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+/* Key badge(s) */
+.keys {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.key {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    color: var(--text-primary);
+    box-shadow: 0 1px 0 var(--border-default);
+    white-space: nowrap;
+}
+
+.keySeparator {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+/* Chord indicator toast (bottom-right of viewport) */
+.chordToast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: var(--z-tooltip);
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+    animation: toastIn 120ms ease-out;
+}
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.chordKey {
+    composes: key;
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.chordHint {
+    color: var(--text-muted);
+    font-size: var(--font-size-base);
+}

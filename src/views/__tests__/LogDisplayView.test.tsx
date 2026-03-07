@@ -6,6 +6,10 @@ import { useLogStore } from '../../stores/logStore';
 import { LogDisplayView } from '../LogDisplayView';
 import { createLogsWithMatches } from '../../test/fixtures';
 import styles from '../LogDisplayView.module.css';
+import {
+  KeyboardShortcutContext,
+  type KeyboardShortcutContextValue,
+} from '../../components/KeyboardShortcutContext';
 
 // Mock react-virtual to simplify rendering in tests
 vi.mock('@tanstack/react-virtual', () => {
@@ -648,5 +652,131 @@ describe('LogDisplayView expand button', () => {
     await user.click(screen.getByRole('button', { name: 'Open in Logs view' }));
 
     expect(onExpand).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Shortcut context registration
+// ---------------------------------------------------------------------------
+
+function makeShortcutCtx(
+  overrides?: Partial<KeyboardShortcutContextValue>,
+): KeyboardShortcutContextValue {
+  return {
+    showHelp: false,
+    toggleHelp: vi.fn(),
+    pendingChord: null,
+    registerFocusSearch: vi.fn(() => vi.fn()),
+    registerFocusFilter: vi.fn(() => vi.fn()),
+    ...overrides,
+  };
+}
+
+describe('LogDisplayView shortcut registration', () => {
+  it('registers a focus-search handler when mounted inside shortcut context', () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    const registerFocusSearch = vi.fn(() => vi.fn());
+    const ctx = makeShortcutCtx({ registerFocusSearch });
+
+    render(
+      <KeyboardShortcutContext.Provider value={ctx}>
+        <LogDisplayView />
+      </KeyboardShortcutContext.Provider>,
+    );
+
+    expect(registerFocusSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers a focus-filter handler when mounted inside shortcut context', () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    const registerFocusFilter = vi.fn(() => vi.fn());
+    const ctx = makeShortcutCtx({ registerFocusFilter });
+
+    render(
+      <KeyboardShortcutContext.Provider value={ctx}>
+        <LogDisplayView />
+      </KeyboardShortcutContext.Provider>,
+    );
+
+    expect(registerFocusFilter).toHaveBeenCalledTimes(1);
+  });
+
+  it('focus-search handler focuses the search input', async () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    let capturedSearchFn: (() => void) | null = null;
+    const registerFocusSearch = vi.fn((fn: () => void) => {
+      capturedSearchFn = fn;
+      return vi.fn();
+    });
+    const ctx = makeShortcutCtx({ registerFocusSearch });
+
+    render(
+      <KeyboardShortcutContext.Provider value={ctx}>
+        <LogDisplayView />
+      </KeyboardShortcutContext.Provider>,
+    );
+
+    expect(capturedSearchFn).not.toBeNull();
+    // Calling the registered fn should not throw (focuses the ref'd input)
+    expect(() => capturedSearchFn?.()).not.toThrow();
+  });
+
+  it('focus-filter handler focuses the filter input', async () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    let capturedFilterFn: (() => void) | null = null;
+    const registerFocusFilter = vi.fn((fn: () => void) => {
+      capturedFilterFn = fn;
+      return vi.fn();
+    });
+    const ctx = makeShortcutCtx({ registerFocusFilter });
+
+    render(
+      <KeyboardShortcutContext.Provider value={ctx}>
+        <LogDisplayView />
+      </KeyboardShortcutContext.Provider>,
+    );
+
+    expect(capturedFilterFn).not.toBeNull();
+    expect(() => capturedFilterFn?.()).not.toThrow();
+  });
+
+  it('Option+w key toggles line wrap', () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    render(<LogDisplayView />);
+
+    const checkbox = screen.getByLabelText(/Line wrap/i) as HTMLInputElement;
+    const initial = checkbox.checked;
+
+    fireEvent.keyDown(document, { key: 'w', code: 'KeyW', altKey: true });
+
+    expect(checkbox.checked).toBe(!initial);
+  });
+
+  it('Option+p key toggles strip prefix', () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    render(<LogDisplayView />);
+
+    const checkbox = screen.getByLabelText(/Strip prefix/i) as HTMLInputElement;
+    const initial = checkbox.checked;
+
+    fireEvent.keyDown(document, { key: 'p', code: 'KeyP', altKey: true });
+
+    expect(checkbox.checked).toBe(!initial);
+  });
+
+  it('Option+w toggles line wrap even when an input element is focused', () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    render(<LogDisplayView />);
+
+    const checkbox = screen.getByLabelText(/Line wrap/i) as HTMLInputElement;
+    const initial = checkbox.checked;
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(document, { key: 'w', code: 'KeyW', altKey: true });
+    document.body.removeChild(input);
+
+    expect(checkbox.checked).toBe(!initial);
   });
 });

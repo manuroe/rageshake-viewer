@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { BurgerMenu } from '../BurgerMenu';
 import { useLogStore } from '../../stores/logStore';
+import { KeyboardShortcutContext } from '../KeyboardShortcutContext';
+import type { KeyboardShortcutContextValue } from '../KeyboardShortcutContext';
 
 // Bypass zustand persist middleware to avoid localStorage issues in tests
 vi.mock('zustand/middleware', async (importOriginal) => {
@@ -269,6 +271,54 @@ describe('BurgerMenu', () => {
 
       fireEvent.mouseDown(screen.getByTestId('outside'));
       expect(screen.queryByText('Summary')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Sync Requests Navigation', () => {
+    it('navigates to /http_requests/sync when Sync Requests is clicked', () => {
+      render(
+        <MemoryRouter>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByText('Sync Requests'));
+      expect(navigateMock).toHaveBeenCalledWith('/http_requests/sync');
+    });
+
+    it('closes menu after navigating to Sync Requests', () => {
+      render(
+        <MemoryRouter>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByText('Sync Requests'));
+      expect(screen.queryByText('Sync Requests')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Keyboard Shortcuts Button', () => {
+    it('calls toggleHelp and closes menu when Keyboard Shortcuts is clicked', () => {
+      const toggleHelp = vi.fn();
+      const ctx: KeyboardShortcutContextValue = {
+        showHelp: false,
+        toggleHelp,
+        pendingChord: null,
+        registerFocusSearch: vi.fn(() => vi.fn()),
+        registerFocusFilter: vi.fn(() => vi.fn()),
+      };
+      render(
+        <KeyboardShortcutContext.Provider value={ctx}>
+          <MemoryRouter>
+            <BurgerMenu />
+          </MemoryRouter>
+        </KeyboardShortcutContext.Provider>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByText('Keyboard Shortcuts'));
+      expect(toggleHelp).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Keyboard Shortcuts')).not.toBeInTheDocument();
     });
   });
 });

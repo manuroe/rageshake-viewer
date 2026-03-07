@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLogStore } from '../stores/logStore';
 import { useThemeStore } from '../stores/themeStore';
+import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import styles from './BurgerMenu.module.css';
 
 export function BurgerMenu() {
@@ -12,6 +13,7 @@ export function BurgerMenu() {
   const [searchParams] = useSearchParams();
   const { clearData, clearLastRoute } = useLogStore();
   const { theme, setTheme } = useThemeStore();
+  const shortcutCtx = useKeyboardShortcutContextOptional();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -89,6 +91,13 @@ export function BurgerMenu() {
             onClick={() => handleNavigate('/http_requests/sync')}
           >
             Sync Requests
+          </button>
+          <div className={styles.burgerDivider} />
+          <button
+            className={styles.burgerItem}
+            onClick={() => { shortcutCtx?.toggleHelp(); setIsOpen(false); }}
+          >
+            Keyboard Shortcuts
           </button>
           <div className={styles.burgerDivider} />
           <div className={styles.themeButtons}>

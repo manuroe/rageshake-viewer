@@ -8,6 +8,9 @@ import { findMatchingIndices, expandWithContext, highlightText as highlightTextU
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useMatchNavigation } from '../hooks/useMatchNavigation';
 import { SearchInput } from '../components/SearchInput';
+import type { SearchInputHandle } from '../components/SearchInput';
+import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
+import { optionKey } from '../utils/shortcuts';
 import styles from './LogDisplayView.module.css';
 
 interface LogDisplayViewProps {
@@ -26,12 +29,37 @@ interface LogDisplayViewProps {
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
   const { rawLogLines } = useLogStore();
+  const shortcutCtx = useKeyboardShortcutContextOptional();
+  const registerFocusSearch = shortcutCtx?.registerFocusSearch;
+  const registerFocusFilter = shortcutCtx?.registerFocusFilter;
   
   // Use passed logLines if provided, otherwise use all raw log lines from store
   const displayLogLines = logLines || rawLogLines;
 
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [filterQueryInput, setFilterQueryInput] = useState(requestFilter);
+
+  // Ref for programmatic focus ("/" shortcut)
+  const searchInputRef = useRef<SearchInputHandle>(null);
+  const filterInputRef = useRef<SearchInputHandle>(null);
+
+  // Register "/" → focus search when this view is mounted
+  useEffect(() => {
+    if (!registerFocusSearch) return;
+    const unregister = registerFocusSearch(() => {
+      searchInputRef.current?.focus();
+    });
+    return unregister;
+  }, [registerFocusSearch]);
+
+  // Register "Option+/" (and "Cmd+F") → focus filter when this view is mounted
+  useEffect(() => {
+    if (!registerFocusFilter) return;
+    const unregister = registerFocusFilter(() => {
+      filterInputRef.current?.focus();
+    });
+    return unregister;
+  }, [registerFocusFilter]);
   
   // Track when we're syncing from prop to avoid calling onFilterChange
   const isSyncingFromProp = useRef(false);
@@ -69,6 +97,22 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [stripPrefix, setStripPrefix] = useState(true);
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
+
+  // Option+w → toggle line wrap; Option+p → toggle strip prefix
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (e.code === 'KeyW') {
+        e.preventDefault();
+        setLineWrap((v) => !v);
+      } else if (e.code === 'KeyP') {
+        e.preventDefault();
+        setStripPrefix((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, []);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -271,10 +315,11 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       <div className={styles.logToolbar}>
         <div className={styles.logToolbarLeft}>
           <SearchInput
+            ref={searchInputRef}
             value={searchQueryInput}
             onChange={setSearchQueryInput}
             placeholder="Search logs..."
-            title="Search and highlight in filtered results"
+            title="Search and highlight in filtered results (/)"
             expandOnFocus={false}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -322,7 +367,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           )}
         </div>
         <div className={styles.logToolbarRight}>
-          <label className={styles.logToolbarOption}>
+          <label className={styles.logToolbarOption} title={`Toggle line wrap (${optionKey}+w)`}>
             <input
               type="checkbox"
               checked={lineWrap}
@@ -330,7 +375,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
             Line wrap
           </label>
-          <label className={styles.logToolbarOption}>
+          <label className={styles.logToolbarOption} title={`Toggle strip prefix (${optionKey}+p)`}>
             <input
               type="checkbox"
               checked={stripPrefix}
@@ -339,6 +384,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             Strip prefix
           </label>
           <SearchInput
+            ref={filterInputRef}
             value={filterQueryInput}
             onChange={setFilterQueryInput}
             placeholder="Filter logs..."

@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { InputHTMLAttributes } from 'react';
 import styles from './SearchInput.module.css';
 
@@ -17,11 +17,16 @@ interface SearchInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
   expandOnFocus?: boolean;
 }
 
+/** Imperative handle exposed via ref */
+export interface SearchInputHandle {
+  focus: () => void;
+}
+
 /**
  * Reusable search/filter input with clear button.
  * Handles the visual presentation - parent manages debouncing if needed.
  */
-export function SearchInput({
+export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(function SearchInput({
   value,
   onChange,
   onClear,
@@ -29,8 +34,12 @@ export function SearchInput({
   className = '',
   expandOnFocus = true,
   ...inputProps
-}: SearchInputProps) {
+}: SearchInputProps, ref) {
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+  }));
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.value);
@@ -82,4 +91,4 @@ export function SearchInput({
       )}
     </div>
   );
-}
+});
