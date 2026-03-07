@@ -307,9 +307,10 @@ describe('SummaryView', () => {
       const { container } = renderSummaryView();
 
       // Find the URL link in Top Failed URLs section
+      // After stripping the Matrix client-server API path, the displayed text is just the endpoint
       const syncLink = screen.getByText((content, element) => 
         element?.tagName.toLowerCase() === 'button' && 
-        content.includes('_matrix/client/r0/sync')
+        content.includes('/sync')
       );
 
       expect(syncLink).toBeInTheDocument();
@@ -324,7 +325,7 @@ describe('SummaryView', () => {
                    window.location.hash;
       
       // Verify the navigation intent - should use request_id for single match
-      expect(syncLink.innerHTML).toContain('_matrix/client/r0/sync');
+      expect(syncLink.innerHTML).toContain('/sync');
     });
 
     it('uses filter= when multiple failed URIs match', async () => {
@@ -352,9 +353,10 @@ describe('SummaryView', () => {
       renderSummaryView();
 
       // Find the sync URL which has 2 failed matches
+      // After stripping the Matrix client-server API path, the displayed text is just the endpoint
       const syncLink = screen.getByText((content, element) => 
         element?.tagName.toLowerCase() === 'button' && 
-        content.includes('_matrix/client/r0/sync')
+        content.includes('/sync')
       );
 
       expect(syncLink).toBeInTheDocument();
@@ -432,9 +434,10 @@ describe('SummaryView', () => {
       renderSummaryView();
 
       // Should show the URI link (appears once in Top Failed URLs)
+      // After stripping the Matrix client-server API path, the displayed text is just the endpoint
       const links = screen.queryAllByText((content, element) => 
         element?.tagName.toLowerCase() === 'button' && 
-        content.includes('_matrix/client/r0/sync')
+        content.includes('/sync')
       );
 
       // Should find the link (potentially multiple if rendering multiple times)

@@ -3,7 +3,7 @@ import { useLogStore } from '../stores/logStore';
 import { countRequestsForTimeRange } from '../utils/timeUtils';
 import { RequestTable } from '../components/RequestTable';
 import type { ColumnDef } from '../components/RequestTable';
-import { extractRelativeUri, findCommonUriPrefix, stripCommonPrefix } from '../utils/uriUtils';
+import { stripMatrixClientPath } from '../utils/uriUtils';
 import { extractAvailableStatusCodes } from '../utils/statusCodeUtils';
 import type { HttpRequest } from '../types/log.types';
 import { renderTimeoutExceededOverlay } from '../utils/waterfallTimeoutOverlay';
@@ -38,12 +38,6 @@ export function HttpRequestsView() {
     [allHttpRequests]
   );
 
-  // Find common URI prefix to strip from display
-  const commonUriPrefix = useMemo(() => 
-    findCommonUriPrefix(filteredHttpRequests.map(r => r.uri)),
-    [filteredHttpRequests]
-  );
-
   // Define columns for HTTP requests view
   const columns: ColumnDef[] = useMemo(() => [
     {
@@ -55,7 +49,7 @@ export function HttpRequestsView() {
       id: 'uri',
       label: 'URI',
       className: 'uri',
-      getValue: (req) => stripCommonPrefix(extractRelativeUri(req.uri), commonUriPrefix),
+      getValue: (req) => stripMatrixClientPath(req.uri),
     },
     {
       id: 'time',
@@ -81,7 +75,7 @@ export function HttpRequestsView() {
       className: 'size',
       getValue: (req) => req.responseSizeString || '-',
     },
-  ], [commonUriPrefix, getDisplayTime]);
+  ], [getDisplayTime]);
 
   // Timeout lookup by request id (sync metadata is stored in allRequests)
   const timeoutByRequestId = useMemo(() => {
