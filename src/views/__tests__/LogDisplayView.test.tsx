@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
-import { screen, fireEvent } from '@testing-library/dom';
+import { screen, fireEvent, createEvent } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { useLogStore } from '../../stores/logStore';
 import { LogDisplayView } from '../LogDisplayView';
-import { createLogsWithMatches } from '../../test/fixtures';
+import { createLogsWithMatches, createParsedLogLine } from '../../test/fixtures';
 import styles from '../LogDisplayView.module.css';
 import {
   KeyboardShortcutContext,
@@ -116,6 +116,25 @@ describe('LogDisplayView gap arrows & expansion', () => {
     expect(line156Container).toBeInTheDocument();
     const downBtn156 = line156Container.querySelector('button[aria-label="Load hidden lines below"]');
     expect(downBtn156).toBeNull();
+  });
+
+  it('context menu: Load 10 more lines action expands by 10', async () => {
+    const user = userEvent.setup();
+    const total = 200;
+    const matchIndices = [76, 157];
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(total, matchIndices) });
+
+    render(<LogDisplayView requestFilter="MATCH" />);
+
+    const line76Container = getLineContainer(76);
+    const downBtn76 = line76Container.querySelector('button[aria-label="Load hidden lines below"]') as HTMLButtonElement;
+    expect(downBtn76).toBeTruthy();
+    fireEvent.contextMenu(downBtn76);
+
+    const load10 = await screen.findByText(/Load 10 more lines/i);
+    await user.click(load10);
+
+    expect(getLineContainer(86)).toBeInTheDocument();
   });
 
   it('context menu: Load all to previous line (up)', async () => {
@@ -258,6 +277,27 @@ describe('LogDisplayView gap arrows & expansion', () => {
     const line20Container = getLineContainer(20);
     expect(line14Container).toBeInTheDocument();
     expect(line20Container).toBeInTheDocument();
+  });
+
+  it('supports resetting and typing context line count', async () => {
+    const user = userEvent.setup();
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(30, [10]) });
+
+    render(<LogDisplayView requestFilter="MATCH" />);
+
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    const ctxToggle = screen.getByTitle(/Context lines before\/after matches/i);
+    const ctxInput = screen.getByTitle(/Context lines \(0 = disabled\)/i) as HTMLInputElement;
+
+    await user.click(ctxToggle as HTMLButtonElement);
+    expect(ctxInput.value).toBe('5');
+
+    await user.click(ctxToggle as HTMLButtonElement);
+    expect(ctxInput.value).toBe('0');
+
+    fireEvent.change(ctxInput, { target: { value: '3' } });
+    expect(ctxInput.value).toBe('3');
   });
 
   it('removes arrows when gap fully expanded to next anchor', async () => {
@@ -501,6 +541,28 @@ describe('LogDisplayView filter & search behaviors', () => {
     expect(counter).toBeTruthy();
   });
 
+  it('handles Enter and Shift+Enter in search input navigation', async () => {
+    const total = 20;
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(total, [3, 7], 'TOKEN') });
+
+    render(<LogDisplayView requestFilter="TOKEN" />);
+
+    const searchInput = screen.getByPlaceholderText(/Search logs/i);
+    await userEvent.type(searchInput, 'TOKEN');
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    const enterEvent = createEvent.keyDown(searchInput, { key: 'Enter' });
+    enterEvent.preventDefault = vi.fn();
+    fireEvent(searchInput, enterEvent);
+
+    const shiftEnterEvent = createEvent.keyDown(searchInput, { key: 'Enter', shiftKey: true });
+    shiftEnterEvent.preventDefault = vi.fn();
+    fireEvent(searchInput, shiftEnterEvent);
+
+    expect(enterEvent.preventDefault).toHaveBeenCalled();
+    expect(shiftEnterEvent.preventDefault).toHaveBeenCalled();
+  });
+
   it('context lines work with filter', async () => {
     const total = 20;
     useLogStore.setState({
@@ -610,6 +672,60 @@ describe('LogDisplayView requestFilter prop sync', () => {
     // Now all lines should be visible again
     expect(getLineContainer(1)).toBeInTheDocument();
     expect(getLineContainer(15)).toBeInTheDocument();
+  });
+
+  it('does not call onFilterChange when syncing from requestFilter prop updates', async () => {
+    const total = 20;
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(total, [7], 'MATCH') });
+    const onFilterChange = vi.fn();
+
+    const { rerender } = render(<LogDisplayView requestFilter="" onFilterChange={onFilterChange} />);
+    rerender(<LogDisplayView requestFilter="MATCH" onFilterChange={onFilterChange} />);
+
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    expect(onFilterChange).not.toHaveBeenCalled();
+  });
+
+  it('calls onFilterChange when user edits filter input', async () => {
+    const total = 20;
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(total, [7], 'MATCH') });
+    const onFilterChange = vi.fn();
+
+    render(<LogDisplayView requestFilter="MATCH" onFilterChange={onFilterChange} />);
+
+    const filterInput = screen.getByPlaceholderText(/Filter logs/i);
+    fireEvent.change(filterInput, { target: { value: 'line 1' } });
+
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    expect(onFilterChange).toHaveBeenCalledWith('line 1');
+  });
+
+  it('treats quoted request filters as exact request-id match', async () => {
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({
+          lineNumber: 0,
+          rawText: '2026-01-01T00:00:00.000000Z INFO send request_id="REQ-18" method=GET',
+          message: 'request_id="REQ-18"',
+          strippedMessage: 'request_id="REQ-18"',
+        }),
+        createParsedLogLine({
+          lineNumber: 1,
+          rawText: '2026-01-01T00:00:01.000000Z INFO send request_id="REQ-180" method=GET',
+          message: 'request_id="REQ-180"',
+          strippedMessage: 'request_id="REQ-180"',
+        }),
+      ],
+    });
+
+    render(<LogDisplayView requestFilter='"REQ-18"' />);
+
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    expect(getLineContainer(0)).toBeInTheDocument();
+    expect(() => getLineContainer(1)).toThrow();
   });
 });
 

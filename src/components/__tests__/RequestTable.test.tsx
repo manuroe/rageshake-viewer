@@ -21,10 +21,11 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...mod, useNavigate: () => mockNavigate };
 });
 
-// Mock LogDisplayView to avoid deep rendering
 vi.mock('../../views/LogDisplayView', () => ({
-  LogDisplayView: vi.fn(({ onClose, onExpand }) => (
+  LogDisplayView: vi.fn(({ onClose, onExpand, requestFilter, lineRange }) => (
     <div data-testid="log-display-view">
+      <span data-testid="log-display-request-filter">{requestFilter ?? ''}</span>
+      <span data-testid="log-display-line-range">{lineRange ? 'line-range-set' : 'line-range-unset'}</span>
       <button onClick={onClose}>Close</button>
       <button onClick={onExpand}>Expand</button>
     </div>
@@ -380,7 +381,32 @@ describe('RequestTable', () => {
       mockNavigate.mockClear();
     });
 
-    it('navigates to /logs with filter=requestId on onExpand', async () => {
+    it('passes quoted requestFilter and no lineRange to embedded LogDisplayView', async () => {
+      const req = createHttpRequest({
+        requestId: 'REQ-18',
+        sendLineNumber: 10,
+        responseLineNumber: 20,
+      });
+      const rawLines = Array.from({ length: 25 }, (_, i) =>
+        createParsedLogLine({ lineNumber: i, timestampUs: 1700000000000000 + i * 1000000 })
+      );
+      useLogStore.getState().setHttpRequests([req], rawLines);
+
+      renderWithRouter(<RequestTable {...createProps({ filteredRequests: [req], totalCount: 1 })} />);
+
+      act(() => {
+        useLogStore.setState({
+          openLogViewerIds: new Set<number>([10]),
+          expandedRows: new Set<number>([10]),
+        });
+      });
+
+      expect(await screen.findByTestId('log-display-view')).toBeInTheDocument();
+      expect(screen.getByTestId('log-display-request-filter')).toHaveTextContent('"REQ-18"');
+      expect(screen.getByTestId('log-display-line-range')).toHaveTextContent('line-range-unset');
+    });
+
+    it('navigates to /logs with quoted filter=requestId on onExpand', async () => {
       const req = createHttpRequest({
         requestId: 'REQ-LOG',
         sendLineNumber: 10,
@@ -411,7 +437,7 @@ describe('RequestTable', () => {
       expect(mockNavigate).toHaveBeenCalledTimes(1);
       const navigatedUrl: string = mockNavigate.mock.calls[0][0] as string;
       expect(navigatedUrl).toMatch(/^\/logs\?/);
-      expect(navigatedUrl).toContain('filter=REQ-LOG');
+      expect(navigatedUrl).toContain('filter=%22REQ-LOG%22');
       expect(navigatedUrl).not.toContain('start_line');
       expect(navigatedUrl).not.toContain('end_line');
     });

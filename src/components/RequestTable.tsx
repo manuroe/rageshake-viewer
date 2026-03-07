@@ -356,36 +356,20 @@ export function RequestTable({
     const req = displayedRequests.find(r => getRowKey(r) === expandedRowKey);
     if (!req) return null;
 
-    const reqIndex = displayedRequests.findIndex(r => getRowKey(r) === expandedRowKey);
-    const prevRequest = reqIndex > 0 ? displayedRequests[reqIndex - 1] : null;
-    const nextRequest = reqIndex < displayedRequests.length - 1 ? displayedRequests[reqIndex + 1] : null;
-
-    const prevRequestLineRange = prevRequest ? {
-      start: prevRequest.sendLineNumber,
-      end: prevRequest.responseLineNumber || prevRequest.sendLineNumber
-    } : undefined;
-
-    const nextRequestLineRange = nextRequest ? {
-      start: nextRequest.sendLineNumber,
-      end: nextRequest.responseLineNumber || nextRequest.sendLineNumber
-    } : undefined;
-
     return (
       <div className={styles.expandedLogViewer}>
         <LogDisplayView
           key={expandedRowKey}
-          lineRange={{ start: req.sendLineNumber!, end: req.responseLineNumber ?? req.sendLineNumber! }}
+          requestFilter={`"${req.requestId}"`}
           defaultShowOnlyMatching
           defaultLineWrap
           logLines={rawLogLines.map(line => ({
             ...line,
             timestamp: line.displayTime
           }))}
-          prevRequestLineRange={prevRequestLineRange}
-          nextRequestLineRange={nextRequestLineRange}
           onExpand={() => {
             const params = new URLSearchParams();
-            params.set('filter', req.requestId);
+            params.set('filter', `"${req.requestId}"`);
             const { startTime: storeStart, endTime: storeEnd } = useLogStore.getState();
             if (storeStart) params.set('start', storeStart);
             if (storeEnd) params.set('end', storeEnd);
