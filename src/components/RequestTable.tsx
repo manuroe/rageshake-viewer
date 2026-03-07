@@ -153,15 +153,16 @@ export function RequestTable({
   // Ref for Cmd+F shortcut (focus URI filter)
   const filterInputRef = useRef<SearchInputHandle>(null);
   const shortcutCtx = useKeyboardShortcutContextOptional();
+  const registerFocusFilter = shortcutCtx?.registerFocusFilter;
 
   // Register Cmd+F → focus URI filter while this RequestTable is mounted
   useEffect(() => {
-    if (!shortcutCtx || !showUriFilter) return;
-    const unregister = shortcutCtx.registerFocusFilter(() => {
+    if (!registerFocusFilter || !showUriFilter) return;
+    const unregister = registerFocusFilter(() => {
       filterInputRef.current?.focus();
     });
     return unregister;
-  }, [shortcutCtx, showUriFilter]);
+  }, [registerFocusFilter, showUriFilter]);
 
   // Sync debounced URI filter to URL
   useEffect(() => {
@@ -450,7 +451,7 @@ export function RequestTable({
               onChange={setUriFilterInput}
               onClear={handleUriFilterClear}
               placeholder="Filter URI..."
-              title={`Filter requests by URI (${metaKey}+/)`}
+              title={`Filter requests by URI (${metaKey}+/ or ${metaKey}+F)`}
               aria-label="Filter requests by URI"
             />
           )}

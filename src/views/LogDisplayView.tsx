@@ -10,6 +10,7 @@ import { useMatchNavigation } from '../hooks/useMatchNavigation';
 import { SearchInput } from '../components/SearchInput';
 import type { SearchInputHandle } from '../components/SearchInput';
 import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
+import { isInputFocused } from '../utils/shortcuts';
 import styles from './LogDisplayView.module.css';
 
 interface LogDisplayViewProps {
@@ -29,6 +30,8 @@ interface LogDisplayViewProps {
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
   const { rawLogLines } = useLogStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
+  const registerFocusSearch = shortcutCtx?.registerFocusSearch;
+  const registerFocusFilter = shortcutCtx?.registerFocusFilter;
   
   // Use passed logLines if provided, otherwise use all raw log lines from store
   const displayLogLines = logLines || rawLogLines;
@@ -42,21 +45,21 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
 
   // Register "/" → focus search when this view is mounted
   useEffect(() => {
-    if (!shortcutCtx) return;
-    const unregister = shortcutCtx.registerFocusSearch(() => {
+    if (!registerFocusSearch) return;
+    const unregister = registerFocusSearch(() => {
       searchInputRef.current?.focus();
     });
     return unregister;
-  }, [shortcutCtx]);
+  }, [registerFocusSearch]);
 
   // Register "Cmd+/" (and "Cmd+F") → focus filter when this view is mounted
   useEffect(() => {
-    if (!shortcutCtx) return;
-    const unregister = shortcutCtx.registerFocusFilter(() => {
+    if (!registerFocusFilter) return;
+    const unregister = registerFocusFilter(() => {
       filterInputRef.current?.focus();
     });
     return unregister;
-  }, [shortcutCtx]);
+  }, [registerFocusFilter]);
   
   // Track when we're syncing from prop to avoid calling onFilterChange
   const isSyncingFromProp = useRef(false);
@@ -98,10 +101,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   // w → toggle line wrap; p → toggle strip prefix (plain keys, only when no input focused)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // Skip when an input is focused
-      const el = document.activeElement;
-      const tag = el?.tagName.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || (el as HTMLElement)?.isContentEditable) return;
+      if (isInputFocused()) return;
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       if (e.key === 'w') {
         e.preventDefault();

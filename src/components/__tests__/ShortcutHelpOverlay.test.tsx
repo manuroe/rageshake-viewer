@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ShortcutHelpOverlay, ChordToast } from '../ShortcutHelpOverlay';
 import { KeyboardShortcutContext } from '../KeyboardShortcutContext';
 import type { KeyboardShortcutContextValue } from '../KeyboardShortcutContext';
@@ -54,8 +54,45 @@ describe('ShortcutHelpOverlay', () => {
   it('calls toggleHelp when the backdrop is clicked', () => {
     const toggleHelp = vi.fn();
     renderWithCtx(makeCtx({ showHelp: true, toggleHelp }), <ShortcutHelpOverlay />);
-    fireEvent.click(screen.getByRole('dialog'));
+    // Backdrop is the parent of the dialog panel
+    const panel = screen.getByRole('dialog');
+    fireEvent.click(panel.parentElement!);
     expect(toggleHelp).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call toggleHelp when clicking inside the panel', () => {
+    const toggleHelp = vi.fn();
+    renderWithCtx(makeCtx({ showHelp: true, toggleHelp }), <ShortcutHelpOverlay />);
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(toggleHelp).not.toHaveBeenCalled();
+  });
+
+  it('focuses the close button when the overlay opens', () => {
+    renderWithCtx(makeCtx({ showHelp: true }), <ShortcutHelpOverlay />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /close/i }));
+  });
+
+  it('restores focus to previous element when overlay closes', () => {
+    const button = document.createElement('button');
+    button.textContent = 'prev';
+    document.body.appendChild(button);
+    button.focus();
+
+    const toggleHelp = vi.fn();
+    const ctx = makeCtx({ showHelp: true, toggleHelp });
+    const { rerender } = renderWithCtx(ctx, <ShortcutHelpOverlay />);
+
+    // Close the overlay
+    act(() => {
+      rerender(
+        <KeyboardShortcutContext.Provider value={makeCtx({ showHelp: false, toggleHelp })}>
+          <ShortcutHelpOverlay />
+        </KeyboardShortcutContext.Provider>,
+      );
+    });
+
+    expect(document.activeElement).toBe(button);
+    document.body.removeChild(button);
   });
 
   it('does not call toggleHelp on Escape (handled by KeyboardShortcutProvider)', () => {

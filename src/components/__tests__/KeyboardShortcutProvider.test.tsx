@@ -402,4 +402,114 @@ describe('KeyboardShortcutProvider', () => {
     act(() => { fireKey('/', { metaKey: true }); });
     expect(filterHandler).not.toHaveBeenCalled();
   });
+
+  // ---------------------------------------------------------------------------
+  // Nested registrations (LIFO stack behaviour)
+  // ---------------------------------------------------------------------------
+
+  it('second registerFocusSearch overrides first (LIFO)', () => {
+    const handler1 = vi.fn();
+    const handler2 = vi.fn();
+    function RegisterTwo() {
+      const ctx = useKeyboardShortcutContext();
+      useEffect(() => {
+        const un1 = ctx.registerFocusSearch(handler1);
+        const un2 = ctx.registerFocusSearch(handler2);
+        return () => { un2(); un1(); };
+      }, [ctx]);
+      return null;
+    }
+    render(
+      <KeyboardShortcutProvider>
+        <RegisterTwo />
+      </KeyboardShortcutProvider>,
+    );
+    act(() => { fireKey('/'); });
+    expect(handler2).toHaveBeenCalledTimes(1);
+    expect(handler1).not.toHaveBeenCalled();
+  });
+
+  it('unregistering second focus-search handler restores first', () => {
+    const handler1 = vi.fn();
+    const handler2 = vi.fn();
+    let unregister2: (() => void) | undefined;
+    function RegisterBoth() {
+      const ctx = useKeyboardShortcutContext();
+      useEffect(() => {
+        const un1 = ctx.registerFocusSearch(handler1);
+        unregister2 = ctx.registerFocusSearch(handler2);
+        return un1;
+      }, [ctx]);
+      return null;
+    }
+    render(
+      <KeyboardShortcutProvider>
+        <RegisterBoth />
+      </KeyboardShortcutProvider>,
+    );
+    // handler2 is the most recent — it wins
+    act(() => { fireKey('/'); });
+    expect(handler2).toHaveBeenCalledTimes(1);
+    expect(handler1).not.toHaveBeenCalled();
+
+    // Remove handler2 → handler1 should be restored
+    act(() => { unregister2!(); });
+    handler2.mockClear();
+    act(() => { fireKey('/'); });
+    expect(handler1).toHaveBeenCalledTimes(1);
+    expect(handler2).not.toHaveBeenCalled();
+  });
+
+  it('second registerFocusFilter overrides first (LIFO)', () => {
+    const handler1 = vi.fn();
+    const handler2 = vi.fn();
+    function RegisterTwo() {
+      const ctx = useKeyboardShortcutContext();
+      useEffect(() => {
+        const un1 = ctx.registerFocusFilter(handler1);
+        const un2 = ctx.registerFocusFilter(handler2);
+        return () => { un2(); un1(); };
+      }, [ctx]);
+      return null;
+    }
+    render(
+      <KeyboardShortcutProvider>
+        <RegisterTwo />
+      </KeyboardShortcutProvider>,
+    );
+    act(() => { fireKey('/', { metaKey: true }); });
+    expect(handler2).toHaveBeenCalledTimes(1);
+    expect(handler1).not.toHaveBeenCalled();
+  });
+
+  it('unregistering second focus-filter handler restores first', () => {
+    const handler1 = vi.fn();
+    const handler2 = vi.fn();
+    let unregister2: (() => void) | undefined;
+    function RegisterBoth() {
+      const ctx = useKeyboardShortcutContext();
+      useEffect(() => {
+        const un1 = ctx.registerFocusFilter(handler1);
+        unregister2 = ctx.registerFocusFilter(handler2);
+        return un1;
+      }, [ctx]);
+      return null;
+    }
+    render(
+      <KeyboardShortcutProvider>
+        <RegisterBoth />
+      </KeyboardShortcutProvider>,
+    );
+    // handler2 is the most recent — it wins
+    act(() => { fireKey('/', { metaKey: true }); });
+    expect(handler2).toHaveBeenCalledTimes(1);
+    expect(handler1).not.toHaveBeenCalled();
+
+    // Remove handler2 → handler1 should be restored
+    act(() => { unregister2!(); });
+    handler2.mockClear();
+    act(() => { fireKey('/', { metaKey: true }); });
+    expect(handler1).toHaveBeenCalledTimes(1);
+    expect(handler2).not.toHaveBeenCalled();
+  });
 });

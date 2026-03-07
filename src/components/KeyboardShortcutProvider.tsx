@@ -30,28 +30,43 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
   const [showHelp, setShowHelp] = useState(false);
   const [pendingChord, setPendingChord] = useState<string | null>(null);
 
-  // Registered handlers for view-specific actions
+  // Registered handlers for view-specific actions (LIFO stacks for nested registrations)
   const focusSearchHandlerRef = useRef<(() => void) | null>(null);
   const focusFilterHandlerRef = useRef<(() => void) | null>(null);
+  const focusSearchHandlerStackRef = useRef<(() => void)[]>([]);
+  const focusFilterHandlerStackRef = useRef<(() => void)[]>([]);
 
   // startChord ref — populated after useKeyboardShortcuts hook runs below;
   // declared here so handleKey can call it without a stale closure.
   const startChordRef = useRef<(chord: ChordKey) => void>(() => undefined);
+
   const registerFocusSearch = useCallback((fn: () => void) => {
+    const stack = focusSearchHandlerStackRef.current.slice();
+    stack.push(fn);
+    focusSearchHandlerStackRef.current = stack;
     focusSearchHandlerRef.current = fn;
     return () => {
-      if (focusSearchHandlerRef.current === fn) {
-        focusSearchHandlerRef.current = null;
-      }
+      const currentStack = focusSearchHandlerStackRef.current.slice();
+      const index = currentStack.lastIndexOf(fn);
+      if (index === -1) return;
+      currentStack.splice(index, 1);
+      focusSearchHandlerStackRef.current = currentStack;
+      focusSearchHandlerRef.current = currentStack.length > 0 ? currentStack[currentStack.length - 1] : null;
     };
   }, []);
 
   const registerFocusFilter = useCallback((fn: () => void) => {
+    const stack = focusFilterHandlerStackRef.current.slice();
+    stack.push(fn);
+    focusFilterHandlerStackRef.current = stack;
     focusFilterHandlerRef.current = fn;
     return () => {
-      if (focusFilterHandlerRef.current === fn) {
-        focusFilterHandlerRef.current = null;
-      }
+      const currentStack = focusFilterHandlerStackRef.current.slice();
+      const index = currentStack.lastIndexOf(fn);
+      if (index === -1) return;
+      currentStack.splice(index, 1);
+      focusFilterHandlerStackRef.current = currentStack;
+      focusFilterHandlerRef.current = currentStack.length > 0 ? currentStack[currentStack.length - 1] : null;
     };
   }, []);
 

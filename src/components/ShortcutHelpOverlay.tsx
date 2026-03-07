@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { SHORTCUTS, SHORTCUT_CATEGORIES, metaKey, type ShortcutCategory } from '../utils/shortcuts';
 import { useKeyboardShortcutContext } from './KeyboardShortcutContext';
@@ -79,8 +79,50 @@ const CATEGORY_ORDER: ShortcutCategory[] = [
   'ui',
 ];
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function ShortcutHelpOverlay() {
   const { showHelp, toggleHelp } = useKeyboardShortcutContext();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Focus close button when overlay opens; restore previous focus when it closes
+  useEffect(() => {
+    if (!showHelp) return;
+    const prev = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    return () => {
+      prev?.focus();
+    };
+  }, [showHelp]);
+
+  // Focus trap: cycle Tab/Shift+Tab within the panel
+  useEffect(() => {
+    if (!showHelp) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    panel.addEventListener('keydown', handleKey);
+    return () => panel.removeEventListener('keydown', handleKey);
+  }, [showHelp]);
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
@@ -104,14 +146,17 @@ export function ShortcutHelpOverlay() {
     <div
       className={styles.backdrop}
       onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Keyboard shortcuts"
     >
-      <div className={styles.panel}>
+      <div
+        ref={panelRef}
+        className={styles.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keyboard shortcuts"
+      >
         <div className={styles.header}>
           <h2 className={styles.title}>Keyboard Shortcuts</h2>
-          <button className={styles.closeButton} onClick={toggleHelp} aria-label="Close">
+          <button ref={closeButtonRef} className={styles.closeButton} onClick={toggleHelp} aria-label="Close">
             ✕
           </button>
         </div>
