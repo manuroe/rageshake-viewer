@@ -27,6 +27,7 @@ describe('FileUpload navigation', () => {
       requests: [],
       httpRequests: [],
       connectionIds: [],
+      sentryEvents: [],
       rawLogLines: [
         {
           lineNumber: 0,
@@ -192,6 +193,7 @@ describe('FileUpload drag-and-drop', () => {
       requests: [],
       httpRequests: [],
       connectionIds: [],
+      sentryEvents: [],
       rawLogLines: [
         {
           lineNumber: 0,
@@ -313,6 +315,7 @@ describe('FileUpload - error handling and warnings', () => {
       requests: [],
       httpRequests: [],
       connectionIds: [],
+      sentryEvents: [],
       rawLogLines: [],
     });
 
