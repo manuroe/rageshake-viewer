@@ -1,5 +1,7 @@
 2026-01-15T10:00:00.000000Z  INFO [matrix-rust-sdk] THIS IS A DEMO LOG, NOT REAL SDK OUTPUT
+2026-01-15T10:00:00.050000Z  INFO [android] MainActivity: Android host app started, initializing Matrix SDK
 2026-01-15T10:00:00.100000Z  INFO [matrix-rust-sdk] Matrix Rust SDK initializing
+2026-01-15T10:00:00.110000Z  WARN [matrix-rust-sdk] Sentry detected a crash in the previous run: 8890d8fdasffdsf809ds8fd7a0b1234
 2026-01-15T10:00:00.120000Z DEBUG [matrix-rust-sdk] Loading client configuration from storage
 2026-01-15T10:00:00.245000Z DEBUG [matrix-rust-sdk] Found cached session, attempting restore
 2026-01-15T10:00:00.380000Z  INFO [matrix-rust-sdk] Connecting to homeserver: https://matrix.example.org
@@ -51,6 +53,7 @@
 2026-01-15T10:00:22.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-022" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room3:example.org/event/$abc123:example.org" request_size="0"}
 2026-01-15T10:00:22.350000Z DEBUG [matrix-rust-sdk] send{request_id="req-022" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room3:example.org/event/$abc123:example.org" request_size="0" status=403 response_size="128" request_duration=350ms}
 2026-01-15T10:00:22.380000Z  WARN [matrix-rust-sdk] Access denied fetching event $abc123:example.org in !room3:example.org (403 Forbidden)
+2026-01-15T10:00:22.390000Z  WARN [matrix-rust-sdk] Sending error to Sentry
 2026-01-15T10:00:25.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-023" method=GET uri="https://matrix.example.org/_matrix/client/v3/profile/@bob:example.org" request_size="0"}
 2026-01-15T10:00:25.410000Z DEBUG [matrix-rust-sdk] send{request_id="req-023" method=GET uri="https://matrix.example.org/_matrix/client/v3/profile/@bob:example.org" request_size="0" status=404 response_size="128" request_duration=410ms}
 2026-01-15T10:00:25.430000Z  WARN [matrix-rust-sdk] User profile not found for @bob:example.org
