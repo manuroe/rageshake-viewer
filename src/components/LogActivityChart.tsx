@@ -1,32 +1,36 @@
 import { useMemo, useCallback } from 'react';
-import type { ParsedLogLine, LogLevel } from '../types/log.types';
+import type { ParsedLogLine, LogLevel, SentryEvent } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_SECOND, MICROS_PER_MILLISECOND } from '../types/time.types';
 import { BaseActivityChart, type ActivityBucket } from './BaseActivityChart';
 
 interface LogActivityChartProps {
   logLines: ParsedLogLine[];
+  sentryEvents?: SentryEvent[];
   /** Callback when user selects a time range. Values are in microseconds. */
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   onResetZoom?: () => void;
 }
 
+type ChartCategory = LogLevel | 'SENTRY';
+
 interface LogBucket extends ActivityBucket {
-  counts: Record<LogLevel, number>;
+  counts: Record<ChartCategory, number>;
 }
 
-const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
+const LOG_LEVEL_COLORS: Record<ChartCategory, string> = {
   TRACE: '#808080',
   DEBUG: '#569cd6',
   INFO: '#4ec9b0',
   WARN: '#ff9800',
   ERROR: '#f44336',
   UNKNOWN: '#858585',
+  SENTRY: '#a855f7',
 };
 
-const LOG_LEVEL_ORDER: LogLevel[] = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE', 'UNKNOWN'];
+const LOG_LEVEL_ORDER: ChartCategory[] = ['SENTRY', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE', 'UNKNOWN'];
 
-export function LogActivityChart({ logLines, onTimeRangeSelected, onResetZoom }: LogActivityChartProps) {
+export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, onResetZoom }: LogActivityChartProps) {
   // Helper to format timestamp as HH:MM:SS in UTC (converts from microseconds)
   const formatTime = useCallback((timestampUs: number): string => {
     const date = new Date(timestampUs / MICROS_PER_MILLISECOND);
@@ -37,6 +41,8 @@ export function LogActivityChart({ logLines, onTimeRangeSelected, onResetZoom }:
     if (logLines.length === 0) {
       return { buckets: [] as LogBucket[], maxCount: 0, minTime: 0 as TimestampMicros, maxTime: 0 as TimestampMicros };
     }
+
+    const sentryLineNumbers = new Set((sentryEvents ?? []).map(e => e.lineNumber));
 
     // Find time range (all in microseconds)
     const timestamps = logLines.map((line) => line.timestampUs);
@@ -69,19 +75,19 @@ export function LogActivityChart({ logLines, onTimeRangeSelected, onResetZoom }:
           WARN: 0,
           ERROR: 0,
           UNKNOWN: 0,
+          SENTRY: 0,
         },
         total: 0,
       });
     }
 
-    // Fill buckets with log data
+    // Fill buckets with log data; Sentry lines get their own category
     logLines.forEach((line) => {
-      const time = line.timestampUs;
-      const bucketKey = Math.floor(time / bucketSize) * bucketSize;
-
+      const bucketKey = Math.floor(line.timestampUs / bucketSize) * bucketSize;
       const bucket = bucketMap.get(bucketKey);
       if (bucket) {
-        bucket.counts[line.level]++;
+        const category: ChartCategory = sentryLineNumbers.has(line.lineNumber) ? 'SENTRY' : line.level;
+        bucket.counts[category]++;
         bucket.total++;
       }
     });
@@ -91,11 +97,11 @@ export function LogActivityChart({ logLines, onTimeRangeSelected, onResetZoom }:
     const dataMaxCount = Math.max(...dataBuckets.map((b) => b.total));
 
     return { buckets: dataBuckets, maxCount: dataMaxCount, minTime: dataMinTime, maxTime: dataMaxTime };
-  }, [logLines, formatTime]);
+  }, [logLines, sentryEvents, formatTime]);
 
-  const getCategoryColor = useCallback((level: LogLevel) => LOG_LEVEL_COLORS[level], []);
+  const getCategoryColor = useCallback((level: ChartCategory) => LOG_LEVEL_COLORS[level], []);
 
-  const getCategoryCount = useCallback((bucket: LogBucket, level: LogLevel) => bucket.counts[level], []);
+  const getCategoryCount = useCallback((bucket: LogBucket, level: ChartCategory) => bucket.counts[level], []);
 
   const renderTooltipContent = useCallback(
     (bucket: LogBucket) => (
@@ -116,7 +122,7 @@ export function LogActivityChart({ logLines, onTimeRangeSelected, onResetZoom }:
                 }}
               />
               <span style={{ fontSize: '9px' }}>
-                {level}: {count}
+                {level === 'SENTRY' ? 'Sentry' : level}: {count}
               </span>
             </div>
           );

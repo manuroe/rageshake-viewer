@@ -103,6 +103,13 @@
 }
 
 .clickableHeading {
+    /* Reset browser button defaults */
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
     cursor: pointer;
     color: var(--color-info);
     transition: color var(--transition-slow);
@@ -111,6 +118,17 @@
 .clickableHeading:hover {
     color: var(--color-primary-hover);
     text-decoration: underline;
+}
+
+/* Sentry Alert Section */
+.sentrySectionAlert {
+    composes: summarySection;
+    border-left: 3px solid var(--color-error);
+    background: var(--color-error-light);
+}
+
+.sentrySectionAlert h2 {
+    color: var(--color-error);
 }
 
 /* Log Activity Chart */

@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { screen, fireEvent } from '@testing-library/dom';
 import { LogActivityChart } from '../LogActivityChart';
 import { createParsedLogLines } from '../../test/fixtures';
+import type { SentryEvent } from '../../types/log.types';
 
 describe('LogActivityChart', () => {
   it('renders the chart with stacked bars', () => {
@@ -438,5 +439,39 @@ describe('LogActivityChart', () => {
     expect(timeLabels.length).toBeGreaterThan(0);
     // Should contain 14:30:45 (the UTC time)
     expect(timeLabels.join(',')).toContain('14:30:45');
+  });
+
+  it('renders Sentry events in purple (#a855f7) when sentryEvents prop is provided', () => {
+    const logs = createParsedLogLines(50);
+    // Mark the first log line as a Sentry event
+    const sentryEvents: SentryEvent[] = [
+      { platform: 'android', lineNumber: logs[0].lineNumber, message: 'Sending error to Sentry' },
+    ];
+
+    const { container } = render(
+      <LogActivityChart logLines={logs} sentryEvents={sentryEvents} />
+    );
+
+    // A purple bar should be present for the SENTRY category
+    const sentryBar = container.querySelector('rect[fill="#a855f7"][opacity="0.9"]');
+    expect(sentryBar).toBeInTheDocument();
+  });
+
+  it('shows "Sentry" label in tooltip for a Sentry-categorized bucket', () => {
+    // Use a single log line so any hover position lands on the one bucket that has a Sentry event
+    const logs = createParsedLogLines(1);
+    const sentryEvents: SentryEvent[] = [
+      { platform: 'ios', lineNumber: logs[0].lineNumber, message: 'Sentry detected a crash', sentryId: 'abc123' },
+    ];
+
+    const { container } = render(
+      <LogActivityChart logLines={logs} sentryEvents={sentryEvents} />
+    );
+
+    const overlay = container.querySelector('rect[fill="transparent"]') as SVGElement;
+    fireEvent.mouseMove(overlay, { clientX: 150, clientY: 50 });
+
+    // The tooltip renders "Sentry:" (not "SENTRY:") for the SENTRY category
+    expect(screen.getByText(/^Sentry:/)).toBeInTheDocument();
   });
 });

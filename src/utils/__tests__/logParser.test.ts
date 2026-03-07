@@ -466,5 +466,65 @@ describe('logParser', () => {
       expect(result.requests).toHaveLength(1);
       expect(result.requests[0].timeout).toBeUndefined();
     });
+
+    it('forwards sentryEvents from parseAllHttpRequests', () => {
+      const iosLine = '2026-01-15T10:00:00.110000Z  WARN [matrix-rust-sdk] Sentry detected a crash in the previous run: 865038c59b224a91a09ff62b1b56767d';
+      const androidLine = '2026-01-15T10:00:22.390000Z  WARN [matrix-rust-sdk] Sending error to Sentry';
+      const content = [INFO_LINE, iosLine, androidLine].join('\n');
+
+      const result = parseLogFile(content);
+
+      expect(result.sentryEvents).toHaveLength(2);
+    });
+  });
+
+  describe('sentry event detection', () => {
+    const IOS_LINE = '2026-01-15T10:00:00.110000Z  WARN [matrix-rust-sdk] Sentry detected a crash in the previous run: 865038c59b224a91a09ff62b1b56767d';
+    const ANDROID_LINE = '2026-01-15T10:00:22.390000Z  WARN [matrix-rust-sdk] Sending error to Sentry';
+
+    it('detects iOS crash report and extracts sentry ID and URL', () => {
+      const result = parseAllHttpRequests(IOS_LINE);
+
+      expect(result.sentryEvents).toHaveLength(1);
+      const event = result.sentryEvents[0];
+      expect(event.platform).toBe('ios');
+      expect(event.sentryId).toBe('865038c59b224a91a09ff62b1b56767d');
+      expect(event.sentryUrl).toBe(
+        'https://sentry.tools.element.io/organizations/element/issues/?project=44&query=865038c59b224a91a09ff62b1b56767d'
+      );
+      expect(event.lineNumber).toBe(1);
+    });
+
+    it('detects Android "Sending error to Sentry" line', () => {
+      const result = parseAllHttpRequests(ANDROID_LINE);
+
+      expect(result.sentryEvents).toHaveLength(1);
+      const event = result.sentryEvents[0];
+      expect(event.platform).toBe('android');
+      expect(event.sentryId).toBeUndefined();
+      expect(event.sentryUrl).toBeUndefined();
+      expect(event.lineNumber).toBe(1);
+    });
+
+    it('detects multiple sentry events in a single log', () => {
+      const content = [INFO_LINE, IOS_LINE, ANDROID_LINE].join('\n');
+      const result = parseAllHttpRequests(content);
+
+      expect(result.sentryEvents).toHaveLength(2);
+      expect(result.sentryEvents[0].platform).toBe('ios');
+      expect(result.sentryEvents[1].platform).toBe('android');
+    });
+
+    it('does not produce false positives on regular log lines', () => {
+      const content = [INFO_LINE, SEND_LINE, RESPONSE_LINE].join('\n');
+      const result = parseAllHttpRequests(content);
+
+      expect(result.sentryEvents).toHaveLength(0);
+    });
+
+    it('returns empty sentryEvents when log has no sentry lines', () => {
+      const result = parseAllHttpRequests(INFO_LINE);
+      expect(result.sentryEvents).toHaveLength(0);
+    });
   });
 });

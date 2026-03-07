@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { decompressSync } from 'fflate';
-import { parseLogFile, parseAllHttpRequests } from '../utils/logParser';
+import { parseLogFile } from '../utils/logParser';
 import { useLogStore } from '../stores/logStore';
 import {
   validateTextFile,
@@ -16,6 +16,7 @@ export function FileUpload() {
   const navigate = useNavigate();
   const setRequests = useLogStore((state) => state.setRequests);
   const setHttpRequests = useLogStore((state) => state.setHttpRequests);
+  const setSentryEvents = useLogStore((state) => state.setSentryEvents);
   const lastRoute = useLogStore((state) => state.lastRoute);
   const [validationError, setValidationError] = useState<AppError | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<AppError[]>([]);
@@ -106,12 +107,12 @@ export function FileUpload() {
           setValidationWarnings(warnings);
         }
 
-        // Parse both sync-specific and all HTTP requests
-        const { requests, connectionIds, rawLogLines } = parseLogFile(logContent);
-        const { httpRequests } = parseAllHttpRequests(logContent);
+        // Parse once and derive both sync-specific and all HTTP requests
+        const { requests, connectionIds, rawLogLines, sentryEvents, httpRequests } = parseLogFile(logContent);
 
         setRequests(requests, connectionIds, rawLogLines);
         setHttpRequests(httpRequests, rawLogLines);
+        setSentryEvents(sentryEvents);
         const targetRoute = lastRoute && lastRoute !== '/' ? lastRoute : '/summary';
         void navigate(targetRoute);
       } catch (error) {
@@ -121,7 +122,7 @@ export function FileUpload() {
         setValidationError(appError);
       }
     },
-    [setRequests, setHttpRequests, navigate, lastRoute, readFileAsText, readFileAsArrayBuffer]
+    [setRequests, setHttpRequests, setSentryEvents, navigate, lastRoute, readFileAsText, readFileAsArrayBuffer]
   );
 
   const handleDrop = useCallback(

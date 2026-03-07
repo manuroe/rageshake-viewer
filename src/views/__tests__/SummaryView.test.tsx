@@ -996,4 +996,103 @@ describe('SummaryView', () => {
       expect(screen.getByText(/Summary/)).toBeInTheDocument();
     });
   });
+
+  // ============================================================================
+  // Sentry Reports Section
+  // ============================================================================
+
+  describe('Sentry Reports section', () => {
+    const BASE_SENTRY = 1_706_000_000_000_000 as TimestampMicros;
+    const STEP_SENTRY = 5_000_000 as TimestampMicros;
+
+    function buildSentryLines() {
+      return [0, 1, 2].map((i) =>
+        createParsedLogLine({
+          lineNumber: i + 200,
+          timestampUs: (BASE_SENTRY + STEP_SENTRY * i) as TimestampMicros,
+        })
+      );
+    }
+
+    it('hides the Sentry Reports section when there are no sentry events', () => {
+      const lines = buildSentryLines();
+      useLogStore.getState().setHttpRequests([], lines);
+      useLogStore.getState().setSentryEvents([]);
+      renderSummaryView();
+
+      expect(screen.queryByText(/Sentry Reports/)).not.toBeInTheDocument();
+    });
+
+    it('shows the Sentry Reports section with iOS crash entry and correct Sentry link', () => {
+      const lines = buildSentryLines();
+      useLogStore.getState().setHttpRequests([], lines);
+      useLogStore.getState().setSentryEvents([
+        {
+          platform: 'ios',
+          lineNumber: 200,
+          message: '2026-01-15T10:00:00.110000Z  WARN [matrix-rust-sdk] Sentry detected a crash in the previous run: 865038c59b224a91a09ff62b1b56767d',
+          sentryId: '865038c59b224a91a09ff62b1b56767d',
+          sentryUrl: 'https://sentry.tools.element.io/organizations/element/issues/?project=44&query=865038c59b224a91a09ff62b1b56767d',
+        },
+      ]);
+      renderSummaryView();
+
+      expect(screen.getByText(/Sentry Reports/)).toBeInTheDocument();
+
+      // Log navigation button shows the raw message text
+      expect(screen.getByRole('button', { name: /Sentry detected a crash/i })).toBeInTheDocument();
+
+      // Dedicated Sentry ID column: link text is the raw hex ID
+      const sentryLink = screen.getByRole('link', { name: '865038c59b224a91a09ff62b1b56767d' });
+      expect(sentryLink).toHaveAttribute(
+        'href',
+        'https://sentry.tools.element.io/organizations/element/issues/?project=44&query=865038c59b224a91a09ff62b1b56767d'
+      );
+      expect(sentryLink).toHaveAttribute('target', '_blank');
+    });
+
+    it('shows the Sentry Reports section with Android error entry (no Sentry link)', () => {
+      const lines = buildSentryLines();
+      useLogStore.getState().setHttpRequests([], lines);
+      useLogStore.getState().setSentryEvents([
+        {
+          platform: 'android',
+          lineNumber: 201,
+          message: '2026-01-15T10:00:22.390000Z  WARN [matrix-rust-sdk] Sending error to Sentry',
+        },
+      ]);
+      renderSummaryView();
+
+      expect(screen.getByText(/Sentry Reports/)).toBeInTheDocument();
+
+      // Log navigation button present with the message text
+      expect(screen.getByRole('button', { name: /Sending error to Sentry/i })).toBeInTheDocument();
+
+      // No Sentry ID link in the dedicated column
+      expect(screen.queryByRole('link', { name: '(Sentry)' })).not.toBeInTheDocument();
+    });
+
+    it('respects time filter and hides sentry events outside the selected range', async () => {
+      const lines = buildSentryLines();
+      useLogStore.getState().setHttpRequests([], lines);
+      // Event is on line 200 (first timestamp); apply a time filter starting AFTER that line
+      useLogStore.getState().setSentryEvents([
+        {
+          platform: 'ios',
+          lineNumber: 200,
+          message: 'crash report',
+          sentryId: 'abc123',
+          sentryUrl: 'https://sentry.tools.element.io/organizations/element/issues/?project=44&query=abc123',
+        },
+      ]);
+      // Set global filter to only include lines 201+ (exclude line 200)
+      useLogStore.getState().setTimeFilter(lines[1].isoTimestamp, lines[2].isoTimestamp);
+      renderSummaryView();
+
+      expect(screen.queryByText(/Sentry Reports/)).not.toBeInTheDocument();
+
+      // Restore
+      useLogStore.getState().setTimeFilter(null, null);
+    });
+  });
 });

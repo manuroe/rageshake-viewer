@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileUpload } from '../components/FileUpload';
-import { parseLogFile, parseAllHttpRequests } from '../utils/logParser';
+import { parseLogFile } from '../utils/logParser';
 import { useLogStore } from '../stores/logStore';
 import { wrapError } from '../utils/errorHandling';
 import type { AppError } from '../utils/errorHandling';
@@ -12,6 +12,7 @@ export function LandingPage() {
   const navigate = useNavigate();
   const setRequests = useLogStore((state) => state.setRequests);
   const setHttpRequests = useLogStore((state) => state.setHttpRequests);
+  const setSentryEvents = useLogStore((state) => state.setSentryEvents);
   const [demoError, setDemoError] = useState<AppError | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
 
@@ -29,10 +30,10 @@ export function LandingPage() {
         throw new Error(`HTTP ${response.status}`);
       }
       const content = await response.text();
-      const { requests, connectionIds, rawLogLines } = parseLogFile(content);
-      const { httpRequests } = parseAllHttpRequests(content);
+      const { requests, connectionIds, rawLogLines, sentryEvents, httpRequests } = parseLogFile(content);
       setRequests(requests, connectionIds, rawLogLines);
       setHttpRequests(httpRequests, rawLogLines);
+      setSentryEvents(sentryEvents);
       void navigate('/summary');
     } catch (error) {
       setDemoError(wrapError(error, 'Failed to load demo. Please try again.'));

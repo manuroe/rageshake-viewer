@@ -1,4 +1,4 @@
-import type { HttpRequest, SyncRequest, LogParserResult, ParsedLogLine, LogLevel } from '../types/log.types';
+import type { HttpRequest, SyncRequest, LogParserResult, ParsedLogLine, LogLevel, SentryEvent } from '../types/log.types';
 import type { ISODateTimeString, TimestampMicros } from '../types/time.types';
 import { isoToMicros, extractTimeFromISO } from './timeUtils';
 import { parseSizeString } from './sizeUtils';
@@ -55,9 +55,14 @@ function parseTimestampMicros(isoTimestamp: ISODateTimeString): TimestampMicros 
   return isoToMicros(isoTimestamp);
 }
 
+const SENTRY_IOS_RE = /Sentry detected a crash in the previous run:\s+([a-f0-9]+)/i;
+const SENTRY_ANDROID_STR = 'Sending error to Sentry';
+const SENTRY_URL_BASE = 'https://sentry.tools.element.io/organizations/element/issues/?project=44&query=';
+
 export interface AllHttpRequestsResult {
   httpRequests: HttpRequest[];
   rawLogLines: ParsedLogLine[];
+  sentryEvents: SentryEvent[];
 }
 
 export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult {
@@ -74,6 +79,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   // final output may be reordered later.
   const allRecordsList: Partial<HttpRequest>[] = [];
   const rawLogLines: ParsedLogLine[] = [];
+  const sentryEvents: SentryEvent[] = [];
   let linesWithTimestamps = 0;
 
   for (let i = 0; i < lines.length; i++) {
@@ -101,6 +107,23 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
         message: line,
         strippedMessage,
       });
+
+      // Detect Sentry events
+      if (line.includes(SENTRY_ANDROID_STR)) {
+        sentryEvents.push({ platform: 'android', lineNumber: i + 1, message: line });
+      } else {
+        const iosMatch = line.match(SENTRY_IOS_RE);
+        if (iosMatch) {
+          const sentryId = iosMatch[1];
+          sentryEvents.push({
+            platform: 'ios',
+            lineNumber: i + 1,
+            message: line,
+            sentryId,
+            sentryUrl: `${SENTRY_URL_BASE}${sentryId}`,
+          });
+        }
+      }
     }
 
     // Early filter for performance - look for HTTP request patterns
@@ -246,12 +269,13 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   return {
     httpRequests: allRequests,
     rawLogLines,
+    sentryEvents,
   };
 }
 
 export function parseLogFile(logContent: string): LogParserResult {
   // First parse all HTTP requests
-  const { httpRequests, rawLogLines } = parseAllHttpRequests(logContent);
+  const { httpRequests, rawLogLines, sentryEvents } = parseAllHttpRequests(logContent);
 
   // Filter for sync-specific requests and add connId
   const syncRequests: SyncRequest[] = [];
@@ -310,7 +334,9 @@ export function parseLogFile(logContent: string): LogParserResult {
 
   return {
     requests: syncRequests,
+    httpRequests,
     connectionIds,
     rawLogLines,
+    sentryEvents,
   };
 }

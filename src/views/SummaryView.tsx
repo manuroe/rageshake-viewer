@@ -9,7 +9,7 @@ import { HttpActivityChart, type HttpRequestWithTimestamp } from '../components/
 import { calculateTimeRangeMicros, formatTimestamp, formatDuration } from '../utils/timeUtils';
 import { formatBytes } from '../utils/sizeUtils';
 import { getHttpStatusBadgeClass } from '../utils/httpStatusColors';
-import type { LogLevel, ParsedLogLine } from '../types/log.types';
+import type { LogLevel, ParsedLogLine, SentryEvent } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import styles from './SummaryView.module.css';
 import tableStyles from '../components/Table.module.css';
@@ -21,6 +21,7 @@ export function SummaryView() {
     allHttpRequests,
     allRequests,
     connectionIds,
+    sentryEvents,
     startTime,
     endTime,
     detectedPlatform,
@@ -147,6 +148,7 @@ export function SummaryView() {
         warnings: 0,
         errorsByType: [] as Array<{ type: string; count: number }>,
         warningsByType: [] as Array<{ type: string; count: number }>,
+        sentryEvents: [] as SentryEvent[],
         httpErrorsByStatus: [] as Array<{ status: string; count: number }>,
         topFailedUrls: [] as Array<{ uri: string; count: number; statuses: string[] }>,
         slowestHttpRequests: [] as Array<{
@@ -194,6 +196,14 @@ export function SummaryView() {
       if (line.timestampUs) {
         lineNumberToTimestamp.set(line.lineNumber, line.timestampUs);
       }
+    });
+
+    // Filter sentry events by time range
+    const filteredSentryEvents = sentryEvents.filter((event) => {
+      if (!timeRangeUs) return true;
+      const timestampUs = lineNumberToTimestamp.get(event.lineNumber);
+      if (!timestampUs) return false;
+      return timestampUs >= timeRangeUs.startUs && timestampUs <= timeRangeUs.endUs;
     });
 
     // Filter HTTP requests by time range and resolve timestamps
@@ -414,6 +424,7 @@ export function SummaryView() {
       warnings: levelCounts.WARN,
       errorsByType,
       warningsByType,
+      sentryEvents: filteredSentryEvents,
       httpErrorsByStatus,
       topFailedUrls,
       slowestHttpRequests,
@@ -424,7 +435,7 @@ export function SummaryView() {
       totalDownloadBytes,
       chartTimeRange: { minTime: chartMinTime, maxTime: chartMaxTime },
     };
-  }, [rawLogLines, allHttpRequests, allRequests, connectionIds, startTime, endTime, localStartTime, localEndTime]);
+  }, [rawLogLines, allHttpRequests, allRequests, connectionIds, sentryEvents, startTime, endTime, localStartTime, localEndTime]);
 
   if (rawLogLines.length === 0) {
     return (
@@ -482,12 +493,68 @@ export function SummaryView() {
           {/* Activity Chart */}
           <div className={styles.activityChartContainer}>
             <LogActivityChart 
-              logLines={stats.filteredLogLines} 
+              logLines={stats.filteredLogLines}
+              sentryEvents={stats.sentryEvents}
               onTimeRangeSelected={handleTimeRangeSelected}
               onResetZoom={handleResetZoom}
             />
           </div>
         </section>
+
+        {/* Sentry Reports Section */}
+        {stats.sentryEvents.length > 0 && (
+          <section className={styles.sentrySectionAlert}>
+            <div className={styles.summaryTableContainer}>
+              <table className={styles.summaryTable}>
+                <thead>
+                  <tr>
+                    <th>
+                      Sentry Reports (
+                      <button
+                        type="button"
+                        className={styles.clickableHeading}
+                        onClick={() => navigate('/logs?filter=sentry')}
+                        aria-label="View Sentry reports in logs"
+                      >
+                        {stats.sentryEvents.length}
+                      </button>
+                      )
+                    </th>
+                    <th>Sentry ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.sentryEvents.map((event) => (
+                    <tr key={event.sentryId ?? `line-${event.lineNumber}`}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/logs?filter=${encodeURIComponent(event.sentryId ?? 'Sending error to Sentry')}`)}
+                          className={styles.actionLink}
+                          style={{ textAlign: 'left', whiteSpace: 'normal' }}
+                        >
+                          {event.message.substring(0, 150)}
+                        </button>
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                        {event.sentryUrl && event.sentryId ? (
+                          <a
+                            href={event.sentryUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.actionLink}
+                          >
+                            {event.sentryId}
+                          </a>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* Errors & Warnings Section */}
         <div className={styles.errorsWarningsGrid}>

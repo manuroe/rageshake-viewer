@@ -19,10 +19,22 @@ export interface SyncRequest extends HttpRequest {
   timeout?: number;
 }
 
+export interface SentryEvent {
+  platform: 'android' | 'ios';
+  lineNumber: number;
+  message: string;
+  /** Hex crash ID, present for iOS crash reports only */
+  sentryId?: string;
+  /** Direct link to the Sentry issue, present for iOS crash reports only */
+  sentryUrl?: string;
+}
+
 export interface LogParserResult {
   requests: SyncRequest[];
+  httpRequests: HttpRequest[];
   connectionIds: string[];
   rawLogLines: ParsedLogLine[];
+  sentryEvents: SentryEvent[];
 }
 
 /**
