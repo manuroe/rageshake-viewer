@@ -17,7 +17,7 @@ export interface KeyboardShortcutContextValue {
    */
   registerFocusSearch: (fn: () => void) => () => void;
   /**
-   * Register a handler to be called when Cmd+/ or Cmd+F is pressed (focus filter).
+   * Register a handler to be called when Option/Alt+`/` or Cmd/Ctrl+F is pressed (focus filter).
    * Returns an unregister function.
    */
   registerFocusFilter: (fn: () => void) => () => void;

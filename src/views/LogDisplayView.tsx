@@ -10,6 +10,7 @@ import { useMatchNavigation } from '../hooks/useMatchNavigation';
 import { SearchInput } from '../components/SearchInput';
 import type { SearchInputHandle } from '../components/SearchInput';
 import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
+import { optionKey } from '../utils/shortcuts';
 import styles from './LogDisplayView.module.css';
 
 interface LogDisplayViewProps {
@@ -366,7 +367,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           )}
         </div>
         <div className={styles.logToolbarRight}>
-          <label className={styles.logToolbarOption} title="Toggle line wrap (Option+w)">
+          <label className={styles.logToolbarOption} title={`Toggle line wrap (${optionKey}+w)`}>
             <input
               type="checkbox"
               checked={lineWrap}
@@ -374,7 +375,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
             Line wrap
           </label>
-          <label className={styles.logToolbarOption} title="Toggle strip prefix (Option+p)">
+          <label className={styles.logToolbarOption} title={`Toggle strip prefix (${optionKey}+p)`}>
             <input
               type="checkbox"
               checked={stripPrefix}

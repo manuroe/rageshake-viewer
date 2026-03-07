@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import type { MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { SHORTCUTS, SHORTCUT_CATEGORIES, metaKey, optionKey, type ShortcutCategory } from '../utils/shortcuts';
 import { useKeyboardShortcutContext } from './KeyboardShortcutContext';
@@ -126,7 +127,7 @@ export function ShortcutHelpOverlay() {
   }, [showHelp]);
 
   const handleBackdropClick = useCallback(
-    (e: React.MouseEvent) => {
+    (e: MouseEvent) => {
       if (e.target === e.currentTarget) toggleHelp();
     },
     [toggleHelp],

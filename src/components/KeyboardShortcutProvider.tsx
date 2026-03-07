@@ -166,7 +166,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
       }
 
       // Chord leader: g
-      if (e.key === 'g' && !meta && !shift && !e.altKey) {
+      if (e.key.toLowerCase() === 'g' && !meta && !shift && !e.altKey) {
         e.preventDefault();
         startChordRef.current('g');
         return;
@@ -180,7 +180,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
       }
 
       // t → cycle theme
-      if (e.key === 't' && !meta && !shift) {
+      if (e.key.toLowerCase() === 't' && !meta && !shift) {
         e.preventDefault();
         cycleTheme();
         return;

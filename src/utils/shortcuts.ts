@@ -73,7 +73,7 @@ export const SHORTCUTS = {
   },
   focusFilter: {
     label: 'Option+/',
-    description: 'Focus filter input',
+    description: 'Focus filter input (also Cmd+F)',
     category: 'filter',
     requiresNoInputFocus: false,
   },
