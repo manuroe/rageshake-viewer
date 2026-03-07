@@ -417,7 +417,7 @@ describe('LogDisplayView filter & search behaviors', () => {
     expect(counter).toBeTruthy();
   });
 
-  it('search respects case sensitivity toggle', async () => {
+  it('search is case-insensitive', async () => {
     const logs: ParsedLogLine[] = [
       {
         lineNumber: 0,
@@ -444,25 +444,17 @@ describe('LogDisplayView filter & search behaviors', () => {
 
     render(<LogDisplayView />);
 
-    // Case insensitive search for "TEXT" should find both lines
+    // Search for "TEXT" should find both lines regardless of source text casing
     const searchInput = screen.getByPlaceholderText(/Search logs/i) as HTMLInputElement;
     await userEvent.type(searchInput, 'TEXT');
 
     await new Promise(resolve => setTimeout(resolve, 400));
 
-    // Both should match (case insensitive by default)
+    // Matches are highlighted and both lines remain visible
     const marks = screen.queryAllByRole('mark');
     expect(marks.length).toBeGreaterThanOrEqual(1);
-
-    // Toggle case sensitive
-    const caseSensitiveCheckbox = screen.getByLabelText(/Case sensitive/i) as HTMLInputElement;
-    await userEvent.click(caseSensitiveCheckbox);
-
-    await new Promise(resolve => setTimeout(resolve, 400));
-
-    // Now only first line should match
-    const marksAfter = screen.queryAllByRole('mark');
-    expect(marksAfter.length).toBeGreaterThanOrEqual(0);
+    expect(screen.getByText('0')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 
   it('filter input initializes from requestFilter prop', () => {
