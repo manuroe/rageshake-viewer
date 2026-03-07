@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { SHORTCUTS, SHORTCUT_CATEGORIES, metaKey, type ShortcutCategory } from '../utils/shortcuts';
+import { SHORTCUTS, SHORTCUT_CATEGORIES, metaKey, optionKey, type ShortcutCategory } from '../utils/shortcuts';
 import { useKeyboardShortcutContext } from './KeyboardShortcutContext';
 import styles from './ShortcutHelpOverlay.module.css';
 
@@ -26,6 +26,7 @@ function parseLabel(label: string): KeyToken[] {
   // Replace Meta modifier with platform symbol
   const normalized = label
     .replace('Cmd', metaKey)
+    .replace('Option', optionKey)
     .replace('Shift', '⇧')
     .replace('Escape', 'Esc');
 

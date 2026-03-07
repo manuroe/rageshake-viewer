@@ -314,7 +314,7 @@ describe('KeyboardShortcutProvider', () => {
     expect(() => act(() => { fireKey('/'); })).not.toThrow();
   });
 
-  it('Cmd+/ calls a registered focus-filter handler', () => {
+  it('Option+/ calls a registered focus-filter handler', () => {
     const filterHandler = vi.fn();
     function RegisterFilter() {
       const ctx = useKeyboardShortcutContext();
@@ -326,15 +326,16 @@ describe('KeyboardShortcutProvider', () => {
         <RegisterFilter />
       </KeyboardShortcutProvider>,
     );
-    act(() => { fireKey('/', { metaKey: true }); });
+    act(() => { fireKey('/', { altKey: true, code: 'Slash' }); });
     expect(filterHandler).toHaveBeenCalledTimes(1);
   });
 
-  it('Cmd+/ does not preventDefault when no filter handler is registered', () => {
+  it('Option+/ does not preventDefault when no filter handler is registered', () => {
     renderProvider();
     const event = new KeyboardEvent('keydown', {
       key: '/',
-      metaKey: true,
+      code: 'Slash',
+      altKey: true,
       bubbles: true,
       cancelable: true,
     });
@@ -408,7 +409,7 @@ describe('KeyboardShortcutProvider', () => {
       </KeyboardShortcutProvider>,
     );
     unmount();
-    act(() => { fireKey('/', { metaKey: true }); });
+    act(() => { fireKey('/', { altKey: true, code: 'Slash' }); });
     expect(filterHandler).not.toHaveBeenCalled();
   });
 
@@ -486,7 +487,7 @@ describe('KeyboardShortcutProvider', () => {
         <RegisterTwo />
       </KeyboardShortcutProvider>,
     );
-    act(() => { fireKey('/', { metaKey: true }); });
+    act(() => { fireKey('/', { altKey: true, code: 'Slash' }); });
     expect(handler2).toHaveBeenCalledTimes(1);
     expect(handler1).not.toHaveBeenCalled();
   });
@@ -510,14 +511,14 @@ describe('KeyboardShortcutProvider', () => {
       </KeyboardShortcutProvider>,
     );
     // handler2 is the most recent — it wins
-    act(() => { fireKey('/', { metaKey: true }); });
+    act(() => { fireKey('/', { altKey: true, code: 'Slash' }); });
     expect(handler2).toHaveBeenCalledTimes(1);
     expect(handler1).not.toHaveBeenCalled();
 
     // Remove handler2 → handler1 should be restored
     act(() => { unregister2!(); });
     handler2.mockClear();
-    act(() => { fireKey('/', { metaKey: true }); });
+    act(() => { fireKey('/', { altKey: true, code: 'Slash' }); });
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler2).not.toHaveBeenCalled();
   });

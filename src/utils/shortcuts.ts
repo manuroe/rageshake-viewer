@@ -72,22 +72,22 @@ export const SHORTCUTS = {
     requiresNoInputFocus: true,
   },
   focusFilter: {
-    label: 'Cmd+/',
+    label: 'Option+/',
     description: 'Focus filter input',
     category: 'filter',
     requiresNoInputFocus: false,
   },
   toggleLineWrap: {
-    label: 'w',
+    label: 'Option+w',
     description: 'Toggle line wrap (Logs view)',
     category: 'filter',
-    requiresNoInputFocus: true,
+    requiresNoInputFocus: false,
   },
   toggleStripPrefix: {
-    label: 'p',
+    label: 'Option+p',
     description: 'Toggle strip prefix (Logs view)',
     category: 'filter',
-    requiresNoInputFocus: true,
+    requiresNoInputFocus: false,
   },
   newSession: {
     label: 'Cmd+R',
@@ -131,3 +131,8 @@ export function isInputFocused(): boolean {
 export const metaKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? navigator.userAgent)
   ? '⌘'
   : 'Ctrl';
+
+/** Display label for the Option/Alt key depending on platform */
+export const optionKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? navigator.userAgent)
+  ? '⌥'
+  : 'Alt';

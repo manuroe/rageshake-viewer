@@ -10,7 +10,6 @@ import { useMatchNavigation } from '../hooks/useMatchNavigation';
 import { SearchInput } from '../components/SearchInput';
 import type { SearchInputHandle } from '../components/SearchInput';
 import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
-import { isInputFocused } from '../utils/shortcuts';
 import styles from './LogDisplayView.module.css';
 
 interface LogDisplayViewProps {
@@ -52,7 +51,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     return unregister;
   }, [registerFocusSearch]);
 
-  // Register "Cmd+/" (and "Cmd+F") → focus filter when this view is mounted
+  // Register "Option+/" (and "Cmd+F") → focus filter when this view is mounted
   useEffect(() => {
     if (!registerFocusFilter) return;
     const unregister = registerFocusFilter(() => {
@@ -98,15 +97,14 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [stripPrefix, setStripPrefix] = useState(true);
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
 
-  // w → toggle line wrap; p → toggle strip prefix (plain keys, only when no input focused)
+  // Option+w → toggle line wrap; Option+p → toggle strip prefix
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (isInputFocused()) return;
-      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      if (e.key === 'w') {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (e.code === 'KeyW') {
         e.preventDefault();
         setLineWrap((v) => !v);
-      } else if (e.key === 'p') {
+      } else if (e.code === 'KeyP') {
         e.preventDefault();
         setStripPrefix((v) => !v);
       }
@@ -368,7 +366,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           )}
         </div>
         <div className={styles.logToolbarRight}>
-          <label className={styles.logToolbarOption} title="Toggle line wrap (w)">
+          <label className={styles.logToolbarOption} title="Toggle line wrap (Option+w)">
             <input
               type="checkbox"
               checked={lineWrap}
@@ -376,7 +374,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
             Line wrap
           </label>
-          <label className={styles.logToolbarOption} title="Toggle strip prefix (p)">
+          <label className={styles.logToolbarOption} title="Toggle strip prefix (Option+p)">
             <input
               type="checkbox"
               checked={stripPrefix}

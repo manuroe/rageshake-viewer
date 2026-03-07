@@ -123,8 +123,8 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
 
       // --- Modifier-based shortcuts (work even when input is focused) ---
 
-      // Cmd+/ → focus filter (only when a filter handler is registered)
-      if (meta && !shift && e.key === '/') {
+      // Option+/ → focus filter (only when a filter handler is registered)
+      if (e.altKey && !meta && !shift && e.code === 'Slash') {
         const handler = focusFilterHandlerRef.current;
         if (handler) {
           e.preventDefault();
@@ -156,7 +156,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
       if (isInputFocused()) return;
 
       // / → focus search
-      if (e.key === '/' && !meta && !shift) {
+      if (e.key === '/' && !meta && !shift && !e.altKey) {
         e.preventDefault();
         focusSearchHandlerRef.current?.();
         return;
