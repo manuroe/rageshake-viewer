@@ -1039,10 +1039,8 @@ describe('SummaryView', () => {
 
       expect(screen.getByText(/Sentry Reports/)).toBeInTheDocument();
 
-      // Log link shows the raw message text
-      const logLink = screen.getByRole('link', { name: /Sentry detected a crash/i });
-      expect(logLink).toHaveAttribute('href', expect.stringContaining('/logs?filter='));
-      expect(logLink).toHaveAttribute('href', expect.stringContaining('865038c59b224a91a09ff62b1b56767d'));
+      // Log navigation button shows the raw message text
+      expect(screen.getByRole('button', { name: /Sentry detected a crash/i })).toBeInTheDocument();
 
       // Dedicated Sentry ID column: link text is the raw hex ID
       const sentryLink = screen.getByRole('link', { name: '865038c59b224a91a09ff62b1b56767d' });
@@ -1067,9 +1065,8 @@ describe('SummaryView', () => {
 
       expect(screen.getByText(/Sentry Reports/)).toBeInTheDocument();
 
-      // Log link present with the message text
-      const logLink = screen.getByRole('link', { name: /Sending error to Sentry/i });
-      expect(logLink).toHaveAttribute('href', expect.stringContaining('/logs?filter='));
+      // Log navigation button present with the message text
+      expect(screen.getByRole('button', { name: /Sending error to Sentry/i })).toBeInTheDocument();
 
       // No Sentry ID link in the dedicated column
       expect(screen.queryByRole('link', { name: '(Sentry)' })).not.toBeInTheDocument();

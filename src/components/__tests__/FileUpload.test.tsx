@@ -12,11 +12,8 @@ vi.mock('react-router-dom', () => ({
 
 const mockParseLogFile = vi.fn();
 
-const mockParseAllHttpRequests = vi.fn();
-
 vi.mock('../../utils/logParser', () => ({
   parseLogFile: (content: string) => mockParseLogFile(content),
-  parseAllHttpRequests: (content: string) => mockParseAllHttpRequests(content),
 }));
 
 describe('FileUpload navigation', () => {
@@ -25,10 +22,10 @@ describe('FileUpload navigation', () => {
     useLogStore.getState().clearLastRoute();
     mockNavigate.mockReset();
     mockParseLogFile.mockReset();
-    mockParseAllHttpRequests.mockReset();
 
     mockParseLogFile.mockReturnValue({
       requests: [],
+      httpRequests: [],
       connectionIds: [],
       rawLogLines: [
         {
@@ -43,7 +40,6 @@ describe('FileUpload navigation', () => {
         },
       ],
     });
-    mockParseAllHttpRequests.mockReturnValue({ httpRequests: [] });
   });
 
   afterEach(() => {
@@ -99,7 +95,6 @@ describe('FileUpload navigation', () => {
     return new Promise<void>((resolve) => {
       setTimeout(() => {
         expect(mockParseLogFile).toHaveBeenCalledWith(logContent);
-        expect(mockParseAllHttpRequests).toHaveBeenCalledWith(logContent);
         expect(mockNavigate).toHaveBeenCalledWith('/summary');
         resolve();
       }, 100);
@@ -192,10 +187,10 @@ describe('FileUpload drag-and-drop', () => {
     useLogStore.getState().clearLastRoute();
     mockNavigate.mockReset();
     mockParseLogFile.mockReset();
-    mockParseAllHttpRequests.mockReset();
 
     mockParseLogFile.mockReturnValue({
       requests: [],
+      httpRequests: [],
       connectionIds: [],
       rawLogLines: [
         {
@@ -210,7 +205,6 @@ describe('FileUpload drag-and-drop', () => {
         },
       ],
     });
-    mockParseAllHttpRequests.mockReturnValue({ httpRequests: [] });
   });
 
   afterEach(() => {
@@ -281,8 +275,6 @@ describe('FileUpload - error handling and warnings', () => {
     useLogStore.getState().clearLastRoute();
     mockNavigate.mockReset();
     mockParseLogFile.mockReset();
-    mockParseAllHttpRequests.mockReset();
-    mockParseAllHttpRequests.mockReturnValue({ httpRequests: [] });
   });
 
   afterEach(() => {
@@ -319,6 +311,7 @@ describe('FileUpload - error handling and warnings', () => {
 
     mockParseLogFile.mockReturnValue({
       requests: [],
+      httpRequests: [],
       connectionIds: [],
       rawLogLines: [],
     });

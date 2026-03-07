@@ -31,6 +31,7 @@ export interface SentryEvent {
 
 export interface LogParserResult {
   requests: SyncRequest[];
+  httpRequests: HttpRequest[];
   connectionIds: string[];
   rawLogLines: ParsedLogLine[];
   sentryEvents: SentryEvent[];

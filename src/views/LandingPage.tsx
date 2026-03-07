@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileUpload } from '../components/FileUpload';
-import { parseLogFile, parseAllHttpRequests } from '../utils/logParser';
+import { parseLogFile } from '../utils/logParser';
 import { useLogStore } from '../stores/logStore';
 import { wrapError } from '../utils/errorHandling';
 import type { AppError } from '../utils/errorHandling';
@@ -30,8 +30,7 @@ export function LandingPage() {
         throw new Error(`HTTP ${response.status}`);
       }
       const content = await response.text();
-      const { requests, connectionIds, rawLogLines, sentryEvents } = parseLogFile(content);
-      const { httpRequests } = parseAllHttpRequests(content);
+      const { requests, connectionIds, rawLogLines, sentryEvents, httpRequests } = parseLogFile(content);
       setRequests(requests, connectionIds, rawLogLines);
       setHttpRequests(httpRequests, rawLogLines);
       setSentryEvents(sentryEvents);

@@ -508,20 +508,33 @@ export function SummaryView() {
               <table className={styles.summaryTable}>
                 <thead>
                   <tr>
-                    <th>Sentry Reports (<span className={styles.clickableHeading} onClick={() => navigate('/logs?filter=sentry')}>{stats.sentryEvents.length}</span>)</th>
+                    <th>
+                      Sentry Reports (
+                      <button
+                        type="button"
+                        className={styles.clickableHeading}
+                        onClick={() => navigate('/logs?filter=sentry')}
+                        aria-label="View Sentry reports in logs"
+                      >
+                        {stats.sentryEvents.length}
+                      </button>
+                      )
+                    </th>
                     <th>Sentry ID</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.sentryEvents.map((event, idx) => (
-                    <tr key={idx}>
+                  {stats.sentryEvents.map((event) => (
+                    <tr key={event.sentryId ?? `line-${event.lineNumber}`}>
                       <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-                        <a
-                          href={`#/logs?filter=${encodeURIComponent(event.sentryId ?? 'Sending error to Sentry')}`}
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/logs?filter=${encodeURIComponent(event.sentryId ?? 'Sending error to Sentry')}`)}
                           className={styles.actionLink}
+                          style={{ textAlign: 'left', whiteSpace: 'normal' }}
                         >
                           {event.message.substring(0, 150)}
-                        </a>
+                        </button>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>
                         {event.sentryUrl && event.sentryId ? (

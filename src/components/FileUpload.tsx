@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { decompressSync } from 'fflate';
-import { parseLogFile, parseAllHttpRequests } from '../utils/logParser';
+import { parseLogFile } from '../utils/logParser';
 import { useLogStore } from '../stores/logStore';
 import {
   validateTextFile,
@@ -107,9 +107,8 @@ export function FileUpload() {
           setValidationWarnings(warnings);
         }
 
-        // Parse both sync-specific and all HTTP requests
-        const { requests, connectionIds, rawLogLines, sentryEvents } = parseLogFile(logContent);
-        const { httpRequests } = parseAllHttpRequests(logContent);
+        // Parse once and derive both sync-specific and all HTTP requests
+        const { requests, connectionIds, rawLogLines, sentryEvents, httpRequests } = parseLogFile(logContent);
 
         setRequests(requests, connectionIds, rawLogLines);
         setHttpRequests(httpRequests, rawLogLines);

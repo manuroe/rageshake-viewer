@@ -334,6 +334,7 @@ export function parseLogFile(logContent: string): LogParserResult {
 
   return {
     requests: syncRequests,
+    httpRequests,
     connectionIds,
     rawLogLines,
     sentryEvents,
