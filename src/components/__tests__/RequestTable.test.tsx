@@ -380,7 +380,7 @@ describe('RequestTable', () => {
       mockNavigate.mockClear();
     });
 
-    it('navigates to /logs with filter=requestId on onExpand', async () => {
+    it('navigates to /logs with quoted filter=requestId on onExpand', async () => {
       const req = createHttpRequest({
         requestId: 'REQ-LOG',
         sendLineNumber: 10,
@@ -411,7 +411,7 @@ describe('RequestTable', () => {
       expect(mockNavigate).toHaveBeenCalledTimes(1);
       const navigatedUrl: string = mockNavigate.mock.calls[0][0] as string;
       expect(navigatedUrl).toMatch(/^\/logs\?/);
-      expect(navigatedUrl).toContain('filter=REQ-LOG');
+      expect(navigatedUrl).toContain('filter=%22REQ-LOG%22');
       expect(navigatedUrl).not.toContain('start_line');
       expect(navigatedUrl).not.toContain('end_line');
     });
