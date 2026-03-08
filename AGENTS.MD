@@ -77,7 +77,14 @@ When prompted **"Review PR comments"**:
 
 Reply quality guideline:
 - Do not send only `Fixed in <sha>`.
-- Prefer a concise detailed format: what changed, where it changed, how it was validated, and the commit reference/link.
+- Prefer a concise detailed format: what changed, where it changed, and the commit reference/link.
+
+Rejecting a comment:
+- If a requested change contradicts the user's requirements or prior discussions in the session or makes no sense, **do not apply it**.
+- Set `"skip": true` for that item in `pr-replies-template.json`.
+- Write a reply explaining clearly why the change was not applied and what the correct behavior is.
+- Ask the reviewer to confirm or clarify before proceeding.
+- No code change should accompany a rejection reply.
 
 ## Architecture (Conceptual)
 1. Parse log text into structured records once.
