@@ -173,15 +173,23 @@ function linkifyCommitRefs(message: string, owner: string, repo: string, env: No
 }
 
 function readBatchFile(batchFile: string): BatchReplyFile {
-  const content = readFileSync(batchFile, 'utf-8');
-  const parsed = JSON.parse(content) as BatchReplyFile & { batchReplyTemplate?: BatchReplyFile };
-  const batch = parsed.batchReplyTemplate ?? parsed;
+  try {
+    const content = readFileSync(batchFile, 'utf-8');
+    const parsed = JSON.parse(content) as BatchReplyFile & { batchReplyTemplate?: BatchReplyFile };
+    const batch = parsed.batchReplyTemplate ?? parsed;
 
-  if (!Array.isArray(batch.replies)) {
-    throw new Error(`Invalid batch file ${batchFile}: expected "replies" array.`);
+    if (!Array.isArray(batch.replies)) {
+      throw new Error(`Invalid batch file ${batchFile}: expected "replies" array.`);
+    }
+
+    return batch;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`❌ Error reading batch file "${batchFile}": ${message}`);
+    process.exit(1);
+    // Unreachable but satisfies TypeScript return type
+    throw new Error('unreachable');
   }
-
-  return batch;
 }
 
 function ensureRepoContext(batch: BatchReplyFile): { owner: string; repo: string; prNumber: string } {
@@ -214,9 +222,13 @@ function postReply(
   body: string,
   env: NodeJS.ProcessEnv,
 ): void {
-  const endpointType: ReplyEndpointType = item.replyEndpointType ?? 'reviewCommentReply';
+  const endpointType: ReplyEndpointType = item.replyEndpointType
+    ?? (item.sourceType === 'reviewInline' ? 'reviewCommentReply' : 'issueCommentCreate');
 
   if (endpointType === 'reviewCommentReply') {
+    if (!/^\d+$/.test(String(item.commentId))) {
+      throw new Error(`reviewCommentReply requires a numeric comment ID, got: ${item.commentId}`);
+    }
     execFileSync(
       'gh',
       ['api', `repos/${owner}/${repo}/pulls/${prNumber}/comments/${item.commentId}/replies`, '--raw-field', `body=${body}`],
@@ -285,7 +297,8 @@ function runBatchReplies(args: BatchArgs): void {
   let hasFailures = false;
 
   for (const item of batch.replies) {
-    const endpointType: ReplyEndpointType = item.replyEndpointType ?? 'reviewCommentReply';
+    const endpointType: ReplyEndpointType = item.replyEndpointType
+      ?? (item.sourceType === 'reviewInline' ? 'reviewCommentReply' : 'issueCommentCreate');
     if (item.skip) {
       results.push({
         commentId: item.commentId,
@@ -336,7 +349,31 @@ function runBatchReplies(args: BatchArgs): void {
         postReply(owner, repo, prNumber, item, replyBody, env);
         posted = true;
       } catch (error: unknown) {
-        lastError = error instanceof Error ? error.message : String(error);
+        if (error !== null && typeof error === 'object') {
+          const err = error as { message?: unknown; status?: unknown; stdout?: unknown; stderr?: unknown };
+          const parts: string[] = [];
+          if (typeof err.message === 'string' && err.message.length > 0) {
+            parts.push(`message=${err.message}`);
+          }
+          if (err.status !== undefined) {
+            parts.push(`status=${String(err.status)}`);
+          }
+          if (err.stdout) {
+            const stdout = String(err.stdout).trim();
+            if (stdout) {
+              parts.push(`stdout=${stdout}`);
+            }
+          }
+          if (err.stderr) {
+            const stderr = String(err.stderr).trim();
+            if (stderr) {
+              parts.push(`stderr=${stderr}`);
+            }
+          }
+          lastError = parts.length > 0 ? parts.join('; ') : String(error);
+        } else {
+          lastError = String(error);
+        }
       }
     }
 

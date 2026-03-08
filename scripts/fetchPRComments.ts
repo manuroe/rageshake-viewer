@@ -303,7 +303,7 @@ function extractComments(prData: PRData): FormattedComment[] {
           body: review.body.trim(),
           sourceType: 'reviewBody',
           replyEndpointType: 'issueCommentCreate',
-          isResolved: review.state === 'DISMISSED',
+          isResolved: review.state === 'DISMISSED' || review.state === 'APPROVED',
           createdAt: review.submittedAt || '',
           commentUrl: review.url,
         });
@@ -391,9 +391,16 @@ function formatForAgent(prData: PRData, comments: FormattedComment[]): string {
   
   unresolvedComments.forEach((comment, index) => {
     const num = index + 1;
-    const location = comment.file 
-      ? `[${comment.file}:${comment.line}](${comment.file}#L${comment.line})`
-      : 'General PR comment';
+    let location: string;
+    if (comment.file && comment.line !== undefined) {
+      location = `[${comment.file}:${comment.line}](${comment.file}#L${comment.line})`;
+    } else if (comment.commentUrl) {
+      location = `[View comment](${comment.commentUrl})`;
+    } else if (comment.file) {
+      location = comment.file;
+    } else {
+      location = 'General PR comment';
+    }
     const replyTypeLabel = comment.replyEndpointType === 'reviewCommentReply'
       ? 'inline review reply'
       : 'issue comment reply';
