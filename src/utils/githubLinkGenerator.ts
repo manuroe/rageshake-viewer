@@ -1,9 +1,47 @@
+// ---------------------------------------------------------------------------
+// Repository constants
+// ---------------------------------------------------------------------------
+
+const ELEMENT_X_IOS_REPO_SLUG = 'element-hq/element-x-ios';
+const ELEMENT_X_IOS_REPO_URL = `https://github.com/${ELEMENT_X_IOS_REPO_SLUG}`;
+// Git Trees API — returns every path in one unauthenticated call (see below).
+const ELEMENT_X_IOS_TREE_API_URL =
+  `https://api.github.com/repos/${ELEMENT_X_IOS_REPO_SLUG}/git/trees/main?recursive=1`;
+
+const MATRIX_RUST_SDK_REPO_SLUG = 'matrix-org/matrix-rust-sdk';
+const MATRIX_RUST_SDK_REPO_URL = `https://github.com/${MATRIX_RUST_SDK_REPO_SLUG}`;
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a GitHub blob URL pointing to a specific line in a file.
+ *
+ * @param repoUrl  Root repository URL, e.g. `https://github.com/owner/repo`
+ * @param filePath Repository-relative file path
+ * @param line     1-based line number
+ */
+export function buildGitHubBlobUrl(repoUrl: string, filePath: string, line: number): string {
+  return `${repoUrl}/blob/main/${filePath}#L${line}`;
+}
+
+// ---------------------------------------------------------------------------
+// Public API — synchronous URL generation
+// ---------------------------------------------------------------------------
+
 /**
  * Generate a GitHub URL pointing to a specific line in a source file.
- * 
- * @param filePath The file path (e.g., "ClientProxy.swift" or "crates/matrix-sdk/src/http_client/native.rs")
- * @param lineNumber The line number in the source file
- * @returns The GitHub URL, or undefined if the file type is not recognized
+ *
+ * - `.rs` files → direct blob link to `matrix-rust-sdk`
+ * - `.swift` files with a full path → direct blob link to `element-x-ios`
+ * - `.swift` files with only a bare filename → code-search URL (line number
+ *   is not included because GitHub cannot resolve the subdirectory without
+ *   the full path; use {@link resolveSwiftFilenameToBlobUrl} for a direct link)
+ *
+ * @param filePath   Repository-relative path or bare filename
+ * @param lineNumber 1-based line number in the source file
+ * @returns The GitHub URL, or `undefined` if the file type is not recognised
  */
 export function generateGitHubSourceUrl(
   filePath: string | undefined,
@@ -14,20 +52,19 @@ export function generateGitHubSourceUrl(
   }
 
   if (filePath.endsWith('.swift')) {
-    // If logs include a full Swift path, link directly to the file+line.
+    // Full path → direct blob link.
     if (filePath.includes('/')) {
-      return `https://github.com/element-hq/element-x-ios/blob/main/${filePath}#L${lineNumber}`;
+      return buildGitHubBlobUrl(ELEMENT_X_IOS_REPO_URL, filePath, lineNumber);
     }
 
-    // If logs only include a Swift filename, fall back to repo code search.
+    // Bare filename → fall back to repo code search.
     // GitHub cannot resolve unknown subdirectories for blob links.
-    const query = encodeURIComponent(`${filePath} repo:element-hq/element-x-ios`);
-    return `https://github.com/element-hq/element-x-ios/search?q=${query}&type=code`;
+    const query = encodeURIComponent(`${filePath} repo:${ELEMENT_X_IOS_REPO_SLUG}`);
+    return `${ELEMENT_X_IOS_REPO_URL}/search?q=${query}&type=code`;
   }
 
   if (filePath.endsWith('.rs')) {
-    // Rust files -> matrix-rust-sdk repo
-    return `https://github.com/matrix-org/matrix-rust-sdk/blob/main/${filePath}#L${lineNumber}`;
+    return buildGitHubBlobUrl(MATRIX_RUST_SDK_REPO_URL, filePath, lineNumber);
   }
 
   return undefined;
@@ -45,19 +82,19 @@ export function generateGitHubSourceUrl(
 // Strategy – GitHub Git Trees API (unauthenticated):
 //   The GitHub Code Search API (/search/code) requires authentication and
 //   returns HTTP 422 for anonymous requests, so it cannot be used here.
-//   Instead we call the Git Trees API once per session:
-//     GET /repos/element-hq/element-x-ios/git/trees/main?recursive=1
-//   This returns every file path in the repo in a single JSON response and
-//   works without any credentials.  We walk the tree, index every .swift
-//   blob by its bare filename, and store the result in `swiftPathCache`.
-//   Subsequent lookups are instant O(1) map reads.
+//   Instead we call the Git Trees API once per session using
+//   ELEMENT_X_IOS_TREE_API_URL.  This returns every file path in the repo in
+//   a single JSON response and works without credentials.  We walk the tree,
+//   index every .swift blob by its bare filename, and store the result in
+//   `swiftPathCache`.  Subsequent lookups are instant O(1) map reads.
 //
 // Performance / resilience:
 //   • sessionStorage: on a successful fetch the full filename→path map is
 //     written to sessionStorage so subsequent page loads in the same tab
 //     session skip the network request entirely.
-//   • AbortController timeout (3 s): if the GitHub API is slow the fetch is
-//     aborted so the caller falls back to the search URL promptly.
+//   • AbortController timeout (TREE_FETCH_TIMEOUT_MS): if the GitHub API is
+//     slow the fetch is aborted so the caller falls back to the search URL
+//     promptly.
 //   • Retry: `treeFetchPromise` is reset to null after each failed attempt,
 //     so the next user click will try again instead of silently giving up.
 // ---------------------------------------------------------------------------
@@ -73,7 +110,8 @@ interface GitHubTreeResponse {
 }
 
 export const SWIFT_PATH_SESSION_STORAGE_KEY = 'element-x-ios-swift-path-cache-v1';
-const TREE_FETCH_TIMEOUT_MS = 3000;
+/** Abort timeout for the GitHub Git Trees API request, in milliseconds. */
+export const TREE_FETCH_TIMEOUT_MS = 3000;
 
 // Maps bare filename (e.g. "ClientProxy.swift") -> full repo path
 const swiftPathCache = new Map<string, string>();
@@ -140,7 +178,7 @@ async function ensureSwiftTreeLoaded(): Promise<void> {
         const timeoutId = setTimeout(() => controller.abort(), TREE_FETCH_TIMEOUT_MS);
         try {
           const response = await fetch(
-            'https://api.github.com/repos/element-hq/element-x-ios/git/trees/main?recursive=1',
+            ELEMENT_X_IOS_TREE_API_URL,
             { signal: controller.signal }
           );
           if (!response.ok) return;
@@ -189,5 +227,5 @@ export async function resolveSwiftFilenameToBlobUrl(
 
   const path = swiftPathCache.get(fileName);
   if (!path) return undefined;
-  return `https://github.com/element-hq/element-x-ios/blob/main/${path}#L${lineNumber}`;
+  return buildGitHubBlobUrl(ELEMENT_X_IOS_REPO_URL, path, lineNumber);
 }
