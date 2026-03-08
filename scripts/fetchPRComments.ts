@@ -9,6 +9,7 @@
  * 
  * Output:
  *   - pr-comments.json: Raw structured data
+ *   - pr-replies-template.json: Batch reply template file
  *   - pr-comments-for-agent.md: Formatted markdown for copy-paste to agent
  */
 
@@ -24,11 +25,14 @@ interface FormattedComment {
   id: string;
   author: string;
   body: string;
+  sourceType: 'reviewInline' | 'reviewBody' | 'issueComment';
+  replyEndpointType: 'reviewCommentReply' | 'issueCommentCreate';
   file?: string;
   line?: number;
   startLine?: number;
   isResolved: boolean;
   createdAt: string;
+  commentUrl?: string;
 }
 
 interface GitHubUser {
@@ -49,6 +53,8 @@ interface ReviewCommentApi {
   original_start_line?: number;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   created_at?: string;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  html_url?: string;
 }
 
 interface ReviewBody {
@@ -57,6 +63,7 @@ interface ReviewBody {
   body?: string;
   state?: string;
   submittedAt?: string;
+  url?: string;
 }
 
 interface GeneralComment {
@@ -64,17 +71,23 @@ interface GeneralComment {
   author?: GitHubUser;
   body?: string;
   createdAt?: string;
+  url?: string;
 }
 
 interface PRData {
   number: number;
   title: string;
   author?: GitHubUser;
+  owner?: string;
+  repo?: string;
   reviews?: ReviewBody[];
   comments?: GeneralComment[];
   reviewComments?: ReviewCommentApi[];
   resolvedCommentIds?: Set<number>;
 }
+
+const botAuthorMarkers = ['github-actions', 'codecov', 'codspeed'];
+const botBodyMarkers = ['pr preview ready', 'performance report', 'codspeed'];
 
 function parseJson<T>(value: string): T {
   return JSON.parse(value) as T;
@@ -89,6 +102,17 @@ function getErrorMessage(error: unknown): string {
 
 function printLine(message = ''): void {
   process.stdout.write(`${message}\n`);
+}
+
+function isBotComment(author: string | undefined, body: string): boolean {
+  const authorLower = (author ?? '').toLowerCase();
+  const bodyLower = body.toLowerCase();
+
+  if (botAuthorMarkers.some(marker => authorLower.includes(marker))) {
+    return true;
+  }
+
+  return botBodyMarkers.some(marker => bodyLower.includes(marker));
 }
 
 /**
@@ -195,6 +219,9 @@ function fetchPRData(prNumber?: string): PRData {
     const owner = execSync('gh repo view --json owner -q .owner.login', { encoding: 'utf-8' }).trim();
     const repo = execSync('gh repo view --json name -q .name', { encoding: 'utf-8' }).trim();
 
+    prData.owner = owner;
+    prData.repo = repo;
+
     // Paginate through all review comments (default page size is 30; PRs can have many more)
     const reviewComments: ReviewCommentApi[] = [];
     let page = 1;
@@ -236,17 +263,23 @@ function extractComments(prData: PRData): FormattedComment[] {
   if (prData.reviewComments) {
     for (const comment of prData.reviewComments) {
       if (comment.body && comment.body.trim()) {
+        if (isBotComment(comment.user?.login, comment.body)) {
+          continue;
+        }
         const id = comment.id ? Number(comment.id) : NaN;
         const isResolved = prData.resolvedCommentIds?.has(id) ?? false;
         comments.push({
           id: String(comment.id),
           author: comment.user?.login || 'unknown',
           body: comment.body.trim(),
+          sourceType: 'reviewInline',
+          replyEndpointType: 'reviewCommentReply',
           file: comment.path,
           line: comment.line || comment.original_line,
           startLine: comment.start_line || comment.original_start_line,
           isResolved,
           createdAt: comment.created_at || '',
+          commentUrl: comment.html_url,
         });
       }
     }
@@ -256,6 +289,9 @@ function extractComments(prData: PRData): FormattedComment[] {
   if (prData.reviews) {
     for (const review of prData.reviews) {
       if (review.body && review.body.trim()) {
+        if (isBotComment(review.author?.login, review.body)) {
+          continue;
+        }
         // Skip if it's just a header (Copilot generated overview)
         if (review.body.includes('## Pull request overview')) {
           continue;
@@ -265,8 +301,11 @@ function extractComments(prData: PRData): FormattedComment[] {
           id: review.id || `review-${review.author?.login}-${review.submittedAt}`,
           author: review.author?.login || 'unknown',
           body: review.body.trim(),
-          isResolved: review.state === 'DISMISSED',
+          sourceType: 'reviewBody',
+          replyEndpointType: 'issueCommentCreate',
+          isResolved: review.state === 'DISMISSED' || review.state === 'APPROVED',
           createdAt: review.submittedAt || '',
+          commentUrl: review.url,
         });
       }
     }
@@ -276,8 +315,7 @@ function extractComments(prData: PRData): FormattedComment[] {
   if (prData.comments) {
     for (const comment of prData.comments) {
       if (comment.body && comment.body.trim()) {
-        // Skip bot comments from GitHub Actions
-        if (comment.author?.login === 'github-actions' || comment.body.includes('PR Preview ready') || comment.body.includes('Performance Report')) {
+        if (isBotComment(comment.author?.login, comment.body)) {
           continue;
         }
         
@@ -285,8 +323,11 @@ function extractComments(prData: PRData): FormattedComment[] {
           id: comment.id || `comment-${comment.author?.login}-${comment.createdAt}`,
           author: comment.author?.login || 'unknown',
           body: comment.body.trim(),
+          sourceType: 'issueComment',
+          replyEndpointType: 'issueCommentCreate',
           isResolved: false,
           createdAt: comment.createdAt || '',
+          commentUrl: comment.url,
         });
       }
     }
@@ -350,11 +391,24 @@ function formatForAgent(prData: PRData, comments: FormattedComment[]): string {
   
   unresolvedComments.forEach((comment, index) => {
     const num = index + 1;
-    const location = comment.file 
-      ? `[${comment.file}:${comment.line}](${comment.file}#L${comment.line})`
-      : 'General PR comment';
+    let location: string;
+    if (comment.file && comment.line !== undefined) {
+      location = `[${comment.file}:${comment.line}](${comment.file}#L${comment.line})`;
+    } else if (comment.commentUrl) {
+      location = `[View comment](${comment.commentUrl})`;
+    } else if (comment.file) {
+      location = comment.file;
+    } else {
+      location = 'General PR comment';
+    }
+    const replyTypeLabel = comment.replyEndpointType === 'reviewCommentReply'
+      ? 'inline review reply'
+      : 'issue comment reply';
     
     output += `### ${num}. ${location}\n`;
+    output += `**Comment ID**: ${comment.id}\n`;
+    output += `**Source Type**: ${comment.sourceType}\n`;
+    output += `**Reply Endpoint**: ${replyTypeLabel}\n`;
     output += `**@${comment.author}** commented:\n\n`;
     output += `> ${comment.body.split('\n').join('\n> ')}\n\n`;
     
@@ -365,16 +419,27 @@ function formatForAgent(prData: PRData, comments: FormattedComment[]): string {
     
     output += `---\n\n`;
   });
-  
-  if (resolvedComments.length > 0) {
-    output += `## ✅ Resolved Comments (${resolvedComments.length})\n\n`;
-    resolvedComments.forEach((comment, index) => {
-      const location = comment.file ? `${comment.file}:${comment.line}` : 'General';
-      output += `${index + 1}. **${location}** - @${comment.author}\n`;
-    });
-  }
+
+  output += `ℹ️ Resolved comments omitted from actionable list: ${resolvedComments.length}\n`;
   
   return output;
+}
+
+function createDetailedReplySkeleton(comment: FormattedComment): string {
+  const location = comment.file && comment.line
+    ? `${comment.file}:${comment.line}`
+    : 'general PR discussion';
+  const sourceLabel = comment.sourceType === 'reviewInline'
+    ? 'inline review comment'
+    : comment.sourceType === 'reviewBody'
+      ? 'review summary comment'
+      : 'PR issue comment';
+
+  return [
+    `Implemented the requested changes for ${sourceLabel} #${comment.id}.`,
+    `Where: ${location}.`,
+    'Commit: <paste commit SHA>.',
+  ].join('\n');
 }
 
 /**
@@ -397,8 +462,49 @@ function main() {
   printLine('💾 Saving structured data...');
   const workspaceRoot = join(currentDirPath, '..');
   const jsonPath = join(workspaceRoot, 'pr-comments.json');
-  writeFileSync(jsonPath, JSON.stringify({ pr: prData.number, title: prData.title, comments }, null, 2));
+  const unresolvedComments = comments.filter(comment => !comment.isResolved);
+  const batchReplyTemplate = {
+    pr: prData.number,
+    owner: prData.owner,
+    repo: prData.repo,
+    generatedAt: new Date().toISOString(),
+    replyGuidance: {
+      format: ['Implemented', 'Where', 'Commit'],
+      note: 'Replace placeholders and keep replies concise and specific to the addressed comment.',
+    },
+    replies: unresolvedComments.map(comment => ({
+      commentId: comment.id,
+      sourceType: comment.sourceType,
+      replyEndpointType: comment.replyEndpointType,
+      author: comment.author,
+      file: comment.file,
+      line: comment.line,
+      commentUrl: comment.commentUrl,
+      message: createDetailedReplySkeleton(comment),
+      skip: false,
+    })),
+  };
+  writeFileSync(
+    jsonPath,
+    JSON.stringify(
+      {
+        pr: prData.number,
+        title: prData.title,
+        owner: prData.owner,
+        repo: prData.repo,
+        comments,
+        unresolvedComments,
+        batchReplyTemplate,
+      },
+      null,
+      2,
+    ),
+  );
   printLine(`   → ${jsonPath}`);
+
+  const batchTemplatePath = join(workspaceRoot, 'pr-replies-template.json');
+  writeFileSync(batchTemplatePath, JSON.stringify(batchReplyTemplate, null, 2));
+  printLine(`   → ${batchTemplatePath}`);
   
   printLine('📄 Formatting for agent...');
   const markdown = formatForAgent(prData, comments);
