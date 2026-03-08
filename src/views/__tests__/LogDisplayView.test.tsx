@@ -1,10 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, waitFor, act } from '@testing-library/react';
 import { screen, fireEvent, createEvent } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { useLogStore } from '../../stores/logStore';
 import { LogDisplayView } from '../LogDisplayView';
 import { createLogsWithMatches, createParsedLogLine } from '../../test/fixtures';
+import { parseAllHttpRequests } from '../../utils/logParser';
+import { resetSwiftPathCacheForTests } from '../../utils/githubLinkGenerator';
 import styles from '../LogDisplayView.module.css';
 import {
   KeyboardShortcutContext,
@@ -252,6 +254,158 @@ describe('LogDisplayView gap arrows & expansion', () => {
     line2Container = getLineContainer(2);
     expect(line2Container.classList.contains(styles.wrap)).toBe(true);
     expect(line2Container.classList.contains(styles.nowrap)).toBe(false);
+  });
+
+  describe('GitHub source links', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+      resetSwiftPathCacheForTests();
+    });
+
+    const RUST_LINE = '2026-02-04T13:01:45.365379Z DEBUG matrix_sdk::http_client::native: Sending request num_attempt=1 | crates/matrix-sdk/src/http_client/native.rs:78 | spans: root';
+    const SWIFT_LINE = '2026-02-04T13:10:37.511766Z  INFO elementx: Received room list update: running | ClientProxy.swift:1092 | spans: root';
+
+    it('shows source links with hover styling for source-tagged lines', async () => {
+      const user = userEvent.setup();
+      const parsed = parseAllHttpRequests(`${RUST_LINE}\n${SWIFT_LINE}`);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines });
+
+      render(<LogDisplayView />);
+
+      // Links are always in the DOM; before hover they carry the inactive class.
+      const rustLink = screen.getByRole('link', { name: 'crates/matrix-sdk/src/http_client/native.rs:78' });
+      expect(rustLink).toHaveAttribute('href', 'https://github.com/matrix-org/matrix-rust-sdk/blob/main/crates/matrix-sdk/src/http_client/native.rs#L78');
+      expect(rustLink.className).toMatch(/sourceLinkInactive/);
+
+      // Hovering the row switches the link to active (visible) styling.
+      await user.hover(getLineContainer(1));
+      await waitFor(() => expect(rustLink.className).toMatch(/sourceLink(?!Inactive)/));
+
+      const swiftLink = screen.getByRole('link', { name: 'ClientProxy.swift:1092' });
+      expect(swiftLink).toHaveAttribute('href', 'https://github.com/element-hq/element-x-ios/search?q=ClientProxy.swift%20repo%3Aelement-hq%2Felement-x-ios&type=code');
+      expect(swiftLink.className).toMatch(/sourceLinkInactive/);
+      await user.hover(getLineContainer(2));
+      await waitFor(() => expect(swiftLink.className).toMatch(/sourceLink(?!Inactive)/));
+    });
+
+    it('shows active link styling on keyboard focus and restores inactive on blur', async () => {
+      const parsed = parseAllHttpRequests(RUST_LINE);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines });
+
+      render(<LogDisplayView />);
+
+      // Link is always in the DOM; starts with inactive (plain-text) styling.
+      const link = screen.getByRole('link', { name: 'crates/matrix-sdk/src/http_client/native.rs:78' });
+      expect(link).toHaveAttribute('href', 'https://github.com/matrix-org/matrix-rust-sdk/blob/main/crates/matrix-sdk/src/http_client/native.rs#L78');
+      expect(link.className).toMatch(/sourceLinkInactive/);
+
+      // Focus the row → link becomes visually active.
+      const container = getLineContainer(1);
+      act(() => { container.focus(); });
+      await waitFor(() => expect(link.className).toMatch(/sourceLink(?!Inactive)/));
+
+      // Blur the row entirely → link reverts to inactive styling (still in DOM).
+      act(() => { container.blur(); });
+      await waitFor(() => expect(link.className).toMatch(/sourceLinkInactive/));
+    });
+
+    it('clicking a Swift source link navigates to the resolved file URL in a new tab', async () => {
+      const user = userEvent.setup();
+      const parsed = parseAllHttpRequests(SWIFT_LINE);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines });
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          tree: [{ path: 'ElementX/Sources/Services/Client/ClientProxy.swift', type: 'blob' }],
+        }),
+      } as Response);
+
+      const mockTab = { opener: null as unknown, location: { href: '' }, close: vi.fn() };
+      vi.spyOn(window, 'open').mockReturnValue(mockTab as Window);
+
+      render(<LogDisplayView />);
+      await user.hover(getLineContainer(1));
+      const link = await screen.findByRole('link', { name: 'ClientProxy.swift:1092' });
+      // Use fireEvent.click so the synthetic onClick fires without userEvent's
+      // anchor-navigation side-effects in jsdom.
+      fireEvent.click(link);
+
+      expect(window.open).toHaveBeenCalledWith('', '_blank');
+      expect(mockTab.opener).toBeNull();
+      await waitFor(() => {
+        expect(mockTab.location.href).toBe(
+          'https://github.com/element-hq/element-x-ios/blob/main/ElementX/Sources/Services/Client/ClientProxy.swift#L1092'
+        );
+      });
+    });
+
+    it('preserves search highlights in the text surrounding the source link when hovering a matched line', async () => {
+      const user = userEvent.setup();
+      const parsed = parseAllHttpRequests(RUST_LINE);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines });
+
+      render(<LogDisplayView />);
+
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      await user.type(searchInput, 'Sending');
+      // Wait for the debounced searchQuery to update and the line to be classed as a match.
+      await waitFor(() => expect(getLineContainer(1).className).toMatch(/matchLine/));
+
+      const container = getLineContainer(1);
+      await user.hover(container);
+
+      const link = await screen.findByRole('link', { name: 'crates/matrix-sdk/src/http_client/native.rs:78' });
+      expect(link).toBeInTheDocument();
+
+      // The matched word should still appear highlighted inside a <mark>
+      const marks = container.querySelectorAll('mark');
+      expect(marks.length).toBeGreaterThan(0);
+      expect(marks[0].textContent).toBe('Sending');
+    });
+
+    it('highlights search matches inside the source link text when the line matches the search', async () => {
+      const user = userEvent.setup();
+      const parsed = parseAllHttpRequests(RUST_LINE);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines });
+
+      render(<LogDisplayView />);
+
+      // Search for a term that appears inside the sourceRef itself.
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      await user.type(searchInput, 'native.rs');
+      await waitFor(() => expect(getLineContainer(1).className).toMatch(/matchLine/));
+
+      // The link is always in the DOM; its highlighted text can be found by accessible name.
+      const link = await screen.findByRole('link', { name: /native\.rs/ });
+      const markInLink = link.querySelector('mark');
+      expect(markInLink).not.toBeNull();
+      expect(markInLink?.textContent).toBe('native.rs');
+    });
+
+    it('keeps active link styling when focus moves from the row to the link inside it', async () => {
+      const parsed = parseAllHttpRequests(RUST_LINE);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines });
+
+      render(<LogDisplayView />);
+
+      // Link is always in the DOM; starts inactive.
+      const link = screen.getByRole('link', { name: 'crates/matrix-sdk/src/http_client/native.rs:78' });
+      expect(link.className).toMatch(/sourceLinkInactive/);
+
+      const container = getLineContainer(1);
+      act(() => { container.focus(); });
+      await waitFor(() => expect(link.className).toMatch(/sourceLink(?!Inactive)/));
+
+      // Blur the row with relatedTarget = the link (focus staying inside the row).
+      // The active styling should be preserved.
+      act(() => { fireEvent.blur(container, { relatedTarget: link }); });
+      expect(link.className).toMatch(/sourceLink(?!Inactive)/);
+
+      // Blur to outside: inactive styling restored.
+      act(() => { container.blur(); });
+      await waitFor(() => expect(link.className).toMatch(/sourceLinkInactive/));
+    });
   });
 
   it('contextLines shows surrounding lines when enabled', async () => {

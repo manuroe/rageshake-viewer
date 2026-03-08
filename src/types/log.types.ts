@@ -57,6 +57,10 @@ export interface ParsedLogLine {
   level: LogLevel;
   message: string;
   strippedMessage: string;
+  /** Source file path extracted from log (e.g., "ClientProxy.swift" or "crates/matrix-sdk/src/http_client/native.rs") */
+  filePath?: string;
+  /** Source file line number extracted from log */
+  sourceLineNumber?: number;
 }
 
 export type LogLevel = 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'UNKNOWN';

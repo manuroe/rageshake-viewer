@@ -11,6 +11,7 @@ import { SearchInput } from '../components/SearchInput';
 import type { SearchInputHandle } from '../components/SearchInput';
 import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
 import { optionKey } from '../utils/shortcuts';
+import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import styles from './LogDisplayView.module.css';
 
 interface LogDisplayViewProps {
@@ -96,6 +97,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [lineWrap, setLineWrap] = useState(defaultLineWrap);
   const [stripPrefix, setStripPrefix] = useState(true);
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
+  const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
 
   // Option+w → toggle line wrap; Option+p → toggle strip prefix
   useEffect(() => {
@@ -225,6 +227,51 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const highlightText = (line: ParsedLogLine, originalIndex: number): React.ReactNode => {
     const isMatch = searchMatchingLineIndices.has(originalIndex);
     const displayText = getDisplayText(line);
+    const isHovered = hoveredLineIndex === originalIndex;
+
+    // Always render the anchor so the first click lands on the element.
+    // The link only receives visible link styling when the row is hovered/focused;
+    // otherwise it inherits the surrounding text appearance (sourceLinkInactive).
+    if (line.filePath && line.sourceLineNumber) {
+      const githubUrl = generateGitHubSourceUrl(line.filePath, line.sourceLineNumber);
+      if (githubUrl) {
+        const sourceRef = `${line.filePath}:${line.sourceLineNumber}`;
+        const sourceRefIndex = displayText.indexOf(sourceRef);
+        if (sourceRefIndex >= 0) {
+          const before = displayText.slice(0, sourceRefIndex);
+          const after = displayText.slice(sourceRefIndex + sourceRef.length);
+          // Preserve search highlights in the segments surrounding the link.
+          const highlightOpts = searchQuery && isMatch
+            ? { query: searchQuery, caseSensitive: false, highlightClassName: styles.searchHighlight }
+            : null;
+          const renderedBefore = highlightOpts
+            ? highlightTextUtil(before, { ...highlightOpts, keyPrefix: `line-${originalIndex}-b` })
+            : before;
+          const renderedSourceRef = highlightOpts
+            ? highlightTextUtil(sourceRef, { ...highlightOpts, keyPrefix: `line-${originalIndex}-r` })
+            : sourceRef;
+          const renderedAfter = highlightOpts
+            ? highlightTextUtil(after, { ...highlightOpts, keyPrefix: `line-${originalIndex}-a` })
+            : after;
+          return (
+            <>
+              {renderedBefore}
+              <a
+                href={githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={isHovered ? styles.sourceLink : styles.sourceLinkInactive}
+                title={isHovered ? 'View on GitHub' : undefined}
+                onClick={(e) => handleSourceLinkClick(e, line.filePath, line.sourceLineNumber)}
+              >
+                {renderedSourceRef}
+              </a>
+              {renderedAfter}
+            </>
+          );
+        }
+      }
+    }
     
     if (!searchQuery || !isMatch) {
       return displayText;
@@ -258,6 +305,35 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     // Strip ISO timestamp and log level from display (they're already shown in columns)
     // Pattern: "YYYY-MM-DDTHH:MM:SS.ffffffZ LEVEL " -> keep just the message part
     return line.rawText.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+\w+\s+/, '');
+  };
+
+  const handleSourceLinkClick = async (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    filePath?: string,
+    sourceLineNumber?: number
+  ) => {
+    if (!filePath || !sourceLineNumber) return;
+    if (!filePath.endsWith('.swift') || filePath.includes('/')) return;
+
+    e.preventDefault();
+
+    // Open without 'noopener' in the features string so the browser returns a
+    // usable window reference; then immediately nullify opener to block
+    // reverse-tabnabbing (the opened page cannot access window.opener).
+    const pendingWindow = window.open('', '_blank');
+    if (!pendingWindow) return;
+    pendingWindow.opener = null;
+
+    const resolvedUrl = await resolveSwiftFilenameToBlobUrl(filePath, sourceLineNumber);
+    const fallbackUrl = generateGitHubSourceUrl(filePath, sourceLineNumber);
+    const targetUrl = resolvedUrl || fallbackUrl;
+
+    if (!targetUrl) {
+      pendingWindow.close();
+      return;
+    }
+
+    pendingWindow.location.href = targetUrl;
   };
 
   // Expand a gap by including the missing lines
@@ -465,6 +541,15 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                   if (el) rowVirtualizer.measureElement(el);
                 }}
                 className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${lineWrap ? styles.wrap : styles.nowrap}`}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
+                onFocus={() => setHoveredLineIndex(index)}
+                onBlur={(e: React.FocusEvent<HTMLDivElement>) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                    setHoveredLineIndex(null);
+                  }
+                }}
+                tabIndex={-1}
                 style={{
                   position: 'absolute',
                   top: 0,

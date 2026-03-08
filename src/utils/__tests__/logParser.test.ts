@@ -145,6 +145,27 @@ describe('logParser', () => {
         expect(result.rawLogLines[0].strippedMessage).not.toMatch(/^2026-01-26T/);
         expect(result.rawLogLines[0].strippedMessage).toContain('elementx');
       });
+
+      it('extracts source path and line number for rust entries', () => {
+        const result = parseAllHttpRequests(SEND_LINE);
+
+        expect(result.rawLogLines[0].filePath).toBe('crates/matrix-sdk/src/http_client/native.rs');
+        expect(result.rawLogLines[0].sourceLineNumber).toBe(78);
+      });
+
+      it('extracts source path and line number for swift entries', () => {
+        const result = parseAllHttpRequests(INFO_LINE);
+
+        expect(result.rawLogLines[0].filePath).toBe('ClientProxy.swift');
+        expect(result.rawLogLines[0].sourceLineNumber).toBe(1055);
+      });
+
+      it('leaves source fields undefined when no source marker exists', () => {
+        const result = parseAllHttpRequests('2026-01-01T00:00:00.000000Z  INFO no source marker here');
+
+        expect(result.rawLogLines[0].filePath).toBeUndefined();
+        expect(result.rawLogLines[0].sourceLineNumber).toBeUndefined();
+      });
     });
 
     describe('duration parsing', () => {

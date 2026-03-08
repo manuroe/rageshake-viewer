@@ -227,6 +227,23 @@
     overflow: hidden;
 }
 
+.sourceLink {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.sourceLink:hover {
+    color: var(--color-primary-hover);
+}
+
+/* Anchor is always in the DOM so clicks land on it; hide link styling until hover. */
+.sourceLinkInactive {
+    color: inherit;
+    text-decoration: none;
+    cursor: text;
+}
+
 /* Log Level Colors */
 .levelTrace {
     color: var(--log-level-trace);
