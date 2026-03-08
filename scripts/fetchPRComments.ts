@@ -438,8 +438,7 @@ function createDetailedReplySkeleton(comment: FormattedComment): string {
   return [
     `Implemented the requested changes for ${sourceLabel} #${comment.id}.`,
     `Where: ${location}.`,
-    'Validation: npm run build, npm run lint, npm test -- --run --coverage.',
-    'Commit: <paste commit SHA or link>.',
+    'Commit: <paste commit SHA>.',
   ].join('\n');
 }
 
@@ -470,7 +469,7 @@ function main() {
     repo: prData.repo,
     generatedAt: new Date().toISOString(),
     replyGuidance: {
-      format: ['Implemented', 'Where', 'Validation', 'Commit'],
+      format: ['Implemented', 'Where', 'Commit'],
       note: 'Replace placeholders and keep replies concise and specific to the addressed comment.',
     },
     replies: unresolvedComments.map(comment => ({
