@@ -11,6 +11,7 @@ import { SearchInput } from '../components/SearchInput';
 import type { SearchInputHandle } from '../components/SearchInput';
 import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
 import { optionKey } from '../utils/shortcuts';
+import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import styles from './LogDisplayView.module.css';
 
 interface LogDisplayViewProps {
@@ -96,6 +97,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [lineWrap, setLineWrap] = useState(defaultLineWrap);
   const [stripPrefix, setStripPrefix] = useState(true);
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
+  const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
 
   // Option+w → toggle line wrap; Option+p → toggle strip prefix
   useEffect(() => {
@@ -225,6 +227,35 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const highlightText = (line: ParsedLogLine, originalIndex: number): React.ReactNode => {
     const isMatch = searchMatchingLineIndices.has(originalIndex);
     const displayText = getDisplayText(line);
+    const isHovered = hoveredLineIndex === originalIndex;
+
+    if (isHovered && line.filePath && line.sourceLineNumber) {
+      const githubUrl = generateGitHubSourceUrl(line.filePath, line.sourceLineNumber);
+      if (githubUrl) {
+        const sourceRef = `${line.filePath}:${line.sourceLineNumber}`;
+        const sourceRefIndex = displayText.indexOf(sourceRef);
+        if (sourceRefIndex >= 0) {
+          const before = displayText.slice(0, sourceRefIndex);
+          const after = displayText.slice(sourceRefIndex + sourceRef.length);
+          return (
+            <>
+              {before}
+              <a
+                href={githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.sourceLink}
+                title="View on GitHub"
+                onClick={(e) => handleSourceLinkClick(e, line.filePath, line.sourceLineNumber)}
+              >
+                {sourceRef}
+              </a>
+              {after}
+            </>
+          );
+        }
+      }
+    }
     
     if (!searchQuery || !isMatch) {
       return displayText;
@@ -258,6 +289,34 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     // Strip ISO timestamp and log level from display (they're already shown in columns)
     // Pattern: "YYYY-MM-DDTHH:MM:SS.ffffffZ LEVEL " -> keep just the message part
     return line.rawText.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+\w+\s+/, '');
+  };
+
+  const handleSourceLinkClick = async (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    filePath?: string,
+    sourceLineNumber?: number
+  ) => {
+    if (!filePath || !sourceLineNumber) return;
+    if (!filePath.endsWith('.swift') || filePath.includes('/')) return;
+
+    e.preventDefault();
+
+    // Open without 'noopener' so we retain the window reference needed to
+    // navigate it after the async resolution.  The destination is always
+    // github.com so there is no cross-origin trust concern here.
+    const pendingWindow = window.open('', '_blank');
+    if (!pendingWindow) return;
+
+    const resolvedUrl = await resolveSwiftFilenameToBlobUrl(filePath, sourceLineNumber);
+    const fallbackUrl = generateGitHubSourceUrl(filePath, sourceLineNumber);
+    const targetUrl = resolvedUrl || fallbackUrl;
+
+    if (!targetUrl) {
+      pendingWindow.close();
+      return;
+    }
+
+    pendingWindow.location.href = targetUrl;
   };
 
   // Expand a gap by including the missing lines
@@ -465,6 +524,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                   if (el) rowVirtualizer.measureElement(el);
                 }}
                 className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${lineWrap ? styles.wrap : styles.nowrap}`}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
                 style={{
                   position: 'absolute',
                   top: 0,

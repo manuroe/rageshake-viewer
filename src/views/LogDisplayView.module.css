@@ -227,6 +227,16 @@
     overflow: hidden;
 }
 
+.sourceLink {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.sourceLink:hover {
+    color: var(--color-primary-hover);
+}
+
 /* Log Level Colors */
 .levelTrace {
     color: var(--log-level-trace);

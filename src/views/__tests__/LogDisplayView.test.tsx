@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { useLogStore } from '../../stores/logStore';
 import { LogDisplayView } from '../LogDisplayView';
 import { createLogsWithMatches, createParsedLogLine } from '../../test/fixtures';
+import { parseAllHttpRequests } from '../../utils/logParser';
 import styles from '../LogDisplayView.module.css';
 import {
   KeyboardShortcutContext,
@@ -252,6 +253,26 @@ describe('LogDisplayView gap arrows & expansion', () => {
     line2Container = getLineContainer(2);
     expect(line2Container.classList.contains(styles.wrap)).toBe(true);
     expect(line2Container.classList.contains(styles.nowrap)).toBe(false);
+  });
+
+  it('shows a GitHub source link on hover for source-tagged lines', async () => {
+    const user = userEvent.setup();
+    const rustLine = '2026-02-04T13:01:45.365379Z DEBUG matrix_sdk::http_client::native: Sending request num_attempt=1 | crates/matrix-sdk/src/http_client/native.rs:78 | spans: root';
+    const swiftLine = '2026-02-04T13:10:37.511766Z  INFO elementx: Received room list update: running | ClientProxy.swift:1092 | spans: root';
+    const parsed = parseAllHttpRequests(`${rustLine}\n${swiftLine}`);
+    useLogStore.setState({ rawLogLines: parsed.rawLogLines });
+
+    render(<LogDisplayView />);
+
+    const rustLineContainer = getLineContainer(1);
+    await user.hover(rustLineContainer);
+    const rustLink = await screen.findByRole('link', { name: 'crates/matrix-sdk/src/http_client/native.rs:78' });
+    expect(rustLink).toHaveAttribute('href', 'https://github.com/matrix-org/matrix-rust-sdk/blob/main/crates/matrix-sdk/src/http_client/native.rs#L78');
+
+    const swiftLineContainer = getLineContainer(2);
+    await user.hover(swiftLineContainer);
+    const swiftLink = await screen.findByRole('link', { name: 'ClientProxy.swift:1092' });
+    expect(swiftLink).toHaveAttribute('href', 'https://github.com/element-hq/element-x-ios/search?q=ClientProxy.swift%20repo%3Aelement-hq%2Felement-x-ios&type=code');
   });
 
   it('contextLines shows surrounding lines when enabled', async () => {

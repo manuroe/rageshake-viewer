@@ -26,6 +26,24 @@ function stripMessagePrefix(message: string): string {
 }
 
 /**
+ * Extract file path and line number from a log line.
+ * Matches the pipe-delimited pattern: | path/to/file.rs:42 |
+ * Returns {filePath, sourceLineNumber} or {filePath: undefined, sourceLineNumber: undefined} if not found.
+ */
+function extractSourceLocation(line: string): { filePath?: string; sourceLineNumber?: number } {
+  // Match pattern: "| <path>:<number> |" where path can contain slashes
+  // The path must end with .swift or .rs for our purposes
+  const match = line.match(/\|\s*([^\s|]+\.(?:rs|swift)):(\d+)\s*\|/);
+  if (match && match[1] && match[2]) {
+    return {
+      filePath: match[1],
+      sourceLineNumber: parseInt(match[2], 10),
+    };
+  }
+  return {};
+}
+
+/**
  * Extract ISO timestamp from a log line.
  * Returns the full ISO 8601 datetime string.
  */
@@ -92,6 +110,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       const timestampUs = parseTimestampMicros(isoTimestamp);
       const displayTime = formatDisplayTime(isoTimestamp);
       const strippedMessage = stripMessagePrefix(line);
+      const { filePath, sourceLineNumber } = extractSourceLocation(line);
       
       if (isoTimestamp) {
         linesWithTimestamps++;
@@ -106,6 +125,8 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
         level,
         message: line,
         strippedMessage,
+        filePath,
+        sourceLineNumber,
       });
 
       // Detect Sentry events
