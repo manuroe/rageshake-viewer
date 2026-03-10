@@ -29,17 +29,8 @@ This document is a lightweight guide for contributors and automated agents. It f
 - Keep domain logic in stores/utils, UI-specific logic in views/components.
 - Prefer predictable, immutable updates for state (e.g., replace sets/arrays to trigger updates).
 - Shareable URLs: global time filters should sync to query parameters.
-- Default to fast, readable UI for debugging large logs.
-- After parsing, most UI and filtering logic is log-agnostic; Matrix-specific behavior is mainly in the some views.
-
-## UX/UI Design
-**Target Audience**: Developers debugging Matrix Rust SDK issues
-
-**Core Principles**:
-- Efficiency first: fast loading, instant search, minimal clicks.
-- Shareable URLs for filters and views.
-- Dark mode and copy-friendly UI for long sessions.
-- Sensible defaults that reduce setup time.
+- Efficiency first: fast loading, instant search, dark mode, sensible defaults.
+- After parsing, most UI and filtering logic is log-agnostic; Matrix-specific behavior is mainly in some views.
 
 ## Useful Commands
 - Start dev server: `npm start`
@@ -53,6 +44,10 @@ This document is a lightweight guide for contributors and automated agents. It f
 - Batch-reply to PR comments from template file: `npm run pr:reply:batch` (reads `pr-replies-template.json`)
 - Reply to a single PR review comment: `npm run pr:reply -- --comment-id <id> --message "<text>"`
 
+## When to Commit
+
+Do **not** commit on the first iteration. Write the code, show the user what changed, and wait for feedback. Only commit once the user confirms the direction is correct — or explicitly asks you to commit.
+
 ## Pre-Commit Checklist (for Agents)
 
 Before committing **any** code change (new feature, bug fix, PR comment fix, refactor, etc.), always run the following commands and resolve all errors before proceeding:
@@ -64,6 +59,8 @@ npm test -- --run --coverage  # coverage thresholds must pass
 ```
 
 Do not commit if any of these steps fail. Fix the issue first, then re-run the full checklist before committing.
+
+**Manual review** — before committing, scan the diff against each pillar in [Code Quality Standards](#code-quality-standards) and verify all apply.
 
 ## PR Review Workflow (for Agents)
 
@@ -86,27 +83,27 @@ Rejecting a comment:
 - Ask the reviewer to confirm or clarify before proceeding.
 - No code change should accompany a rejection reply.
 
-## Architecture (Conceptual)
+## Architecture
 1. Parse log text into structured records once.
-2. Store parsed results and filters centrally in Zustand.
-3. Views render filtered results; view-specific filters do not affect other views.
-4. Large lists are virtualized to avoid rendering all rows.
+2. Store parsed results and filters centrally in Zustand. Global filters (time range) are shared across views; each view applies its own view-specific filters on top.
+3. Views render filtered results; large lists are virtualized.
+4. UI state (expanded rows, open log viewers) is kept in the store for consistent behavior across views.
 
-## State Management (Conceptual)
-- Global filters (e.g., time range) are shared across views.
-- Each view applies its own view-specific filters on top of global ones.
-- UI state (expanded rows, open log viewers) is kept in the store for consistent behavior.
+## Code Quality Standards
 
-## Minimal Examples (Non-Exhaustive)
-- When adding a new view: keep data access in the store and render-only logic in the view.
-- When adding a filter: update store filter logic, then read the filtered list in the view.
-- When dealing with large lists: use virtualized rendering.
+Every change must uphold these pillars — apply them when writing, not just at review time.
 
-## Anti-Patterns to Avoid
-- Computing expensive parsing in render.
-- Re-filtering large collections on every render.
-- Mixing domain parsing logic inside UI components.
-- Storing cross-view filters in local component state.
+**Clean**: `eslint-disable` requires an inline justification. Warnings are errors in this repo.
+
+**Well Documented**: Every exported symbol gets a JSDoc explaining *why* it exists, not just what it does. Non-obvious decisions need an inline comment. Utils in `src/utils/` need at least one `@example`.
+
+**Composable**: Domain logic in `src/utils/` or `src/stores/` only — never inside component render or handlers. Components never call `useStore.setState()` directly; always use a named store action.
+
+**Easy to Test**: Every new pure function (`src/utils/__tests__/`) and hook (`src/hooks/__tests__/`) gets a unit test asserting on concrete output. Mock only external boundaries (network, store, router).
+
+**No Duplication**: Search before writing. If the same block appears in two or more places, extract it immediately (utility function, shared hook, or store action).
+
+**AI-Generated Code — extra watch-outs**: all domain type properties must be `readonly`; all literals need named constants; every `setTimeout`/`addEventListener` in a `useEffect` needs a cleanup return; symbol-only buttons need `aria-label`.
 
 ## Performance Regression Detection
 CI runs benchmark suites via CodSpeed and publishes performance tracking/results on codspeed.io and GitHub checks.
@@ -127,9 +124,7 @@ Screenshots in [`public/demo/screenshot-*.png`](public/demo/) are **generated an
 
 ## Contribution Guidelines
 - Use camelCase for identifiers (lint enforced).
-- Avoid embedding parsing logic directly in components.
 - Prefer additive changes over refactors unless necessary.
-- Keep documentation high-level; link to code for implementation specifics.
 - Every new feature must be represented in [`public/demo/demo.log`](public/demo/demo.log).
 - Always pass the [Pre-Commit Checklist](#pre-commit-checklist-for-agents) (`npm run build`, `npm run lint`, `npm test -- --run --coverage`) before committing.
 
