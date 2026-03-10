@@ -88,6 +88,8 @@
   --log-level-warn-text: #dcdcaa;
   --log-level-error: #f44336;
   --log-level-error-text: #f48771;
+  --log-collapse-exact: #4caf50;
+  --log-collapse-similar: #64b5f6;
   --log-timestamp: #9cdcfe;
   --log-search-highlight: #ffeb3b;
   --log-match-bg: rgba(255, 255, 0, 0.1);

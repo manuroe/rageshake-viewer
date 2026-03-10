@@ -447,12 +447,12 @@
 
 /* =  exact-duplicate indicator in the level column */
 .collapseExact {
-    color: #4caf50;
+    color: var(--log-collapse-exact, #4caf50);
 }
 
 /* ≈  similar-source indicator in the level column */
 .collapseSimilar {
-    color: #64b5f6;
+    color: var(--log-collapse-similar, #64b5f6);
 }
 
 .collapseSummaryText {

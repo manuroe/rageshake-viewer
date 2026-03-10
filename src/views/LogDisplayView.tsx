@@ -170,21 +170,28 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     };
   }, [filteredLines, collapseEnabled]);
 
-  // Search determines highlighting within visible lines
-  // Returns a Set of original line indices (not filtered indices) that match the search
+  // Build display items with gap indicators
+  const displayItems = useMemo(() => {
+    return buildDisplayItems(visibleLines, displayLogLines, forcedRanges);
+  }, [visibleLines, displayLogLines, forcedRanges]);
+
+  const displayIndices = useMemo(() => {
+    return displayItems.map((item) => item.data.index);
+  }, [displayItems]);
+
+  // Search determines highlighting within all currently rendered lines (including
+  // lines expanded from collapsed groups via forcedRanges).
   const searchMatchingLineIndices = useMemo(() => {
     if (!searchQuery.trim()) return new Set<number>();
-    // Build a set of original indices that match the search within visible lines
     const matchingOriginalIndices = new Set<number>();
     const normalizedQuery = searchQuery.toLowerCase();
-    visibleLines.forEach(({ line, index }) => {
-      const text = line.rawText.toLowerCase();
-      if (text.includes(normalizedQuery)) {
+    displayItems.forEach(({ data: { line, index } }) => {
+      if (line.rawText.toLowerCase().includes(normalizedQuery)) {
         matchingOriginalIndices.add(index);
       }
     });
     return matchingOriginalIndices;
-  }, [visibleLines, searchQuery]);
+  }, [displayItems, searchQuery]);
 
   // Convert search matches to sorted array for navigation
   const searchMatchesArray = useMemo(() => {
@@ -197,15 +204,6 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     goToNext: goToNextMatch,
     goToPrevious: goToPreviousMatch,
   } = useMatchNavigation(searchMatchesArray);
-
-  // Build display items with gap indicators
-  const displayItems = useMemo(() => {
-    return buildDisplayItems(visibleLines, displayLogLines, forcedRanges);
-  }, [visibleLines, displayLogLines, forcedRanges]);
-
-  const displayIndices = useMemo(() => {
-    return displayItems.map((item) => item.data.index);
-  }, [displayItems]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
