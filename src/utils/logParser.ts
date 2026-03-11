@@ -217,12 +217,12 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     }
 
     // Try to match send pattern.
-    // Lines containing "Error while sending request" are exclusively handled by
-    // HTTP_CLIENT_ERROR_RE below, even when their span looks like a plain send
+    // Lines that match HTTP_CLIENT_ERROR_RE are exclusively handled by the
+    // client-error path below, even when their span looks like a plain send
     // (no request_size=, no status=). Skipping them here prevents the updated
     // HTTP_SEND_RE (which no longer requires request_size=) from stealing those
     // lines before the client-error path can mark them as clientError records.
-    const sendMatch = !line.includes('Error while sending request') ? line.match(HTTP_SEND_RE) : null;
+    const sendMatch = !HTTP_CLIENT_ERROR_RE.test(line) ? line.match(HTTP_SEND_RE) : null;
     if (sendMatch && sendMatch.groups) {
       const requestId = sendMatch.groups.id;
 
