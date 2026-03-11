@@ -319,6 +319,9 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       !!rec.uri && (!!rec.sendLineNumber || !!rec.responseLineNumber)
   ) as HttpRequest[];
 
+  // Build a line-number index for O(1) lookups when computing client-error durations
+  const lineByNumber = new Map(rawLogLines.map(l => [l.lineNumber, l]));
+
   // Fill in missing fields with empty strings or default values
   allRequests.forEach((rec) => {
     rec.method = rec.method || '';
@@ -334,8 +337,8 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
 
     // Compute duration from timestamps for client-error requests (no request_duration= field in error lines)
     if (rec.clientError && rec.requestDurationMs === 0 && rec.sendLineNumber && rec.responseLineNumber) {
-      const sendLine = rawLogLines.find(l => l.lineNumber === rec.sendLineNumber);
-      const errorLine = rawLogLines.find(l => l.lineNumber === rec.responseLineNumber);
+      const sendLine = lineByNumber.get(rec.sendLineNumber);
+      const errorLine = lineByNumber.get(rec.responseLineNumber);
       if (sendLine?.timestampUs && errorLine?.timestampUs) {
         rec.requestDurationMs = Math.max(1, Math.round((errorLine.timestampUs - sendLine.timestampUs) / 1000));
       }

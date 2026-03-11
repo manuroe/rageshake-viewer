@@ -187,4 +187,8 @@ describe('getHttpStatusBadgeClass', () => {
     expect(getHttpStatusBadgeClass(100)).toBe('Incomplete');
     expect(getHttpStatusBadgeClass(0)).toBe('Incomplete');
   });
+
+  it('returns ClientError for Client Error status', () => {
+    expect(getHttpStatusBadgeClass('Client Error')).toBe('ClientError');
+  });
 });

@@ -66,15 +66,20 @@ function getBucketLabel(code: string): string {
  *  3. all other codes: 5xx → client-error → 4xx → 3xx → 2xx → incomplete (top)
  */
 function sortStatusCodes(codes: string[]): string[] {
-  // Assign a sort key: lower = bottom of stack
+  // Assign a sort key: lower = bottom of stack (ascending sort → first item is bottom)
   const sortKey = (c: string): number => {
-    if (c === SYNC_CATCHUP_KEY) return -2;
-    if (c === SYNC_LONGPOLL_KEY) return -1;
-    if (c === CLIENT_ERROR_KEY) return 550; // between 5xx and 4xx
+    if (c === SYNC_CATCHUP_KEY) return 0;
+    if (c === SYNC_LONGPOLL_KEY) return 1;
+    if (c === CLIENT_ERROR_KEY) return 3; // between 5xx (2.x) and 4xx (4.x)
     const n = parseInt(c, 10);
-    return isNaN(n) ? 9999 : n; // incomplete/unknown at top
+    if (isNaN(n)) return 9999; // incomplete/unknown at top
+    if (n >= 500) return 2 + n / 10000; // 5xx: above sync, below client-error
+    if (n >= 400) return 4 + n / 10000; // 4xx: above client-error
+    if (n >= 300) return 5 + n / 10000; // 3xx
+    if (n >= 200) return 6 + n / 10000; // 2xx
+    return 7 + n / 10000;               // other
   };
-  return [...codes].sort((a, b) => sortKey(b) - sortKey(a));
+  return [...codes].sort((a, b) => sortKey(a) - sortKey(b));
 }
 
 export function HttpActivityChart({
