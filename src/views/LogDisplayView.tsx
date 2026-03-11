@@ -17,7 +17,9 @@ import { getHttpStatusColor } from '../utils/httpStatusColors';
 import styles from './LogDisplayView.module.css';
 
 const HTTP_ERROR_RE = /\bstatus=(\d{3})\b/;
+const HTTP_CLIENT_ERROR_LOG_RE = /Error while sending request.*send\{request_id=/;
 function getHttpErrorStatus(rawText: string): string | null {
+  if (HTTP_CLIENT_ERROR_LOG_RE.test(rawText)) return 'client-error';
   const m = rawText.match(HTTP_ERROR_RE);
   if (!m) return null;
   const code = parseInt(m[1], 10);
@@ -633,7 +635,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 <span className={styles.logLineLevel}>{line.level}</span>
                 <span
                   className={styles.logLineText}
-                  style={isSentryLine ? { color: 'var(--color-sentry)' } : httpErrorStatus ? { color: getHttpStatusColor(httpErrorStatus) } : undefined}
+                  style={isSentryLine ? { color: 'var(--color-sentry)' } : httpErrorStatus === 'client-error' ? { color: 'var(--http-client-error)' } : httpErrorStatus ? { color: getHttpStatusColor(httpErrorStatus) } : undefined}
                 >
                   {highlightText(line, index)}
                 </span>

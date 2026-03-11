@@ -110,6 +110,7 @@ export function createHttpRequest(
     requestDurationMs: overrides.requestDurationMs ?? 500,
     sendLineNumber: lineNumber,
     responseLineNumber: overrides.responseLineNumber ?? lineNumber + 1,
+    clientError: overrides.clientError,
   };
 }
 

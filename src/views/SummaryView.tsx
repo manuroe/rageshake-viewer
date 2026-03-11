@@ -232,7 +232,7 @@ export function SummaryView() {
         const timeout = timeoutByRequestId.get(req.requestId);
         return {
           requestId: req.requestId,
-          status: req.status,
+          status: req.clientError ? 'client-error' : (req.status ?? ''),
           timestampUs,
           ...(timeout !== undefined && { timeout }),
         };
@@ -241,7 +241,7 @@ export function SummaryView() {
 
     // Add incomplete requests (no response yet) using their send timestamp
     const incompleteRequestsWithTimestamps: HttpRequestWithTimestamp[] = allHttpRequests
-      .filter(req => !req.status)
+      .filter(req => !req.status && !req.clientError)
       .filter(req => {
         if (!timeRangeUs) return true;
         if (!req.sendLineNumber) return false;
@@ -342,10 +342,16 @@ export function SummaryView() {
       .map(([status, count]) => ({ status, count }))
       .sort((a, b) => b.count - a.count);
 
-    // Failed URLs (4xx, 5xx) grouped by URI with status codes
+    // Failed URLs (4xx, 5xx, and client-side transport errors) grouped by URI
     const failedUrlData: Record<string, { count: number; statuses: Set<string> }> = {};
     filteredHttpRequests.forEach((req) => {
-      if (req.status) {
+      if (req.clientError) {
+        if (!failedUrlData[req.uri]) {
+          failedUrlData[req.uri] = { count: 0, statuses: new Set() };
+        }
+        failedUrlData[req.uri].count += 1;
+        failedUrlData[req.uri].statuses.add('Client Error');
+      } else if (req.status) {
         const statusCode = parseInt(req.status, 10);
         if (statusCode >= 400) {
           if (!failedUrlData[req.uri]) {
@@ -690,8 +696,10 @@ export function SummaryView() {
                           <span
                             className={styles.clickableHeading}
                             onClick={() => {
-                              const statuses = stats.httpErrorsByStatus.map(e => e.status).join(',');
-                              void navigate(`/http_requests?status=${encodeURIComponent(statuses)}`);
+                              const statuses = stats.httpErrorsByStatus.map(e => e.status);
+                              const hasClientErrors = stats.topFailedUrls.some(u => u.statuses.includes('Client Error'));
+                              if (hasClientErrors) statuses.push('Client Error');
+                              void navigate(`/http_requests?status=${encodeURIComponent(statuses.join(','))}`);
                             }}
                           >
                             {stats.topFailedUrls.reduce((sum, e) => sum + e.count, 0)}
@@ -711,9 +719,10 @@ export function SummaryView() {
                                 className={styles.actionLink}
                                 title={item.uri}
                                 onClick={() => {
-                                  // Find all requests matching this URI with error status
+                                  // Find all requests matching this URI with error status or client error
                                   const matchingRequests = allHttpRequests.filter(req => {
                                     if (req.uri !== item.uri) return false;
+                                    if (req.clientError) return true;
                                     if (!req.status) return false;
                                     const statusCode = parseInt(req.status, 10);
                                     return statusCode >= 400;

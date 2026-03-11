@@ -8,6 +8,12 @@ import { ParsingError } from './errorHandling';
 const HTTP_RESP_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"\s+request_size="(?<req_size>[^"]+)"\s+status=(?<status>\S+)\s+response_size="(?<resp_size>[^"]+)"\s+request_duration=(?<duration_val>[0-9.]+)(?<duration_unit>ms|s)/;
 const HTTP_SEND_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"\s+request_size="(?<req_size>[^"]+)"(?![^}]*(?:status=|response_size=|request_duration=))/;
 
+// Regex for client-side transport errors (no HTTP response received, e.g. timeout, connection failure).
+// These log lines have the send{} span without request_size=.
+const HTTP_CLIENT_ERROR_RE = /Error while sending request.*send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"\}/;
+// Extracts the specific error source from reqwest-style errors (e.g. "source: TimedOut")
+const CLIENT_ERROR_SOURCE_RE = /\bsource:\s*([A-Za-z]\w*)/;
+
 // Pattern for extracting log level - matches common Rust log formats
 const LOG_LEVEL_RE = /\s(TRACE|DEBUG|INFO|WARN|ERROR)\s/;
 
@@ -252,6 +258,49 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       rec.uri = sendMatch.groups.uri;
       rec.requestSizeString = sendMatch.groups.req_size;
       rec.sendLineNumber = i + 1;
+    } else {
+      // Try to match client-side error pattern (no HTTP response: timeout, connection failure, etc.).
+      // The send{} span in error lines omits request_size=, so HTTP_SEND_RE does not match.
+      const clientErrMatch = line.match(HTTP_CLIENT_ERROR_RE);
+      if (clientErrMatch && clientErrMatch.groups) {
+        const requestId = clientErrMatch.groups.id;
+        const sourceMatch = line.match(CLIENT_ERROR_SOURCE_RE);
+        const clientError = sourceMatch ? sourceMatch[1] : 'SendError';
+
+        if (!recordsByRequestId.has(requestId)) {
+          recordsByRequestId.set(requestId, []);
+        }
+        const bucket = recordsByRequestId.get(requestId)!;
+
+        // Find the most-recent send record with matching method+uri that has no response yet.
+        const errMethod = clientErrMatch.groups.method;
+        const errUri = clientErrMatch.groups.uri;
+        let rec: Partial<HttpRequest> | undefined;
+        let fallbackAny: Partial<HttpRequest> | undefined;
+        for (let idx = bucket.length - 1; idx >= 0; idx--) {
+          const candidate = bucket[idx];
+          if (candidate.responseLineNumber) continue; // already resolved
+          if (candidate.method === errMethod && candidate.uri === errUri) {
+            rec = candidate;
+            break;
+          }
+          if (!fallbackAny) {
+            fallbackAny = candidate;
+          }
+        }
+        if (!rec) rec = fallbackAny;
+        if (!rec) {
+          rec = {};
+          bucket.push(rec);
+          allRecordsList.push(rec);
+        }
+
+        rec.requestId = requestId;
+        rec.method = rec.method || errMethod;
+        rec.uri = rec.uri || errUri;
+        rec.clientError = clientError;
+        rec.responseLineNumber = i + 1;
+      }
     }
   }
 
@@ -282,6 +331,15 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     rec.requestDurationMs = rec.requestDurationMs || 0;
     rec.sendLineNumber = rec.sendLineNumber || 0;
     rec.responseLineNumber = rec.responseLineNumber || 0;
+
+    // Compute duration from timestamps for client-error requests (no request_duration= field in error lines)
+    if (rec.clientError && rec.requestDurationMs === 0 && rec.sendLineNumber && rec.responseLineNumber) {
+      const sendLine = rawLogLines.find(l => l.lineNumber === rec.sendLineNumber);
+      const errorLine = rawLogLines.find(l => l.lineNumber === rec.responseLineNumber);
+      if (sendLine?.timestampUs && errorLine?.timestampUs) {
+        rec.requestDurationMs = Math.max(1, Math.round((errorLine.timestampUs - sendLine.timestampUs) / 1000));
+      }
+    }
   });
 
   // Sort requests by start time (sendLineNumber) to ensure chronological order

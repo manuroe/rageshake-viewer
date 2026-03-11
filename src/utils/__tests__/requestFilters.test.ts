@@ -407,6 +407,49 @@ describe('filterHttpRequests', () => {
     expect(result[0].requestId).toBe('A');
   });
 
+  it('shows client-error requests even when showIncompleteHttp is false', () => {
+    const requests = [
+      createHttpRequest({ requestId: 'A', status: '200' }),
+      createHttpRequest({ requestId: 'B', status: '', clientError: 'TimedOut' }),
+      createHttpRequest({ requestId: 'C', status: '' }), // truly incomplete
+    ];
+    const result = filterHttpRequests(requests, [], makeFilters({ showIncompleteHttp: false }));
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.requestId).sort()).toEqual(['A', 'B']);
+  });
+
+  it('filters client-error requests by CLIENT_ERROR_STATUS_KEY in statusCodeFilter', () => {
+    const requests = [
+      createHttpRequest({ requestId: 'A', status: '200' }),
+      createHttpRequest({ requestId: 'B', status: '', clientError: 'TimedOut' }),
+      createHttpRequest({ requestId: 'C', status: '', clientError: 'ConnectError' }),
+    ];
+    const result = filterHttpRequests(
+      requests,
+      [],
+      makeFilters({ statusCodeFilter: new Set(['Client Error']) })
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.requestId).sort()).toEqual(['B', 'C']);
+  });
+
+  it('excludes client-error requests when statusCodeFilter does not include CLIENT_ERROR_STATUS_KEY', () => {
+    const requests = [
+      createHttpRequest({ requestId: 'A', status: '200' }),
+      createHttpRequest({ requestId: 'B', status: '', clientError: 'TimedOut' }),
+    ];
+    const result = filterHttpRequests(
+      requests,
+      [],
+      makeFilters({ statusCodeFilter: new Set(['200']) })
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].requestId).toBe('A');
+  });
+
   it('performs case-insensitive URI filter', () => {
     const requests = [
       createHttpRequest({ requestId: 'A', uri: 'https://example.com/SYNC?timeout=30000' }),
