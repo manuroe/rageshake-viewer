@@ -87,9 +87,10 @@ interface LogStore {
   clearError: () => void;
 
   /**
-   * Load all parsed log data atomically — equivalent to calling setRequests +
-   * setHttpRequests + setSentryEvents in one shot. Use this instead of calling
-   * the three actions separately to ensure a consistent store state after parsing.
+   * Load all parsed log data in a single store update — sets requests, HTTP
+   * requests, Sentry events, and all derived fields (lineNumberIndex,
+   * detectedPlatform) together so subscribers never observe a partially-loaded
+   * state. Use this instead of calling the individual setters manually.
    */
   loadLogParserResult: (result: LogParserResult) => void;
   
@@ -337,8 +338,28 @@ export const useLogStore = create<LogStore>((set, get) => ({
   },
 
   loadLogParserResult: (result) => {
-    get().setRequests(result.requests, result.connectionIds, result.rawLogLines);
-    get().setHttpRequests(result.httpRequests, result.rawLogLines);
-    get().setSentryEvents(result.sentryEvents);
+    try {
+      const lineNumberIndex = buildLineNumberIndex(result.rawLogLines);
+      const detectedPlatform = detectPlatform(result.rawLogLines);
+      const defaultConn = result.connectionIds.includes('room-list')
+        ? 'room-list'
+        : result.connectionIds[0] ?? '';
+      set({
+        allRequests: result.requests,
+        connectionIds: result.connectionIds,
+        selectedConnId: defaultConn,
+        allHttpRequests: result.httpRequests,
+        sentryEvents: result.sentryEvents,
+        rawLogLines: result.rawLogLines,
+        lineNumberIndex,
+        detectedPlatform,
+        error: null,
+      });
+      get().filterRequests();
+      get().filterHttpRequests();
+    } catch (error) {
+      const appError = wrapError(error, 'Failed to process log data');
+      set({ error: appError });
+    }
   },
 }));

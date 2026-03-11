@@ -608,7 +608,7 @@ describe('logStore', () => {
   });
 
   describe('loadLogParserResult', () => {
-    it('populates all three sub-states atomically from a single call', () => {
+    it('populates all sub-states from a single call', () => {
       const rawLines = createParsedLogLines(3);
       const syncReqs = createSyncRequests(2);
       const httpReqs = createHttpRequests(3);

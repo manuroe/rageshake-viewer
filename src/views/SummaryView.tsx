@@ -187,17 +187,11 @@ export function SummaryView() {
       return line.timestampUs >= timeRangeUs.startUs && line.timestampUs <= timeRangeUs.endUs;
     });
 
-    // Build a map from line number to timestamp for efficient lookup
-    // Uses the precomputed lineNumberIndex from logStore (built once on parse).
-    const lineNumberToTimestamp = new Map<number, TimestampMicros>();
-    lineNumberIndex.forEach((line, lineNumber) => {
-      if (line.timestampUs) lineNumberToTimestamp.set(lineNumber, line.timestampUs);
-    });
 
     // Filter sentry events by time range
     const filteredSentryEvents = sentryEvents.filter((event) => {
       if (!timeRangeUs) return true;
-      const timestampUs = lineNumberToTimestamp.get(event.lineNumber);
+      const timestampUs = lineNumberIndex.get(event.lineNumber)?.timestampUs;
       if (!timestampUs) return false;
       return timestampUs >= timeRangeUs.startUs && timestampUs <= timeRangeUs.endUs;
     });
@@ -206,7 +200,7 @@ export function SummaryView() {
     const filteredHttpRequests = allHttpRequests.filter((req) => {
       if (!timeRangeUs) return true;
       if (!req.responseLineNumber) return false;
-      const timestampUs = lineNumberToTimestamp.get(req.responseLineNumber);
+      const timestampUs = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
       if (!timestampUs) return false;
       return timestampUs >= timeRangeUs.startUs && timestampUs <= timeRangeUs.endUs;
     });
@@ -223,7 +217,7 @@ export function SummaryView() {
     const completedRequestsWithTimestamps: HttpRequestWithTimestamp[] = filteredHttpRequests
       .filter(req => req.responseLineNumber)
       .map(req => {
-        const timestampUs = lineNumberToTimestamp.get(req.responseLineNumber) ?? (0 as TimestampMicros);
+        const timestampUs = lineNumberIndex.get(req.responseLineNumber)?.timestampUs ?? (0 as TimestampMicros);
         const timeout = timeoutByRequestId.get(req.requestId);
         return {
           requestId: req.requestId,
@@ -240,14 +234,14 @@ export function SummaryView() {
       .filter(req => {
         if (!timeRangeUs) return true;
         if (!req.sendLineNumber) return false;
-        const timestampUs = lineNumberToTimestamp.get(req.sendLineNumber);
+        const timestampUs = lineNumberIndex.get(req.sendLineNumber)?.timestampUs;
         if (!timestampUs) return false;
         return timestampUs >= timeRangeUs.startUs && timestampUs <= timeRangeUs.endUs;
       })
       .map(req => ({
         requestId: req.requestId,
         status: '',
-        timestampUs: lineNumberToTimestamp.get(req.sendLineNumber) ?? (0 as TimestampMicros),
+        timestampUs: lineNumberIndex.get(req.sendLineNumber)?.timestampUs ?? (0 as TimestampMicros),
       }))
       .filter(req => req.timestampUs > 0);
 
@@ -257,7 +251,7 @@ export function SummaryView() {
     const filteredSyncRequests = allRequests.filter((req) => {
       if (!timeRangeUs) return true;
       if (!req.responseLineNumber) return false;
-      const timestampUs = lineNumberToTimestamp.get(req.responseLineNumber);
+      const timestampUs = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
       if (!timestampUs) return false;
       return timestampUs >= timeRangeUs.startUs && timestampUs <= timeRangeUs.endUs;
     });
@@ -400,7 +394,7 @@ export function SummaryView() {
     for (const req of allHttpRequests) {
       if (req.responseLineNumber) {
         // Completed request: mirrors completedRequestsWithTimestamps filter
-        const ts = lineNumberToTimestamp.get(req.responseLineNumber);
+        const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
         if (!ts || ts === 0) continue;
         if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
           totalUploadBytes += req.requestSize;
@@ -408,7 +402,7 @@ export function SummaryView() {
         }
       } else if (!req.status && req.sendLineNumber) {
         // Incomplete request: mirrors incompleteRequestsWithTimestamps filter
-        const ts = lineNumberToTimestamp.get(req.sendLineNumber);
+        const ts = lineNumberIndex.get(req.sendLineNumber)?.timestampUs;
         if (!ts || ts === 0) continue;
         if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
           totalUploadBytes += req.requestSize;
