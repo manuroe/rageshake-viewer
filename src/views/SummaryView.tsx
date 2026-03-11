@@ -379,7 +379,7 @@ export function SummaryView() {
             : parseInt(req.requestDurationMs as string, 10) || 0,
         method: req.method,
         uri: req.uri,
-        status: req.status,
+        status: req.clientError ? 'Client Error' : req.status,
       }))
       .sort((a, b) => b.duration - a.duration)
       .slice(0, 10);
