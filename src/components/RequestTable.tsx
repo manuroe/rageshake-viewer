@@ -480,7 +480,7 @@ export function RequestTable({
                     <div
                       key={`sticky-${rowKey}`}
                       data-row-id={`sticky-${rowKey}`}
-                      className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${!req.status ? styles.incomplete : ''}`}
+                      className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${(!req.status && !req.clientError) ? styles.incomplete : ''}`}
                       style={{ minHeight: '28px', cursor: 'pointer' }}
                       onMouseEnter={() => handleRowMouseEnter(rowKey)}
                       onMouseLeave={() => handleRowMouseLeave(rowKey)}
@@ -533,10 +533,15 @@ export function RequestTable({
                         timelineWidth,
                         msPerPixel
                       );
-                      const status = req.status ? req.status : 'Incomplete';
-                      const isIncomplete = !req.status;
+                      const isClientError = !req.status && !!req.clientError;
+                      const resolvedIsIncomplete = !req.status && !req.clientError;
+                      const resolvedStatus = req.status ? req.status : (req.clientError ?? 'Incomplete');
                       const statusCode = req.status ? req.status.split(' ')[0] : '';
-                      const defaultBarColor = isIncomplete ? 'var(--http-incomplete)' : getHttpStatusColor(statusCode);
+                      const defaultBarColor = isClientError
+                        ? 'var(--http-client-error)'
+                        : resolvedIsIncomplete
+                        ? 'var(--http-incomplete)'
+                        : getHttpStatusColor(statusCode);
                       const barColor = getBarColor ? getBarColor(req, defaultBarColor) : defaultBarColor;
 
                       const rowKey = getRowKey(req);
@@ -544,7 +549,7 @@ export function RequestTable({
                         <div
                           key={`waterfall-${rowKey}`}
                           data-row-id={`waterfall-${rowKey}`}
-                          className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${isIncomplete ? styles.incomplete : ''}`}
+                          className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${resolvedIsIncomplete ? styles.incomplete : ''}`}
                           style={{ minHeight: '28px', cursor: 'pointer' }}
                           onMouseEnter={() => handleRowMouseEnter(rowKey)}
                           onMouseLeave={() => handleRowMouseLeave(rowKey)}
@@ -567,12 +572,12 @@ export function RequestTable({
                                   width: `${barWidth}px`,
                                   background: barColor,
                                 }}
-                                title={isIncomplete ? 'Incomplete' : status}
+                                title={resolvedIsIncomplete ? 'Incomplete' : resolvedStatus}
                               >
-                                {!isIncomplete && renderBarOverlay && renderBarOverlay(req, barWidth, msPerPixel, totalDuration, timelineWidth)}
+                                {!resolvedIsIncomplete && renderBarOverlay && renderBarOverlay(req, barWidth, msPerPixel, totalDuration, timelineWidth)}
                               </div>
-                              <span className={styles.waterfallDuration} title={isIncomplete ? 'Incomplete' : status}>
-                                {isIncomplete ? '...' : statusCode === '200' ? `${req.requestDurationMs}ms` : `${status} - ${req.requestDurationMs}ms`}
+                              <span className={styles.waterfallDuration} title={resolvedIsIncomplete ? 'Incomplete' : resolvedStatus}>
+                                {resolvedIsIncomplete ? '...' : statusCode === '200' ? `${req.requestDurationMs}ms` : `${resolvedStatus} - ${req.requestDurationMs}ms`}
                               </span>
                             </div>
                           </div>

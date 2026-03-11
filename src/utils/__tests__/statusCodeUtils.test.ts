@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { extractAvailableStatusCodes, INCOMPLETE_STATUS_KEY } from '../statusCodeUtils';
+import { extractAvailableStatusCodes, INCOMPLETE_STATUS_KEY, CLIENT_ERROR_STATUS_KEY } from '../statusCodeUtils';
 
 describe('INCOMPLETE_STATUS_KEY', () => {
   it('is the string Incomplete', () => {
     expect(INCOMPLETE_STATUS_KEY).toBe('Incomplete');
+  });
+});
+
+describe('CLIENT_ERROR_STATUS_KEY', () => {
+  it('is the string Client Error', () => {
+    expect(CLIENT_ERROR_STATUS_KEY).toBe('Client Error');
   });
 });
 
@@ -78,5 +84,29 @@ describe('extractAvailableStatusCodes', () => {
     for (let i = 1; i < numericPart.length; i++) {
       expect(numericPart[i]).toBeGreaterThan(numericPart[i - 1]);
     }
+  });
+
+  it('includes Client Error key when some requests have clientError set', () => {
+    const requests = [
+      { status: '200' },
+      { status: '', clientError: 'TimedOut' },
+      { status: '', clientError: 'ConnectError' },
+    ];
+    const result = extractAvailableStatusCodes(requests);
+    expect(result).toContain(CLIENT_ERROR_STATUS_KEY);
+    expect(result).not.toContain(INCOMPLETE_STATUS_KEY);
+    expect(result.indexOf('200')).toBeLessThan(result.indexOf(CLIENT_ERROR_STATUS_KEY));
+  });
+
+  it('places Client Error before Incomplete when both exist', () => {
+    const requests = [
+      { status: '200' },
+      { status: '', clientError: 'TimedOut' },
+      { status: '' },
+    ];
+    const result = extractAvailableStatusCodes(requests);
+    expect(result).toContain(CLIENT_ERROR_STATUS_KEY);
+    expect(result).toContain(INCOMPLETE_STATUS_KEY);
+    expect(result.indexOf(CLIENT_ERROR_STATUS_KEY)).toBeLessThan(result.indexOf(INCOMPLETE_STATUS_KEY));
   });
 });

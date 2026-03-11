@@ -27,12 +27,14 @@ interface HttpBucket extends ActivityBucket {
   counts: Record<string, number>;
 }
 
-/** Synthetic status keys for sync request sub-types */
+/** Synthetic status keys for sync request sub-types and client-side errors */
 const SYNC_CATCHUP_KEY = 'sync-catchup';
 const SYNC_LONGPOLL_KEY = 'sync-longpoll';
+const CLIENT_ERROR_KEY = 'client-error';
 
 /** Resolve the chart bucket key for an HTTP request (handles sync subtypes) */
 function getBucketKey(req: HttpRequestWithTimestamp): string {
+  if (req.status === CLIENT_ERROR_KEY) return CLIENT_ERROR_KEY;
   const statusCode = req.status ? req.status.split(' ')[0] : 'incomplete';
   const is2xx = statusCode.startsWith('2');
   if (is2xx && req.timeout !== undefined) {
@@ -44,6 +46,7 @@ function getBucketKey(req: HttpRequestWithTimestamp): string {
 
 /** Color for a chart status key (handles synthetic sync keys) */
 function getBucketColor(code: string): string {
+  if (code === CLIENT_ERROR_KEY) return 'var(--http-client-error)';
   if (code === SYNC_CATCHUP_KEY) return 'var(--sync-catchup-success)';
   if (code === SYNC_LONGPOLL_KEY) return 'var(--sync-longpoll-success)';
   return getHttpStatusColor(code);
@@ -51,6 +54,7 @@ function getBucketColor(code: string): string {
 
 /** Human-readable label for a chart status key */
 function getBucketLabel(code: string): string {
+  if (code === CLIENT_ERROR_KEY) return 'Client Error';
   if (code === SYNC_CATCHUP_KEY) return 'sync catchup';
   if (code === SYNC_LONGPOLL_KEY) return 'sync long-poll';
   return code;
@@ -59,30 +63,23 @@ function getBucketLabel(code: string): string {
 /** Sort status codes for stacking order (first = bottom of bar, last = top):
  *  1. sync-catchup (bottom - baseline background activity)
  *  2. sync-longpoll (above catchup)
- *  3. all other codes: 5xx → 4xx → 3xx → 2xx → incomplete (top)
+ *  3. all other codes: 5xx → client-error → 4xx → 3xx → 2xx → incomplete (top)
  */
 function sortStatusCodes(codes: string[]): string[] {
-  return [...codes].sort((a, b) => {
-    // Sync subtypes always come first (bottom of stack)
-    const syncOrder = (c: string) =>
-      c === SYNC_CATCHUP_KEY ? 0 : c === SYNC_LONGPOLL_KEY ? 1 : 2;
-    const aSyncOrder = syncOrder(a);
-    const bSyncOrder = syncOrder(b);
-    if (aSyncOrder !== bSyncOrder) return aSyncOrder - bSyncOrder;
-
-    // Within regular codes: higher codes first (5xx below 2xx visually)
-    const aNum = parseInt(a, 10);
-    const bNum = parseInt(b, 10);
-    const aIsNum = !isNaN(aNum);
-    const bIsNum = !isNaN(bNum);
-
-    // Non-numeric (incomplete) goes last (top)
-    if (!aIsNum && bIsNum) return 1;
-    if (aIsNum && !bIsNum) return -1;
-    if (!aIsNum && !bIsNum) return 0;
-
-    return bNum - aNum;
-  });
+  // Assign a sort key: lower = bottom of stack (ascending sort → first item is bottom)
+  const sortKey = (c: string): number => {
+    if (c === SYNC_CATCHUP_KEY) return 0;
+    if (c === SYNC_LONGPOLL_KEY) return 1;
+    if (c === CLIENT_ERROR_KEY) return 3; // between 5xx (2.x) and 4xx (4.x)
+    const n = parseInt(c, 10);
+    if (isNaN(n)) return 9999; // incomplete/unknown at top
+    if (n >= 500) return 2 + n / 10000; // 5xx: above sync, below client-error
+    if (n >= 400) return 4 + n / 10000; // 4xx: above client-error
+    if (n >= 300) return 5 + n / 10000; // 3xx
+    if (n >= 200) return 6 + n / 10000; // 2xx
+    return 7 + n / 10000;               // other
+  };
+  return [...codes].sort((a, b) => sortKey(a) - sortKey(b));
 }
 
 export function HttpActivityChart({

@@ -18,6 +18,18 @@ const RESPONSE_LINE = '2026-01-26T17:02:25.416416Z DEBUG matrix_sdk::http_client
 
 const INFO_LINE = '2026-01-26T17:02:25.038968Z  INFO elementx: Received sync service update: running | ClientProxy.swift:1055 | spans: root';
 
+// Client-error log line (TimedOut): send{} in spans but no request_size
+const CLIENT_ERROR_TIMEOUT_LINE = '2026-01-26T17:02:55.100000Z ERROR matrix_sdk::http_client: Error while sending request: Reqwest(reqwest::Error { kind: Request, url: "https://matrix-client.matrix.org/_matrix/client/v3/rooms/!room:matrix.org/members", source: TimedOut }) | crates/matrix-sdk/src/http_client/mod.rs:218 | spans: root > send{request_id="REQ-99" method=GET uri="https://matrix-client.matrix.org/_matrix/client/v3/rooms/!room:matrix.org/members"}';
+
+// Client-error log line (ConnectError)
+const CLIENT_ERROR_CONNECT_LINE = '2026-01-26T17:02:56.000000Z ERROR matrix_sdk::http_client: Error while sending request: Reqwest(reqwest::Error { kind: Connect, url: "https://matrix-client.matrix.org/_matrix/client/v3/keys/upload", source: ConnectError("tcp connect error", ...) }) | crates/matrix-sdk/src/http_client/mod.rs:218 | spans: root > send{request_id="REQ-100" method=POST uri="https://matrix-client.matrix.org/_matrix/client/v3/keys/upload"}';
+
+// Send line for REQ-99 (appears before the error)
+const SEND_LINE_REQ99 = '2026-01-26T17:02:45.000000Z  INFO matrix_sdk::http_client::native: Sending request | crates/matrix-sdk/src/http_client/native.rs:89 | spans: root > send{request_id="REQ-99" method=GET uri="https://matrix-client.matrix.org/_matrix/client/v3/rooms/!room:matrix.org/members" request_size="0"}';
+
+// Send line for REQ-100 (appears before the connect error)
+const SEND_LINE_REQ100 = '2026-01-26T17:02:55.990000Z  INFO matrix_sdk::http_client::native: Sending request | crates/matrix-sdk/src/http_client/native.rs:89 | spans: root > send{request_id="REQ-100" method=POST uri="https://matrix-client.matrix.org/_matrix/client/v3/keys/upload" request_size="512"}';
+
 describe('logParser', () => {
   describe('parseAllHttpRequests', () => {
     describe('basic parsing', () => {
@@ -407,9 +419,82 @@ describe('logParser', () => {
         expect(result.httpRequests[0].uri).toContain('foo=bar');
       });
     });
-  });
 
-  describe('parseLogFile', () => {
+    describe('client-side transport errors', () => {
+      it('parses a client error line with a preceding send (TimedOut)', () => {
+        const content = [SEND_LINE_REQ99, CLIENT_ERROR_TIMEOUT_LINE].join('\n');
+        const result = parseAllHttpRequests(content);
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-99',
+          method: 'GET',
+          uri: 'https://matrix-client.matrix.org/_matrix/client/v3/rooms/!room:matrix.org/members',
+          status: '',
+          clientError: 'TimedOut',
+          sendLineNumber: 1,
+          responseLineNumber: 2,
+        });
+      });
+
+      it('parses a client error line with no preceding send (error-only)', () => {
+        const result = parseAllHttpRequests(CLIENT_ERROR_TIMEOUT_LINE);
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-99',
+          method: 'GET',
+          clientError: 'TimedOut',
+          status: '',
+          sendLineNumber: 0,
+          responseLineNumber: 1,
+        });
+      });
+
+      it('extracts ConnectError source label', () => {
+        const content = [SEND_LINE_REQ100, CLIENT_ERROR_CONNECT_LINE].join('\n');
+        const result = parseAllHttpRequests(content);
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0].clientError).toBe('ConnectError');
+      });
+
+      it('computes request duration from timestamps for client-error requests', () => {
+        // SEND_LINE_REQ99 timestamp: 2026-01-26T17:02:45.000000Z
+        // CLIENT_ERROR_TIMEOUT_LINE timestamp: 2026-01-26T17:02:55.100000Z  → 10100ms elapsed
+        const content = [SEND_LINE_REQ99, CLIENT_ERROR_TIMEOUT_LINE].join('\n');
+        const result = parseAllHttpRequests(content);
+
+        expect(result.httpRequests[0].requestDurationMs).toBe(10100);
+      });
+
+      it('does not set clientError for normal incomplete requests (send only)', () => {
+        const result = parseAllHttpRequests(SEND_LINE);
+
+        expect(result.httpRequests[0].clientError).toBeUndefined();
+        expect(result.httpRequests[0].status).toBe('');
+      });
+
+      it('does not override an already-completed request with a client error', () => {
+        // Response arrives first, then an error arrives for the same id (unusual but possible)
+        const responseLine = RESPONSE_LINE.replace('REQ-63', 'REQ-99')
+          .replace('/sync"', '/rooms/!room:matrix.org/members"')
+          .replace('method=POST', 'method=GET')
+          .replace('request_size="113B"', 'request_size="0"');
+        const content = [responseLine, CLIENT_ERROR_TIMEOUT_LINE].join('\n');
+        const result = parseAllHttpRequests(content);
+
+        // The response-only record should not be overwritten; a second record is created
+        expect(result.httpRequests).toHaveLength(2);
+        const completed = result.httpRequests.find(r => r.status === '200');
+        expect(completed).toBeDefined();
+        expect(completed?.clientError).toBeUndefined();
+      });
+    });
+  });
+});
+
+describe('parseLogFile', () => {
     it('extracts sync requests with connId', () => {
       // Both lines must have the same conn_id for consistent extraction
       const sendLine = SEND_LINE;
@@ -548,4 +633,3 @@ describe('logParser', () => {
       expect(result.sentryEvents).toHaveLength(0);
     });
   });
-});

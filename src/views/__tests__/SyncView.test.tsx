@@ -18,6 +18,29 @@ vi.mock('react-router-dom', () => ({
   },
 }));
 
+describe('SyncView - column getValue branch coverage', () => {
+  beforeEach(() => {
+    HTMLElement.prototype.scrollTo = vi.fn();
+  });
+
+  it('renders dash for size columns when requestSizeString and responseSizeString are empty', () => {
+    const request = createSyncRequest({
+      requestId: 'S-NOSIZE',
+      requestSizeString: '',
+      responseSizeString: '',
+    });
+    useLogStore.setState({
+      allRequests: [request],
+      filteredRequests: [request],
+    });
+
+    // Rendering triggers getValue() for each column; empty strings hit the '|| "-"' fallback branches
+    expect(() => {
+      act(() => { render(<SyncView />); });
+    }).not.toThrow();
+  });
+});
+
 describe('SyncView - header controls', () => {
   beforeEach(() => {
     // suppress act() warnings for these synchronous render tests

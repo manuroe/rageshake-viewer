@@ -205,6 +205,9 @@
    /* Incomplete/Unknown (cancelled catchup variation) */
    --http-incomplete: #7b8667;
 
+  /* Client-side transport errors (timeout, connection failure — no HTTP response received) */
+  --http-client-error: #9716f9;
+
   /* -------------------------------------------------------------------------
      Row Backgrounds (used for zebra striping)
      ------------------------------------------------------------------------- */
@@ -317,6 +320,7 @@
   --http-5xx: #c084fc;
 
    --http-incomplete: #8d9878;
+  --http-client-error: #a78bfa;
 }
 
 /* Auto dark mode (respects system preference when no explicit theme is set) */
@@ -420,6 +424,7 @@
     --http-5xx: #c084fc;
 
       --http-incomplete: #8d9878;
+    --http-client-error: #a78bfa;
   }
 }
 

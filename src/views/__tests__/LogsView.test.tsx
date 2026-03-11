@@ -241,6 +241,22 @@ describe('LogsView', () => {
     expect(container.querySelector('.logs-view-container')).toBeInTheDocument();
   });
 
+  it('handles non-monotonic timestamps (if t > maxLogTimeUs → false branch)', () => {
+    // Second line has earlier timestamp than first → t > maxLogTimeUs is false for it
+    const baseUs = 1_700_000_000_000_000;
+    const lines = [
+      createParsedLogLine({ lineNumber: 0, timestampUs: (baseUs + 200_000) as any }),
+      createParsedLogLine({ lineNumber: 1, timestampUs: (baseUs + 100_000) as any }), // < first → false branch
+      createParsedLogLine({ lineNumber: 2, timestampUs: (baseUs + 300_000) as any }),
+    ];
+    useLogStore.setState({ rawLogLines: lines });
+
+    const { container } = render(<LogsView />);
+
+    expect(screen.getByText('3', { selector: '#shown-count' })).toBeInTheDocument();
+    expect(container.querySelector('.logs-view-container')).toBeInTheDocument();
+  });
+
   it('calls setUriFilter via handleFilterChange when filter input is changed', () => {
     // Use fake timers to control debounce
     vi.useFakeTimers();

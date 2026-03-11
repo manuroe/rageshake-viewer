@@ -8,6 +8,7 @@
 import type { HttpRequest, SyncRequest, ParsedLogLine } from '../types/log.types';
 import type { TimestampMicros, TimeFilterValue } from '../types/time.types';
 import { calculateTimeRangeMicros } from './timeUtils';
+import { INCOMPLETE_STATUS_KEY, CLIENT_ERROR_STATUS_KEY } from './statusCodeUtils';
 
 export interface SyncRequestFilters {
   selectedConnId: string;
@@ -116,12 +117,12 @@ export function filterHttpRequests(
   const timeRangeUs = getTimeRangeUs(rawLogLines, startTime, endTime);
 
   return requests.filter((r) => {
-    // Incomplete filter
-    if (!showIncompleteHttp && !r.status) return false;
+    // Incomplete filter — client errors always show (they are resolved, not truly incomplete)
+    if (!showIncompleteHttp && !r.status && !r.clientError) return false;
 
     // Status code filter (null = all enabled)
     if (statusCodeFilter !== null) {
-      const statusKey = r.status || 'Incomplete';
+      const statusKey = r.status || (r.clientError ? CLIENT_ERROR_STATUS_KEY : INCOMPLETE_STATUS_KEY);
       if (!statusCodeFilter.has(statusKey)) return false;
     }
 

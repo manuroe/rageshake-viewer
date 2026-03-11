@@ -12,6 +12,8 @@ export interface HttpRequest {
   requestDurationMs: number;
   sendLineNumber: number;
   responseLineNumber: number;
+  /** Client-side transport error (e.g., "TimedOut", "Connect") when the request failed without receiving an HTTP response */
+  clientError?: string;
 }
 
 export interface SyncRequest extends HttpRequest {

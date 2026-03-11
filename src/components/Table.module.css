@@ -88,6 +88,11 @@
     color: white;
 }
 
+.badgeClientError {
+    background: var(--http-client-error);
+    color: white;
+}
+
 /* HTTP Status Code Badge Styles (solid background with contrasting text) */
 /* 2xx Success codes - white text on green */
 .badgeHttp200 { background: var(--http-200); color: white; }

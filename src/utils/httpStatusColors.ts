@@ -135,6 +135,8 @@ export function getStatusCodeLegend(statusCodes: string[]): Array<{ code: string
  * Use with Table.module.css badge classes.
  */
 export function getHttpStatusBadgeClass(status: string | number): string {
+  if (status === 'Client Error') return 'ClientError';
+
   const code = typeof status === 'string' ? parseInt(status, 10) : status;
 
   if (isNaN(code)) return 'Incomplete';

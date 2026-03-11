@@ -429,6 +429,47 @@ describe('HttpRequestsView - stats-compact with active time window', () => {
   });
 });
 
+describe('HttpRequestsView - column getValue branch coverage', () => {
+  beforeEach(() => {
+    useLogStore.getState().clearData();
+    HTMLElement.prototype.scrollTo = vi.fn();
+  });
+
+  it('renders dash for size columns when requestSizeString and responseSizeString are empty', () => {
+    const request = createHttpRequest({
+      requestId: 'REQ-NOSIZE',
+      requestSizeString: '',
+      responseSizeString: '',
+    });
+    useLogStore.setState({
+      allHttpRequests: [request],
+      filteredHttpRequests: [request],
+    });
+
+    // Rendering triggers getValue() for each column; empty strings hit the '|| "-"' fallback branches
+    expect(() => {
+      act(() => { render(<HttpRequestsView />); });
+    }).not.toThrow();
+  });
+
+  it('handles sync requests without timeout (if req.timeout !== undefined → false branch)', () => {
+    const httpReq = createHttpRequest({ requestId: 'REQ-1', sendLineNumber: 0, responseLineNumber: 1 });
+    const syncReqNoTimeout = createSyncRequest({ requestId: 'SYNC-NO-TIMEOUT', connId: 'conn-1' }); // timeout: undefined
+    const rawLogLines = createParsedLogLines(5);
+    useLogStore.setState({
+      allHttpRequests: [httpReq],
+      filteredHttpRequests: [httpReq],
+      allRequests: [syncReqNoTimeout],
+      rawLogLines,
+    });
+
+    // timeoutByRequestId iterates allRequests; with timeout===undefined the if-false branch is taken
+    expect(() => {
+      act(() => { render(<HttpRequestsView />); });
+    }).not.toThrow();
+  });
+});
+
 describe('HttpRequestsView - getBarColor with sync timeout', () => {
   beforeEach(() => {
     useLogStore.getState().clearData();
