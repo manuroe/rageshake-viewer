@@ -1,8 +1,6 @@
 name: Screenshots
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -65,6 +63,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No screenshot changes detected; skipping commit and push."
           else
-            git commit -m "chore: update screenshots [skip ci]"
+            git commit -m "chore: update screenshots"
             git push origin HEAD
           fi
