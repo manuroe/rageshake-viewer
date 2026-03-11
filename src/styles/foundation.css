@@ -41,6 +41,8 @@
   --color-info-bg: #e3f2fd;
   --color-info-text: #1565c0;
 
+  --color-sentry: #ec4899;
+
   /* -------------------------------------------------------------------------
      Text Colors
      ------------------------------------------------------------------------- */
@@ -88,6 +90,7 @@
   --log-level-warn-text: #dcdcaa;
   --log-level-error: #f44336;
   --log-level-error-text: #f48771;
+  --log-level-unknown: #858585;
   --log-collapse-exact: #4caf50;
   --log-collapse-similar: #64b5f6;
   --log-timestamp: #9cdcfe;

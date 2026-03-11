@@ -13,7 +13,16 @@ import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortc
 import { optionKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
+import { getHttpStatusColor } from '../utils/httpStatusColors';
 import styles from './LogDisplayView.module.css';
+
+const HTTP_ERROR_RE = /\bstatus=(\d{3})\b/;
+function getHttpErrorStatus(rawText: string): string | null {
+  const m = rawText.match(HTTP_ERROR_RE);
+  if (!m) return null;
+  const code = parseInt(m[1], 10);
+  return code >= 400 ? m[1] : null;
+}
 
 interface LogDisplayViewProps {
   requestFilter?: string;
@@ -30,13 +39,15 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
-  const { rawLogLines } = useLogStore();
+  const { rawLogLines, sentryEvents } = useLogStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
   
   // Use passed logLines if provided, otherwise use all raw log lines from store
   const displayLogLines = logLines || rawLogLines;
+
+  const sentryLineNumbers = useMemo(() => new Set(sentryEvents.map((e) => e.lineNumber)), [sentryEvents]);
 
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [filterQueryInput, setFilterQueryInput] = useState(requestFilter);
@@ -557,6 +568,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             const gapBelow = item.gapBelow;
             const collapseInfo = gapBelow ? collapseGroupsMap.get(gapBelow.gapId) : undefined;
             const collapsedCount = collapseInfo && gapBelow ? Math.min(collapseInfo.count, gapBelow.remainingGap) : 0;
+            const isSentryLine = sentryLineNumbers.has(line.lineNumber);
+            const httpErrorStatus = isSentryLine ? null : getHttpErrorStatus(line.rawText);
 
             return (
               <div
@@ -618,7 +631,10 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 <span className={styles.logLineNumber}>{line.lineNumber}</span>
                 <span className={styles.logLineTimestamp}>{line.displayTime}</span>
                 <span className={styles.logLineLevel}>{line.level}</span>
-                <span className={styles.logLineText}>
+                <span
+                  className={styles.logLineText}
+                  style={isSentryLine ? { color: 'var(--color-sentry)' } : httpErrorStatus ? { color: getHttpStatusColor(httpErrorStatus) } : undefined}
+                >
                   {highlightText(line, index)}
                 </span>
                 {collapseInfo && gapBelow && (

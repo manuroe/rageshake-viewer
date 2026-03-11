@@ -19,13 +19,13 @@ interface LogBucket extends ActivityBucket {
 }
 
 const LOG_LEVEL_COLORS: Record<ChartCategory, string> = {
-  TRACE: '#808080',
-  DEBUG: '#569cd6',
-  INFO: '#4ec9b0',
-  WARN: '#ff9800',
-  ERROR: '#f44336',
-  UNKNOWN: '#858585',
-  SENTRY: '#a855f7',
+  TRACE: 'var(--log-level-trace)',
+  DEBUG: 'var(--log-level-debug)',
+  INFO: 'var(--log-level-info)',
+  WARN: 'var(--log-level-warn)',
+  ERROR: 'var(--log-level-error)',
+  UNKNOWN: 'var(--log-level-unknown)',
+  SENTRY: 'var(--color-sentry)',
 };
 
 const LOG_LEVEL_ORDER: ChartCategory[] = ['SENTRY', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE', 'UNKNOWN'];

@@ -441,7 +441,7 @@ describe('LogActivityChart', () => {
     expect(timeLabels.join(',')).toContain('14:30:45');
   });
 
-  it('renders Sentry events in purple (#a855f7) when sentryEvents prop is provided', () => {
+  it('renders Sentry events with sentry color (var(--color-sentry)) when sentryEvents prop is provided', () => {
     const logs = createParsedLogLines(50);
     // Mark the first log line as a Sentry event
     const sentryEvents: SentryEvent[] = [
@@ -452,8 +452,8 @@ describe('LogActivityChart', () => {
       <LogActivityChart logLines={logs} sentryEvents={sentryEvents} />
     );
 
-    // A purple bar should be present for the SENTRY category
-    const sentryBar = container.querySelector('rect[fill="#a855f7"][opacity="0.9"]');
+    // A bar with the sentry CSS variable color should be present for the SENTRY category
+    const sentryBar = container.querySelector('rect[fill="var(--color-sentry)"][opacity="0.9"]');
     expect(sentryBar).toBeInTheDocument();
   });
 

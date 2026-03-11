@@ -1292,3 +1292,55 @@ describe('LogDisplayView collapse duplicates', () => {
     expect(updatedBar?.querySelector('button[aria-label="Load 10 collapsed lines"]')).toBeNull();
   });
 });
+
+describe('LogDisplayView sentry and HTTP error text coloring', () => {
+  afterEach(() => {
+    useLogStore.setState({ rawLogLines: [], sentryEvents: [] });
+  });
+
+  it('colors logLineText with sentry token for sentry lines', () => {
+    const line = createParsedLogLine({
+      lineNumber: 1,
+      rawText: '2024-01-15T10:00:01.000000Z  WARN Sending error to Sentry',
+      level: 'WARN',
+    });
+    useLogStore.setState({
+      rawLogLines: [line],
+      sentryEvents: [{ platform: 'android', lineNumber: 1, message: line.rawText }],
+    });
+    render(<LogDisplayView />);
+    const lineEl = screen.getAllByText(String(1)).find((el) => el.classList.contains(styles.logLineNumber))!
+      .closest(`.${styles.logLine}`) as HTMLElement;
+    const textSpan = lineEl.querySelector(`.${styles.logLineText}`) as HTMLElement;
+    expect(textSpan.style.color).toBe('var(--color-sentry)');
+  });
+
+  it('colors logLineText with HTTP status color for 4xx error lines', () => {
+    const line = createParsedLogLine({
+      lineNumber: 1,
+      rawText: '2024-01-15T10:00:01.000000Z DEBUG send{request_id="r1" method=GET uri="https://example.com/api" request_size="0" status=404 response_size="128" request_duration=200ms}',
+      level: 'DEBUG',
+    });
+    useLogStore.setState({ rawLogLines: [line], sentryEvents: [] });
+    render(<LogDisplayView />);
+    const lineEl = screen.getAllByText(String(1)).find((el) => el.classList.contains(styles.logLineNumber))!
+      .closest(`.${styles.logLine}`) as HTMLElement;
+    const textSpan = lineEl.querySelector(`.${styles.logLineText}`) as HTMLElement;
+    expect(textSpan.style.color).toBeTruthy();
+    expect(textSpan.style.color).not.toBe('');
+  });
+
+  it('does not color logLineText for 2xx lines', () => {
+    const line = createParsedLogLine({
+      lineNumber: 1,
+      rawText: '2024-01-15T10:00:01.000000Z DEBUG send{request_id="r1" method=GET uri="https://example.com/api" request_size="0" status=200 response_size="512" request_duration=100ms}',
+      level: 'DEBUG',
+    });
+    useLogStore.setState({ rawLogLines: [line], sentryEvents: [] });
+    render(<LogDisplayView />);
+    const lineEl = screen.getAllByText(String(1)).find((el) => el.classList.contains(styles.logLineNumber))!
+      .closest(`.${styles.logLine}`) as HTMLElement;
+    const textSpan = lineEl.querySelector(`.${styles.logLineText}`) as HTMLElement;
+    expect(textSpan.style.color).toBe('');
+  });
+});
