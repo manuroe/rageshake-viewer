@@ -30,6 +30,12 @@ const SEND_LINE_REQ99 = '2026-01-26T17:02:45.000000Z  INFO matrix_sdk::http_clie
 // Send line for REQ-100 (appears before the connect error)
 const SEND_LINE_REQ100 = '2026-01-26T17:02:55.990000Z  INFO matrix_sdk::http_client::native: Sending request | crates/matrix-sdk/src/http_client/native.rs:89 | spans: root > send{request_id="REQ-100" method=POST uri="https://matrix-client.matrix.org/_matrix/client/v3/keys/upload" request_size="512"}';
 
+// Send line without request_size= in span (observed with some API error paths in the SDK).
+const SEND_LINE_NO_REQUEST_SIZE = '2026-03-11T12:52:18.399611Z DEBUG matrix_sdk::http_client::native: Sending request num_attempt=1 | crates/matrix-sdk/src/http_client/native.rs:78 | spans: keys_query{request_id="0c7a35d0af474b258f4699e4fe0e7f38"} > update_state_after_keys_query > send{request_id="REQ-18" method=GET uri="https://matrix-client.matrix.org/_matrix/client/v3/user/@user:matrix.org/account_data/m.secret_storage.default_key"}';
+
+// Error response line for REQ-18 that carries a 404 status in its span but no request_size=.
+const HTTP_ERROR_404_LINE = '2026-03-11T12:52:18.485177Z ERROR matrix_sdk::http_client: Error while sending request: Api(Server(ClientApi(Error { status_code: 404, body: Standard(StandardErrorBody { kind: NotFound, message: "Account data not found" }) }))) | crates/matrix-sdk/src/http_client/mod.rs:218 | spans: keys_query{request_id="0c7a35d0af474b258f4699e4fe0e7f38"} > update_state_after_keys_query > send{request_id="REQ-18" method=GET uri="https://matrix-client.matrix.org/_matrix/client/v3/user/@user:matrix.org/account_data/m.secret_storage.default_key" status=404 response_size="58B" request_duration=85.251916ms}';
+
 describe('logParser', () => {
   describe('parseAllHttpRequests', () => {
     describe('basic parsing', () => {
@@ -489,6 +495,56 @@ describe('logParser', () => {
         const completed = result.httpRequests.find(r => r.status === '200');
         expect(completed).toBeDefined();
         expect(completed?.clientError).toBeUndefined();
+      });
+    });
+
+    describe('HTTP error responses without request_size in span', () => {
+      it('parses a 404 error response line that omits request_size', () => {
+        const result = parseAllHttpRequests(HTTP_ERROR_404_LINE);
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-18',
+          method: 'GET',
+          uri: 'https://matrix-client.matrix.org/_matrix/client/v3/user/@user:matrix.org/account_data/m.secret_storage.default_key',
+          status: '404',
+          requestSizeString: '',
+          responseSizeString: '58B',
+          requestDurationMs: 85,
+          sendLineNumber: 0,
+          responseLineNumber: 1,
+        });
+        expect(result.httpRequests[0].clientError).toBeUndefined();
+      });
+
+      it('parses a send line that omits request_size', () => {
+        const result = parseAllHttpRequests(SEND_LINE_NO_REQUEST_SIZE);
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-18',
+          method: 'GET',
+          status: '',
+          sendLineNumber: 1,
+          responseLineNumber: 0,
+        });
+      });
+
+      it('pairs a send line (no request_size) with its 404 error response', () => {
+        const content = [SEND_LINE_NO_REQUEST_SIZE, HTTP_ERROR_404_LINE].join('\n');
+        const result = parseAllHttpRequests(content);
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-18',
+          method: 'GET',
+          status: '404',
+          responseSizeString: '58B',
+          requestDurationMs: 85,
+          sendLineNumber: 1,
+          responseLineNumber: 2,
+        });
+        expect(result.httpRequests[0].clientError).toBeUndefined();
       });
     });
   });

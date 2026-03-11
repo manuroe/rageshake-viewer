@@ -5,8 +5,9 @@ import { parseSizeString } from './sizeUtils';
 import { ParsingError } from './errorHandling';
 
 // Regex patterns for parsing HTTP requests - generic (all URIs)
-const HTTP_RESP_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"\s+request_size="(?<req_size>[^"]+)"\s+status=(?<status>\S+)\s+response_size="(?<resp_size>[^"]+)"\s+request_duration=(?<duration_val>[0-9.]+)(?<duration_unit>ms|s)/;
-const HTTP_SEND_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"\s+request_size="(?<req_size>[^"]+)"(?![^}]*(?:status=|response_size=|request_duration=))/;
+// request_size= is optional: some SDK log lines (e.g. API error responses) omit it from the span.
+const HTTP_RESP_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"(?:\s+request_size="(?<req_size>[^"]+)")?\s+status=(?<status>\S+)\s+response_size="(?<resp_size>[^"]+)"\s+request_duration=(?<duration_val>[0-9.]+)(?<duration_unit>ms|s)/;
+const HTTP_SEND_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"(?:\s+request_size="(?<req_size>[^"]+)")?(?![^}]*(?:status=|response_size=|request_duration=))/;
 
 // Regex for client-side transport errors (no HTTP response received, e.g. timeout, connection failure).
 // These log lines have the send{} span without request_size=.
@@ -215,8 +216,13 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       continue;
     }
 
-    // Try to match send pattern
-    const sendMatch = line.match(HTTP_SEND_RE);
+    // Try to match send pattern.
+    // Lines containing "Error while sending request" are exclusively handled by
+    // HTTP_CLIENT_ERROR_RE below, even when their span looks like a plain send
+    // (no request_size=, no status=). Skipping them here prevents the updated
+    // HTTP_SEND_RE (which no longer requires request_size=) from stealing those
+    // lines before the client-error path can mark them as clientError records.
+    const sendMatch = !line.includes('Error while sending request') ? line.match(HTTP_SEND_RE) : null;
     if (sendMatch && sendMatch.groups) {
       const requestId = sendMatch.groups.id;
 
@@ -260,7 +266,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       rec.sendLineNumber = i + 1;
     } else {
       // Try to match client-side error pattern (no HTTP response: timeout, connection failure, etc.).
-      // The send{} span in error lines omits request_size=, so HTTP_SEND_RE does not match.
+      // These lines contain "Error while sending request" and are skipped by HTTP_SEND_RE above.
       const clientErrMatch = line.match(HTTP_CLIENT_ERROR_RE);
       if (clientErrMatch && clientErrMatch.groups) {
         const requestId = clientErrMatch.groups.id;
