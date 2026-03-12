@@ -999,7 +999,7 @@ describe('SummaryView', () => {
       expect(screen.getByText(/Summary/)).toBeInTheDocument();
     });
 
-    it('clicking a warning type button navigates to the logs filtered view', () => {
+    it('exercises the warning type button onClick handler without crashing', () => {
       const lines = [
         createParsedLogLine({ lineNumber: 90, level: 'WARN', message: 'some warning message' }),
       ];
@@ -1008,7 +1008,6 @@ describe('SummaryView', () => {
 
       const warnBtn = screen.getByRole('button', { name: /some warning message/i });
       fireEvent.click(warnBtn);
-      // After click the component is still rendered (MemoryRouter handles navigation)
       expect(screen.getByText(/Summary/)).toBeInTheDocument();
     });
 
@@ -1042,10 +1041,8 @@ describe('SummaryView', () => {
       renderSummaryView();
 
       // The top failed URL button navigates with request_id for single match (exercise the single-match branch)
-      const failedUrlBtn = screen.queryByRole('button', { name: /single-fail/i });
-      if (failedUrlBtn) {
-        fireEvent.click(failedUrlBtn);
-      }
+      const failedUrlBtn = screen.getByRole('button', { name: /single-fail/i });
+      fireEvent.click(failedUrlBtn);
       expect(screen.getByText(/Summary/)).toBeInTheDocument();
     });
   });

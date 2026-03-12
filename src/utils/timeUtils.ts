@@ -591,6 +591,7 @@ export function snapSelectionToLogLine(
   fullDataRange: { minTime: TimestampMicros; maxTime: TimestampMicros },
   edge: 'start' | 'end'
 ): string {
+  if (rawLogLines.length === 0) return edge;
   const edgeTime = edge === 'start' ? fullDataRange.minTime : fullDataRange.maxTime;
   if (Math.abs(us - edgeTime) <= SNAP_TOLERANCE_US) {
     return edge;

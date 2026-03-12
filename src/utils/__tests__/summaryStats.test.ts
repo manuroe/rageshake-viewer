@@ -140,12 +140,12 @@ describe('computeSummaryStats — httpErrorsByStatus', () => {
 
     const result = computeSummaryStats(rawLines, requests, [], [], [], null, null, null, index);
 
-    const statusTypes = result.httpErrorsByStatus.map((e) => e.type);
+    const statusTypes = result.httpErrorsByStatus.map((e) => e.status);
     expect(statusTypes).toContain('500');
     expect(statusTypes).toContain('404');
     expect(statusTypes).not.toContain('200');
 
-    const fiveHundred = result.httpErrorsByStatus.find((e) => e.type === '500');
+    const fiveHundred = result.httpErrorsByStatus.find((e) => e.status === '500');
     expect(fiveHundred?.count).toBe(2);
   });
 

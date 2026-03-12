@@ -34,6 +34,15 @@ export interface MessageCount {
   readonly count: number;
 }
 
+/**
+ * A single row in the HTTP error status-code breakdown table.
+ * Uses `status` (not `type`) to match the domain concept.
+ */
+export interface HttpStatusCount {
+  readonly status: string;
+  readonly count: number;
+}
+
 /** A single row in the slowest-HTTP-requests table. */
 export interface SlowHttpRequest {
   readonly id: string;
@@ -76,7 +85,7 @@ export interface SummaryStats {
   /** Sentry events within the active time window. */
   readonly sentryEvents: SentryEvent[];
   /** HTTP error status codes with counts (4xx / 5xx only). */
-  readonly httpErrorsByStatus: readonly MessageCount[];
+  readonly httpErrorsByStatus: readonly HttpStatusCount[];
   /** Up to 5 URIs with the highest number of HTTP errors. */
   readonly topFailedUrls: readonly FailedUrl[];
   /** Up to 10 slowest non-sync HTTP requests. */
@@ -149,14 +158,6 @@ export function computeSummaryStats(
     timeRangeUs = localTimeRangeUs;
   }
 
-  // ── Build line-number → timestamp lookup ──────────────────────────────────
-  // We use the precomputed index from the store rather than re-scanning the
-  // array on every render, keeping filtering at O(n) rather than O(n²).
-  const lineNumberToTimestamp = new Map<number, TimestampMicros>();
-  lineNumberIndex.forEach((line, lineNumber) => {
-    if (line.timestampUs) lineNumberToTimestamp.set(lineNumber, line.timestampUs);
-  });
-
   // ── Filter by time range ───────────────────────────────────────────────────
   const filteredLogLines = rawLogLines.filter((line) => {
     if (!timeRangeUs) return true;
@@ -165,7 +166,7 @@ export function computeSummaryStats(
 
   const filteredSentryEvents = sentryEvents.filter((event) => {
     if (!timeRangeUs) return true;
-    const ts = lineNumberToTimestamp.get(event.lineNumber);
+    const ts = lineNumberIndex.get(event.lineNumber)?.timestampUs;
     if (!ts) return false;
     return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
   });
@@ -173,7 +174,7 @@ export function computeSummaryStats(
   const filteredHttpRequests = allHttpRequests.filter((req) => {
     if (!timeRangeUs) return true;
     if (!req.responseLineNumber) return false;
-    const ts = lineNumberToTimestamp.get(req.responseLineNumber);
+    const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
     if (!ts) return false;
     return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
   });
@@ -181,7 +182,7 @@ export function computeSummaryStats(
   const filteredSyncRequests = allRequests.filter((req) => {
     if (!timeRangeUs) return true;
     if (!req.responseLineNumber) return false;
-    const ts = lineNumberToTimestamp.get(req.responseLineNumber);
+    const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
     if (!ts) return false;
     return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
   });
@@ -221,9 +222,9 @@ export function computeSummaryStats(
     }
   }
 
-  const httpErrorsByStatus: MessageCount[] = Object.entries(httpStatusCounts)
+  const httpErrorsByStatus: HttpStatusCount[] = Object.entries(httpStatusCounts)
     .filter(([status]) => parseInt(status, 10) >= 400)
-    .map(([status, count]) => ({ type: status, count }))
+    .map(([status, count]) => ({ status, count }))
     .sort((a, b) => b.count - a.count);
 
   // ── Failed URL grouping ────────────────────────────────────────────────────
@@ -285,7 +286,7 @@ export function computeSummaryStats(
   const completedRequestsWithTimestamps: HttpRequestWithTimestamp[] = filteredHttpRequests
     .filter((req) => req.responseLineNumber)
     .map((req) => {
-      const ts = lineNumberToTimestamp.get(req.responseLineNumber) ?? (0 as TimestampMicros);
+      const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs ?? (0 as TimestampMicros);
       const timeout = timeoutByRequestId.get(req.requestId);
       return {
         requestId: req.requestId,
@@ -301,14 +302,14 @@ export function computeSummaryStats(
     .filter((req) => {
       if (!timeRangeUs) return true;
       if (!req.sendLineNumber) return false;
-      const ts = lineNumberToTimestamp.get(req.sendLineNumber);
+      const ts = lineNumberIndex.get(req.sendLineNumber)?.timestampUs;
       if (!ts) return false;
       return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
     })
     .map((req) => ({
       requestId: req.requestId,
       status: '',
-      timestampUs: lineNumberToTimestamp.get(req.sendLineNumber) ?? (0 as TimestampMicros),
+      timestampUs: lineNumberIndex.get(req.sendLineNumber)?.timestampUs ?? (0 as TimestampMicros),
     }))
     .filter((req) => req.timestampUs > 0);
 
@@ -325,14 +326,14 @@ export function computeSummaryStats(
   let totalDownloadBytes = 0;
   for (const req of allHttpRequests) {
     if (req.responseLineNumber) {
-      const ts = lineNumberToTimestamp.get(req.responseLineNumber);
+      const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
       if (!ts || ts === 0) continue;
       if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
         totalUploadBytes += req.requestSize;
         totalDownloadBytes += req.responseSize;
       }
     } else if (!req.status && req.sendLineNumber) {
-      const ts = lineNumberToTimestamp.get(req.sendLineNumber);
+      const ts = lineNumberIndex.get(req.sendLineNumber)?.timestampUs;
       if (!ts || ts === 0) continue;
       if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
         totalUploadBytes += req.requestSize;

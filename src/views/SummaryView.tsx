@@ -395,7 +395,7 @@ export function SummaryView() {
                           <span
                             className={styles.clickableHeading}
                             onClick={() => {
-                              const statuses = stats.httpErrorsByStatus.map(e => e.type);
+                              const statuses = stats.httpErrorsByStatus.map(e => e.status);
                               const hasClientErrors = stats.topFailedUrls.some(u => u.statuses.includes('Client Error'));
                               if (hasClientErrors) statuses.push('Client Error');
                               void navigate(`/http_requests?status=${encodeURIComponent(statuses.join(','))}`);
@@ -473,12 +473,12 @@ export function SummaryView() {
                       <tr key={idx}>
                         <td>
                           <button
-                            className={`${styles.actionLink} ${tableStyles.badge} ${tableStyles[`badge${getHttpStatusBadgeClass(error.type)}`]}`}
+                            className={`${styles.actionLink} ${tableStyles.badge} ${tableStyles[`badge${getHttpStatusBadgeClass(error.status)}`]}`}
                             onClick={() =>
-                              void navigate(`/http_requests?status=${error.type}`)
+                              void navigate(`/http_requests?status=${error.status}`)
                             }
                           >
-                            {error.type}
+                            {error.status}
                           </button>
                         </td>
                         <td className={styles.alignRight}>{error.count}</td>
