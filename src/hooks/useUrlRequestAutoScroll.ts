@@ -20,6 +20,7 @@ export function useUrlRequestAutoScroll(
     openLogViewerIds,
     openLogViewer,
     toggleRowExpansion,
+    clearUIState,
   } = useLogStore();
 
   const scrolledIdRef = useRef<string | null>(null);
@@ -95,9 +96,8 @@ export function useUrlRequestAutoScroll(
       const hash = window.location.hash;
       const match = hash.match(/request_id=([^&]+)/);
       if (!match) {
-        // Clear all at once without iteration to prevent infinite loops
-        useLogStore.setState({ expandedRows: new Set(), openLogViewerIds: new Set() });
+        clearUIState();
       }
     };
-  }, []);
+  }, [clearUIState]);
 }

@@ -85,6 +85,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       isSyncingFromProp.current = true;
       setFilterQueryInput(requestFilter);
     }
+    // filterQueryInput is intentionally excluded: it is set inside this effect, so
+    // including it would create an infinite loop (effect sets state → state triggers effect).
   }, [requestFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Debounce inputs to avoid recalculating on every keystroke

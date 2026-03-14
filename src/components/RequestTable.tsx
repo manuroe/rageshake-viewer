@@ -179,6 +179,9 @@ export function RequestTable({
     if (storeValue !== uriFilterInput && storeValue !== debouncedUriFilter) {
       setUriFilterInput(storeValue);
     }
+    // uriFilterInput and debouncedUriFilter are intentionally excluded: this effect must only
+    // react to external store changes (e.g., URL navigation). Including local input state
+    // would create a sync loop between the input and the store.
   }, [uriFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUriFilterClear = useCallback(() => {

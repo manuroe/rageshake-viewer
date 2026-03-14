@@ -13,15 +13,17 @@ import { getHttpStatusColor } from './httpStatusColors';
  *   HTTP status color so errors and failures remain prominent.
  */
 export function getSyncRequestBarColor(req: HttpRequest, defaultColor: string): string {
-  const sync = req as SyncRequest;
+  // SyncRequest extends HttpRequest with an optional `timeout` field. Use 'in'
+  // to narrow safely instead of a blanket cast, since callers type req as HttpRequest.
+  const timeout: number | undefined = 'timeout' in req ? (req as SyncRequest).timeout : undefined;
   const statusCode = req.status ? req.status.split(' ')[0] : '';
   const is2xx = statusCode.startsWith('2');
 
   if (is2xx) {
-    if (sync.timeout === 0) {
+    if (timeout === 0) {
       return 'var(--sync-catchup-success)';
     }
-    if (sync.timeout !== undefined && sync.timeout >= 30000) {
+    if (timeout !== undefined && timeout >= 30000) {
       return 'var(--sync-longpoll-success)';
     }
   }

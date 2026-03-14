@@ -73,6 +73,8 @@ interface LogStore {
   toggleRowExpansion: (rowKey: number) => void;
   setActiveRequest: (rowKey: number | null) => void; // Opens one request, closes all others; null clears selection
   clearData: () => void;
+  /** Resets ephemeral UI state (expanded rows, open log viewers) without clearing parsed log data. */
+  clearUIState: () => void;
   
   // Log viewer actions
   openLogViewer: (rowKey: number) => void;
@@ -303,6 +305,10 @@ export const useLogStore = create<LogStore>((set, get) => ({
       detectedPlatform: null,
       sentryEvents: [],
     });
+  },
+
+  clearUIState: () => {
+    set({ expandedRows: new Set(), openLogViewerIds: new Set() });
   },
   
   openLogViewer: (requestId) => {

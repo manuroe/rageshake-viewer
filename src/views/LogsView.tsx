@@ -46,15 +46,6 @@ export function LogsView() {
     end: filteredLines[filteredLines.length - 1].lineNumber ?? (rawLogLines.length - 1),
   } : undefined;
 
-  // Memoize transformed log lines to avoid rebuilding on every render
-  const transformedLines = useMemo(() => 
-    filteredLines.map(line => ({
-      ...line,
-      timestamp: line.displayTime
-    })),
-    [filteredLines]
-  );
-
   return (
     <div className="app">
       <div className="header-compact">
@@ -78,7 +69,7 @@ export function LogsView() {
 
       <div className="logs-view-container">
         <LogDisplayView 
-          logLines={transformedLines}
+          logLines={filteredLines}
           requestFilter={filterPrefill}
           onFilterChange={handleFilterChange}
           prevRequestLineRange={prevRequestLineRange}
