@@ -101,21 +101,25 @@ export interface SummaryStats {
   readonly chartTimeRange: { readonly minTime: TimestampMicros; readonly maxTime: TimestampMicros };
 }
 
-/** Empty result returned when there is no loaded log data. Frozen to prevent cross-call mutation aliasing. */
+/**
+ * Empty result returned when there is no loaded log data.
+ * Arrays are fresh (not frozen) so both empty and non-empty results share the
+ * same mutable array contract, avoiding unsafe casts and runtime inconsistencies.
+ */
 const EMPTY_STATS: SummaryStats = Object.freeze({
   totalLogLines: 0,
-  filteredLogLines: Object.freeze([]) as unknown as ParsedLogLine[],
+  filteredLogLines: [] as ParsedLogLine[],
   timeSpan: Object.freeze({ start: '', end: '' }),
   errors: 0,
   warnings: 0,
-  errorsByType: Object.freeze([]) as unknown as readonly MessageCount[],
-  warningsByType: Object.freeze([]) as unknown as readonly MessageCount[],
-  sentryEvents: Object.freeze([]) as unknown as SentryEvent[],
-  httpErrorsByStatus: Object.freeze([]) as unknown as readonly HttpStatusCount[],
-  topFailedUrls: Object.freeze([]) as unknown as readonly FailedUrl[],
-  slowestHttpRequests: Object.freeze([]) as unknown as readonly SlowHttpRequest[],
-  syncRequestsByConnection: Object.freeze([]) as unknown as readonly SyncByConnection[],
-  httpRequestsWithTimestamps: Object.freeze([]) as unknown as HttpRequestWithTimestamp[],
+  errorsByType: [] as readonly MessageCount[],
+  warningsByType: [] as readonly MessageCount[],
+  sentryEvents: [] as SentryEvent[],
+  httpErrorsByStatus: [] as readonly HttpStatusCount[],
+  topFailedUrls: [] as readonly FailedUrl[],
+  slowestHttpRequests: [] as readonly SlowHttpRequest[],
+  syncRequestsByConnection: [] as readonly SyncByConnection[],
+  httpRequestsWithTimestamps: [] as HttpRequestWithTimestamp[],
   incompleteRequestCount: 0,
   totalUploadBytes: 0,
   totalDownloadBytes: 0,
@@ -341,7 +345,7 @@ export function computeSummaryStats(
   }
 
   // ── Chart time range ───────────────────────────────────────────────────────
-  const { min: chartMinTime, max: chartMaxTime } = getMinMaxTimestamps(filteredLogLines as ParsedLogLine[]);
+  const { min: chartMinTime, max: chartMaxTime } = getMinMaxTimestamps(filteredLogLines);
 
   return {
     totalLogLines: filteredLogLines.length,

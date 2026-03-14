@@ -587,7 +587,7 @@ export const SNAP_TOLERANCE_US = 1_000 as TimestampMicros;
  */
 export function snapSelectionToLogLine(
   us: TimestampMicros,
-  rawLogLines: Array<{ timestampUs: TimestampMicros; isoTimestamp: string }>,
+  rawLogLines: ReadonlyArray<{ timestampUs: TimestampMicros; isoTimestamp: string }>,
   fullDataRange: { minTime: TimestampMicros; maxTime: TimestampMicros },
   edge: 'start' | 'end'
 ): string {
