@@ -1146,4 +1146,112 @@ describe('SummaryView', () => {
       useLogStore.getState().setTimeFilter(null, null);
     });
   });
+
+  // ============================================================================
+  // §4.3 — Render tests asserting stats are displayed with real computed data
+  // ============================================================================
+
+  describe('concrete rendered statistics (§4.3)', () => {
+    it('renders the exact error message strings as row labels', () => {
+      const lines = [
+        createParsedLogLine({ lineNumber: 0, level: 'ERROR', message: 'database connection lost' }),
+        createParsedLogLine({ lineNumber: 1, level: 'ERROR', message: 'database connection lost' }),
+        createParsedLogLine({ lineNumber: 2, level: 'ERROR', message: 'token refresh failed' }),
+      ];
+      useLogStore.getState().setHttpRequests([], lines);
+      renderSummaryView();
+
+      // Both error types must appear as navigable row labels
+      expect(screen.getByRole('button', { name: /database connection lost/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /token refresh failed/i })).toBeInTheDocument();
+    });
+
+    it('renders the exact warning message strings as row labels', () => {
+      const lines = [
+        createParsedLogLine({ lineNumber: 0, level: 'WARN', message: 'retrying after backoff' }),
+        createParsedLogLine({ lineNumber: 1, level: 'WARN', message: 'retrying after backoff' }),
+      ];
+      useLogStore.getState().setHttpRequests([], lines);
+      renderSummaryView();
+
+      expect(screen.getByRole('button', { name: /retrying after backoff/i })).toBeInTheDocument();
+    });
+
+    it('displays HTTP 500 error status badge', () => {
+      const BASE_C = 1_710_000_000_000_000 as TimestampMicros;
+      const lines = [
+        createParsedLogLine({ lineNumber: 0, timestampUs: BASE_C }),
+        createParsedLogLine({ lineNumber: 1, timestampUs: (BASE_C + 1_000_000) as TimestampMicros }),
+      ];
+      const httpRequests = [
+        createHttpRequest({ requestId: 'R1', status: '500', sendLineNumber: 0, responseLineNumber: 1 }),
+      ];
+      useLogStore.getState().setHttpRequests(httpRequests, lines);
+      renderSummaryView();
+
+      // The status code badge in the HTTP Errors by Status table
+      expect(screen.getByRole('button', { name: '500' })).toBeInTheDocument();
+    });
+
+    it('displays the correct sync count next to each connection ID', () => {
+      const BASE_SC = 1_711_000_000_000_000 as TimestampMicros;
+      const lines = [0, 1, 2, 3].map((i) =>
+        createParsedLogLine({ lineNumber: i, timestampUs: (BASE_SC + i * 1_000_000) as TimestampMicros })
+      );
+      const syncRequests = [
+        createSyncRequest({ requestId: 'S1', connId: 'main', sendLineNumber: 0, responseLineNumber: 1 }),
+        createSyncRequest({ requestId: 'S2', connId: 'main', sendLineNumber: 1, responseLineNumber: 2 }),
+        createSyncRequest({ requestId: 'S3', connId: 'encryption', sendLineNumber: 2, responseLineNumber: 3 }),
+      ];
+      useLogStore.getState().setRequests(syncRequests, ['main', 'encryption'], lines);
+      renderSummaryView();
+
+      // Connection rows visible
+      expect(screen.getByText('main')).toBeInTheDocument();
+      expect(screen.getByText('encryption')).toBeInTheDocument();
+      // Count cells: 'main' has 2, 'encryption' has 1
+      expect(screen.getByText('2')).toBeInTheDocument();
+      expect(screen.getByText('1')).toBeInTheDocument();
+    });
+
+    it('displays the correct line count after a global time filter is applied', () => {
+      // 10 lines at 1 s each; filter to the middle 4 (lines 3–6)
+      const BASE_TF = 1_712_000_000_000_000 as TimestampMicros;
+      const lines = Array.from({ length: 10 }, (_, i) =>
+        createParsedLogLine({ lineNumber: i, timestampUs: (BASE_TF + i * 1_000_000) as TimestampMicros })
+      );
+      useLogStore.getState().setHttpRequests([], lines);
+      useLogStore.getState().setTimeFilter(lines[3].isoTimestamp, lines[6].isoTimestamp);
+      renderSummaryView();
+
+      // 4 filtered lines should appear in the "Logs Over Time" heading
+      expect(screen.getByText(/Logs Over Time: 4 lines/)).toBeInTheDocument();
+
+      // Restore
+      useLogStore.getState().setTimeFilter(null, null);
+    });
+
+    it('displays slowest request URI in the Slowest HTTP Requests table', () => {
+      const BASE_SR = 1_713_000_000_000_000 as TimestampMicros;
+      const lines = [
+        createParsedLogLine({ lineNumber: 0, timestampUs: BASE_SR }),
+        createParsedLogLine({ lineNumber: 1, timestampUs: (BASE_SR + 1_000_000) as TimestampMicros }),
+      ];
+      const httpRequests = [
+        createHttpRequest({
+          requestId: 'SLOW-ONE',
+          status: '200',
+          uri: '/api/send-to-device',
+          requestDurationMs: 8500,
+          sendLineNumber: 0,
+          responseLineNumber: 1,
+        }),
+      ];
+      useLogStore.getState().setHttpRequests(httpRequests, lines);
+      renderSummaryView();
+
+      // The URI should appear in the Slowest Requests table
+      expect(screen.getByRole('cell', { name: /send-to-device/i })).toBeInTheDocument();
+    });
+  });
 });

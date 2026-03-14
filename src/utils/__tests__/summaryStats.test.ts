@@ -77,6 +77,38 @@ describe('computeSummaryStats — totalLogLines', () => {
     expect(result.filteredLogLines[0].lineNumber).toBe(1);
     expect(result.filteredLogLines[2].lineNumber).toBe(3);
   });
+
+  it('counts only lines within the global ISO time filter', () => {
+    const lines = makeLines(10);
+    // Global filter: lines 3–7 inclusive
+    const startIso = lines[3].isoTimestamp;
+    const endIso = lines[7].isoTimestamp;
+    const result = computeSummaryStats(lines, [], [], [], [], startIso, endIso, null, buildIndex(lines));
+    expect(result.totalLogLines).toBe(5);
+    expect(result.filteredLogLines[0].lineNumber).toBe(3);
+    expect(result.filteredLogLines[4].lineNumber).toBe(7);
+  });
+
+  it('local zoom overrides global ISO filter', () => {
+    const lines = makeLines(10);
+    const startIso = lines[0].isoTimestamp; // global = full range
+    const endIso = lines[9].isoTimestamp;
+    // Local zoom narrows to lines 4–6
+    const localRange = {
+      startUs: lines[4].timestampUs,
+      endUs: lines[6].timestampUs,
+    };
+    const result = computeSummaryStats(lines, [], [], [], [], startIso, endIso, localRange, buildIndex(lines));
+    expect(result.totalLogLines).toBe(3);
+    expect(result.filteredLogLines[0].lineNumber).toBe(4);
+  });
+
+  it('sets timeSpan from first and last filtered lines', () => {
+    const lines = makeLines(5);
+    const result = computeSummaryStats(lines, [], [], [], [], null, null, null, buildIndex(lines));
+    expect(result.timeSpan.start).toBe(lines[0].displayTime);
+    expect(result.timeSpan.end).toBe(lines[4].displayTime);
+  });
 });
 
 // ---------------------------------------------------------------------------

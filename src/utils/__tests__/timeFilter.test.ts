@@ -709,4 +709,27 @@ describe('snapSelectionToLogLine', () => {
     expect(result).not.toBe('end');
     expect(result).toBe(lines[0].isoTimestamp);
   });
+
+  it('returns the edge keyword when rawLogLines is empty', () => {
+    // Guard: with no log lines there is no "nearest" line to snap to;
+    // the function should still return a usable keyword.
+    expect(snapSelectionToLogLine(BASE, [], fullDataRange, 'start')).toBe('start');
+    expect(snapSelectionToLogLine(BASE, [], fullDataRange, 'end')).toBe('end');
+  });
+
+  it('returns "start" when a boundary is just outside tolerance of the minimum (start edge)', () => {
+    // Value is SNAP_TOLERANCE_US + 1 away from the minimum — must NOT snap to "start".
+    const outsideTolerance = (fullDataRange.minTime + SNAP_TOLERANCE_US + 1) as ReturnType<typeof isoToMicros>;
+    const result = snapSelectionToLogLine(outsideTolerance, lines, fullDataRange, 'start');
+    // Closest line is still lines[0] since the gap to line[1] is larger
+    expect(result).toBe(lines[0].isoTimestamp);
+  });
+
+  it('returns "end" when a boundary is just outside tolerance of the maximum (end edge)', () => {
+    // Value is SNAP_TOLERANCE_US + 1 away from the maximum — must NOT snap to "end".
+    const outsideTolerance = (fullDataRange.maxTime - SNAP_TOLERANCE_US - 1) as ReturnType<typeof isoToMicros>;
+    const result = snapSelectionToLogLine(outsideTolerance, lines, fullDataRange, 'end');
+    // Closest line is still lines[4] (the last line)
+    expect(result).toBe(lines[lines.length - 1].isoTimestamp);
+  });
 });
