@@ -588,19 +588,41 @@ export function RequestTable({
                                 title={resolvedIsIncomplete ? 'Incomplete' : resolvedStatus}
                               >
                                 {!resolvedIsIncomplete && renderBarOverlay && renderBarOverlay(req, barWidth, msPerPixel, totalDuration, timelineWidth)}
-                                {attemptSegments && attemptSegments.map(({ leftPx, widthPx, color }, idx) => (
-                                  <div
-                                    key={idx}
-                                    style={{
-                                      position: 'absolute',
-                                      top: 0,
-                                      bottom: 0,
-                                      left: `${leftPx}px`,
-                                      width: `${widthPx}px`,
-                                      background: color,
-                                    }}
-                                  />
-                                ))}
+                                {attemptSegments && attemptSegments.flatMap(({ leftPx, widthPx, color }, idx) => {
+                                  const segment = (
+                                    <div
+                                      key={`seg-${idx}`}
+                                      style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        bottom: 0,
+                                        left: `${leftPx}px`,
+                                        width: `${widthPx}px`,
+                                        background: color,
+                                      }}
+                                    />
+                                  );
+                                  if (idx < attemptSegments.length - 1) {
+                                    return [
+                                      segment,
+                                      // Separator line between retry attempts
+                                      <div
+                                        key={`sep-${idx}`}
+                                        aria-hidden="true"
+                                        style={{
+                                          position: 'absolute',
+                                          top: 0,
+                                          bottom: 0,
+                                          left: `${leftPx + widthPx - 1}px`,
+                                          width: '1px',
+                                          background: 'rgba(255, 255, 255, 0.75)',
+                                          zIndex: 1,
+                                        }}
+                                      />,
+                                    ];
+                                  }
+                                  return [segment];
+                                })}
                               </div>
                               <span className={styles.waterfallDuration} title={resolvedIsIncomplete ? 'Incomplete' : resolvedStatus}>
                                 {resolvedIsIncomplete
