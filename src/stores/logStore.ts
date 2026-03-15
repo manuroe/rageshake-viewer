@@ -187,7 +187,6 @@ export const useLogStore = create<LogStore>((set, get) => ({
   startTime: null,
   endTime: null,
   
-  // Timeline scale
   timelineScale: DEFAULT_MS_PER_PIXEL,
   
   // UI state

@@ -1,24 +1,24 @@
 import type { TimestampMicros, ISODateTimeString } from './time.types';
 
 export interface HttpRequest {
-  requestId: string;
-  method: string;
-  uri: string;
-  status: string;
-  requestSizeString: string;
-  responseSizeString: string;
-  requestSize: number;
-  responseSize: number;
-  requestDurationMs: number;
-  sendLineNumber: number;
-  responseLineNumber: number;
+  readonly requestId: string;
+  readonly method: string;
+  readonly uri: string;
+  readonly status: string;
+  readonly requestSizeString: string;
+  readonly responseSizeString: string;
+  readonly requestSize: number;
+  readonly responseSize: number;
+  readonly requestDurationMs: number;
+  readonly sendLineNumber: number;
+  readonly responseLineNumber: number;
   /** Client-side transport error (e.g., "TimedOut", "Connect") when the request failed without receiving an HTTP response */
-  clientError?: string;
+  readonly clientError?: string;
 }
 
 export interface SyncRequest extends HttpRequest {
-  connId: string;
-  timeout?: number;
+  readonly connId: string;
+  readonly timeout?: number;
 }
 
 /**
@@ -35,21 +35,21 @@ export interface HttpRequestWithTimestamp {
 }
 
 export interface SentryEvent {
-  platform: 'android' | 'ios';
-  lineNumber: number;
-  message: string;
+  readonly platform: 'android' | 'ios';
+  readonly lineNumber: number;
+  readonly message: string;
   /** Hex crash ID, present for iOS crash reports only */
-  sentryId?: string;
+  readonly sentryId?: string;
   /** Direct link to the Sentry issue, present for iOS crash reports only */
-  sentryUrl?: string;
+  readonly sentryUrl?: string;
 }
 
 export interface LogParserResult {
-  requests: SyncRequest[];
-  httpRequests: HttpRequest[];
-  connectionIds: string[];
-  rawLogLines: ParsedLogLine[];
-  sentryEvents: SentryEvent[];
+  readonly requests: SyncRequest[];
+  readonly httpRequests: HttpRequest[];
+  readonly connectionIds: string[];
+  readonly rawLogLines: ParsedLogLine[];
+  readonly sentryEvents: SentryEvent[];
 }
 
 /**
@@ -61,21 +61,21 @@ export interface LogParserResult {
  * - `displayTime`: Time-only string for display (HH:MM:SS.ssssss)
  */
 export interface ParsedLogLine {
-  lineNumber: number;
-  rawText: string;
+  readonly lineNumber: number;
+  readonly rawText: string;
   /** Original ISO 8601 timestamp from log (e.g., "2026-01-26T16:01:13.382222Z") */
-  isoTimestamp: ISODateTimeString;
+  readonly isoTimestamp: ISODateTimeString;
   /** Microseconds since Unix epoch - for time calculations */
-  timestampUs: TimestampMicros;
+  readonly timestampUs: TimestampMicros;
   /** Pre-formatted time for display (HH:MM:SS.ssssss) */
-  displayTime: string;
-  level: LogLevel;
-  message: string;
-  strippedMessage: string;
+  readonly displayTime: string;
+  readonly level: LogLevel;
+  readonly message: string;
+  readonly strippedMessage: string;
   /** Source file path extracted from log (e.g., "ClientProxy.swift" or "crates/matrix-sdk/src/http_client/native.rs") */
-  filePath?: string;
+  readonly filePath?: string;
   /** Source file line number extracted from log */
-  sourceLineNumber?: number;
+  readonly sourceLineNumber?: number;
 }
 
 export type LogLevel = 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'UNKNOWN';

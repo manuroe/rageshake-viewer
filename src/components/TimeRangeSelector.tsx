@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLogStore } from '../stores/logStore';
 import { useURLParams } from '../hooks/useURLParams';
 import { getTimeDisplayName, parseTimeInput } from '../utils/timeUtils';
 import { ValidationError } from '../utils/errorHandling';
+import { useClickOutside } from '../hooks/useClickOutside';
 import ErrorDisplay from './ErrorDisplay';
 import styles from './TimeRangeSelector.module.css';
 
@@ -32,21 +33,13 @@ export function TimeRangeSelector() {
     }
   }, [startTime, endTime, showCustom]);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setShowCustom(false);
-        setError(null);
-      }
-    };
+  const handleDropdownClose = useCallback(() => {
+    setIsOpen(false);
+    setShowCustom(false);
+    setError(null);
+  }, []);
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
+  useClickOutside(dropdownRef, handleDropdownClose, isOpen);
 
   const handleShortcut = (shortcut: string) => {
     setTimeFilter(shortcut, 'end');

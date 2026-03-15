@@ -3,6 +3,23 @@ import { useLogStore } from '../stores/logStore';
 import type { HttpRequest } from '../types/log.types';
 
 /**
+ * Milliseconds to wait after opening a log viewer before the first scroll attempt.
+ * The virtual-scroll renderer needs one render cycle to stabilise layout.
+ */
+const SCROLL_INITIAL_DELAY_MS = 1000;
+/** Milliseconds between retries when the scroll panel is not yet mounted in the DOM. */
+const SCROLL_MOUNT_RETRY_DELAY_MS = 100;
+/**
+ * Milliseconds between successive scroll-position verification retries.
+ * Chosen to be shorter than the initial delay so the total retry window stays small.
+ */
+const SCROLL_VERIFY_RETRY_DELAY_MS = 120;
+/** Maximum number of scroll-position verification attempts before giving up. */
+const SCROLL_MAX_ATTEMPTS = 6;
+/** Scroll-position delta (px) below which the target is considered reached. */
+const SCROLL_DELTA_THRESHOLD_PX = 4;
+
+/**
  * Hook to handle URL hash `request_id=` parameter for auto-opening and scrolling to a request.
  * Opens the log viewer for the specified request ID and scrolls both panels to center it.
  *
@@ -24,6 +41,12 @@ export function useUrlRequestAutoScroll(
   } = useLogStore();
 
   const scrolledIdRef = useRef<string | null>(null);
+  /**
+   * Tracks all pending `setTimeout` IDs so they can be cancelled when the
+   * component unmounts or the effect re-runs, preventing state updates on an
+   * already-unmounted component.
+   */
+  const pendingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -55,7 +78,9 @@ export function useUrlRequestAutoScroll(
           const leftPanel = leftPanelRef.current;
 
           if (!leftPanel) {
-            setTimeout(checkAndScroll, 100);
+            // Panel not yet mounted; retry after a short delay.
+            const id = setTimeout(checkAndScroll, SCROLL_MOUNT_RETRY_DELAY_MS);
+            pendingTimersRef.current.push(id);
             return;
           }
 
@@ -71,8 +96,9 @@ export function useUrlRequestAutoScroll(
             leftPanel.scrollTo({ top: clampedTarget, behavior: 'auto' });
             const delta = Math.abs(leftPanel.scrollTop - clampedTarget);
 
-            if (delta > 4 && attempt < 6) {
-              setTimeout(() => attemptScroll(attempt + 1), 120);
+            if (delta > SCROLL_DELTA_THRESHOLD_PX && attempt < SCROLL_MAX_ATTEMPTS) {
+              const id = setTimeout(() => attemptScroll(attempt + 1), SCROLL_VERIFY_RETRY_DELAY_MS);
+              pendingTimersRef.current.push(id);
             }
           };
 
@@ -84,11 +110,25 @@ export function useUrlRequestAutoScroll(
           }
         };
 
-        // Wait for virtual scrolling to settle
-        setTimeout(checkAndScroll, 1000);
+        // Wait for virtual scrolling to settle before the first scroll attempt.
+        const id = setTimeout(checkAndScroll, SCROLL_INITIAL_DELAY_MS);
+        pendingTimersRef.current.push(id);
       }
     }
+    // Note: No cleanup return here. The scroll-once guard (scrolledIdRef) prevents
+    // the timer from being rescheduled on re-runs caused by state changes triggered
+    // inside the effect (e.g. openLogViewer updating openLogViewerIds). Cancellation
+    // of pending timers on unmount is handled by the dedicated effect below.
   }, [filteredRequests, openLogViewerIds, expandedRows, openLogViewer, toggleRowExpansion, leftPanelRef, onScrollToRequest]);
+
+  // Cancel all pending scroll timers on unmount to prevent state updates after
+  // the component has been removed from the tree.
+  useEffect(() => {
+    return () => {
+      pendingTimersRef.current.forEach(clearTimeout);
+      pendingTimersRef.current = [];
+    };
+  }, []);
 
   // Clear expanded state on unmount (unless there's a request_id parameter to preserve)
   useEffect(() => {

@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLogStore } from '../stores/logStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
+import { useClickOutside } from '../hooks/useClickOutside';
 import styles from './BurgerMenu.module.css';
 
 export function BurgerMenu() {
@@ -15,19 +16,7 @@ export function BurgerMenu() {
   const { theme, setTheme } = useThemeStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
+  useClickOutside(menuRef, () => setIsOpen(false), isOpen);
 
   const handleNewSession = () => {
     clearData();

@@ -490,17 +490,23 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                   className={`${styles.btnToolbar} ${styles.btnIcon}`}
                   onClick={goToPreviousMatch}
                   title="Previous match (Shift+Enter)"
+                  aria-label="Previous match"
                   disabled={searchMatchesArray.length === 0}
                 >
                   ↑
                 </button>
-                <span className={styles.searchResultsCount}>
+                <span
+                  className={styles.searchResultsCount}
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
                   {currentSearchMatchIndex + 1} / {searchMatchesArray.length}
                 </span>
                 <button
                   className={`${styles.btnToolbar} ${styles.btnIcon}`}
                   onClick={goToNextMatch}
                   title="Next match (Enter)"
+                  aria-label="Next match"
                   disabled={searchMatchesArray.length === 0}
                 >
                   ↓
@@ -553,6 +559,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 }
               }}
               title="Context lines before/after matches"
+              aria-label="Toggle context lines"
               disabled={!filterQuery.trim()}
             >
               ≡

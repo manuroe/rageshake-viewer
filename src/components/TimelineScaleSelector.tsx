@@ -1,5 +1,6 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { useURLParams } from '../hooks/useURLParams';
+import { useClickOutside } from '../hooks/useClickOutside';
 import styles from './TimelineScaleSelector.module.css';
 
 // Available timeline scale options (ms per pixel)
@@ -27,21 +28,7 @@ export function TimelineScaleSelector({ msPerPixel }: TimelineScaleSelectorProps
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
+  useClickOutside(dropdownRef, () => setIsOpen(false), isOpen);
 
   const handleSelect = useCallback((value: number) => {
     setScale(value);

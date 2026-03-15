@@ -116,7 +116,9 @@ export function isValidTextContent(bytes: Uint8Array): ValidationResult {
     );
     return validationSuccess(warnings, { encoding: 'iso-8859-1' });
   } catch {
-    // Fallback failed (shouldn't happen for ISO-8859-1)
+    // ISO-8859-1 decodes every possible byte value (0x00–0xFF), so this
+    // branch should never execute in practice. If it somehow does, surface the
+    // failure as a user-visible error rather than silently swallowing it.
     errors.push(
       new FileError('File encoding is not supported', 'error')
     );

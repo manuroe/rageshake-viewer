@@ -4,6 +4,14 @@ import { isoToMicros, extractTimeFromISO } from './timeUtils';
 import { parseSizeString } from './sizeUtils';
 import { ParsingError } from './errorHandling';
 
+/**
+ * Mutable builder record used during log parsing before all fields have been
+ * resolved. Once finalized, records are cast to the sealed readonly `HttpRequest`.
+ * Using a dedicated mutable type keeps the builder phase type-safe while
+ * `HttpRequest` itself remains immutable in the rest of the codebase.
+ */
+type HttpRequestRecord = { -readonly [K in keyof HttpRequest]?: HttpRequest[K] };
+
 // Regex patterns for parsing HTTP requests - generic (all URIs)
 // request_size= is optional: some SDK log lines (e.g. API error responses) omit it from the span.
 const HTTP_RESP_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"(?:\s+request_size="(?<req_size>[^"]+)")?\s+status=(?<status>\S+)\s+response_size="(?<resp_size>[^"]+)"\s+request_duration=(?<duration_val>[0-9.]+)(?<duration_unit>ms|s)/;
@@ -99,10 +107,10 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   const lines = logContent.split('\n');
   // Map from requestId to all in-progress records for that ID.
   // Multiple requests can share the same requestId; each gets its own record.
-  const recordsByRequestId = new Map<string, Partial<HttpRequest>[]>();
+  const recordsByRequestId = new Map<string, HttpRequestRecord[]>();
   // Flat list of all request records in discovery (insertion) order;
   // final output may be reordered later.
-  const allRecordsList: Partial<HttpRequest>[] = [];
+  const allRecordsList: HttpRequestRecord[] = [];
   const rawLogLines: ParsedLogLine[] = [];
   const sentryEvents: SentryEvent[] = [];
   let linesWithTimestamps = 0;
@@ -180,9 +188,9 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       //   3. Last send with no response yet (any method/uri).
       const respMethod = respMatch.groups.method;
       const respUri = respMatch.groups.uri;
-      let rec: Partial<HttpRequest> | undefined;
-      let fallbackEmpty: Partial<HttpRequest> | undefined;
-      let fallbackAny: Partial<HttpRequest> | undefined;
+      let rec: HttpRequestRecord | undefined;
+      let fallbackEmpty: HttpRequestRecord | undefined;
+      let fallbackAny: HttpRequestRecord | undefined;
       for (let idx = bucket.length - 1; idx >= 0; idx--) {
         const candidate = bucket[idx];
         if (candidate.responseLineNumber) continue;
@@ -239,8 +247,8 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       //   3. Otherwise create a new record.
       const sendMethod = sendMatch.groups.method;
       const sendUri = sendMatch.groups.uri;
-      let rec: Partial<HttpRequest> | null = null;
-      let fallbackEmpty: Partial<HttpRequest> | null = null;
+      let rec: HttpRequestRecord | null = null;
+      let fallbackEmpty: HttpRequestRecord | null = null;
       for (let j = bucket.length - 1; j >= 0; j--) {
         const candidate = bucket[j];
         if (candidate.sendLineNumber) continue;
@@ -281,8 +289,8 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
         // Find the most-recent send record with matching method+uri that has no response yet.
         const errMethod = clientErrMatch.groups.method;
         const errUri = clientErrMatch.groups.uri;
-        let rec: Partial<HttpRequest> | undefined;
-        let fallbackAny: Partial<HttpRequest> | undefined;
+        let rec: HttpRequestRecord | undefined;
+        let fallbackAny: HttpRequestRecord | undefined;
         for (let idx = bucket.length - 1; idx >= 0; idx--) {
           const candidate = bucket[idx];
           if (candidate.responseLineNumber) continue; // already resolved
@@ -320,16 +328,15 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   }
 
   // Filter and convert to array - include any request with at least a send or response line
-  const allRequests = allRecordsList.filter(
-    (rec): rec is HttpRequest =>
-      !!rec.uri && (!!rec.sendLineNumber || !!rec.responseLineNumber)
-  ) as HttpRequest[];
+  const pendingRequests = allRecordsList.filter(
+    (rec) => !!rec.uri && (!!rec.sendLineNumber || !!rec.responseLineNumber)
+  );
 
   // Build a line-number index for O(1) lookups when computing client-error durations
   const lineByNumber = new Map(rawLogLines.map(l => [l.lineNumber, l]));
 
   // Fill in missing fields with empty strings or default values
-  allRequests.forEach((rec) => {
+  pendingRequests.forEach((rec) => {
     rec.method = rec.method || '';
     rec.uri = rec.uri || '';
     rec.status = rec.status || '';
@@ -351,8 +358,11 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     }
   });
 
-  // Sort requests by start time (sendLineNumber) to ensure chronological order
-  allRequests.sort((a, b) => a.sendLineNumber - b.sendLineNumber);
+  // Sort by start time (sendLineNumber) to ensure chronological order
+  pendingRequests.sort((a, b) => (a.sendLineNumber ?? 0) - (b.sendLineNumber ?? 0));
+
+  // Cast to sealed readonly HttpRequest[] — all required fields have been populated above.
+  const allRequests = pendingRequests as HttpRequest[];
 
   return {
     httpRequests: allRequests,

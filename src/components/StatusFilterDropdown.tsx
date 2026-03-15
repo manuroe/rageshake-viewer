@@ -1,6 +1,7 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { useLogStore } from '../stores/logStore';
 import { useURLParams } from '../hooks/useURLParams';
+import { useClickOutside } from '../hooks/useClickOutside';
 import { INCOMPLETE_STATUS_KEY, CLIENT_ERROR_STATUS_KEY } from '../utils/statusCodeUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
 import styles from './StatusFilterDropdown.module.css';
@@ -20,21 +21,7 @@ export function StatusFilterDropdown({ availableStatusCodes }: StatusFilterDropd
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
+  useClickOutside(dropdownRef, () => setIsOpen(false), isOpen);
 
   /** Toggle a status code in the filter */
   const toggleStatusCode = useCallback((code: string) => {

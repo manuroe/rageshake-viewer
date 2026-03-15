@@ -14,7 +14,9 @@ function extractRelativeUri(uri: string): string {
     const url = new URL(uri);
     return url.pathname + url.search + url.hash;
   } catch {
-    // If not a valid URL, check if it starts with http:// or https://
+    // `new URL()` throws for relative URIs such as `/path?query` and for
+    // malformed strings — both are intentional inputs. Swallowing the parse
+    // error is safe here; we fall back to a regex that handles these cases.
     const match = uri.match(/^https?:\/\/[^/]+(.*)$/);
     return match ? match[1] || '/' : uri;
   }
