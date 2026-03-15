@@ -73,9 +73,14 @@ export interface FilteredLine {
 }
 
 /**
- * An inclusive-start, exclusive-end index range `[start, end)` that must be
- * included in the virtualized display even if those lines don't pass the
- * active search filter.
+ * An inclusive-start, exclusive-end index range `[start, end)` that is applied
+ * in addition to the current `filteredLines` set.
+ *
+ * Lines covered by a forced range are eligible to be included in the
+ * virtualized display even if those lines don't pass the active search filter,
+ * but only when there is at least one filtered/displayed line to anchor the
+ * list (i.e. when `filteredLines.length > 0`). When there are no filtered
+ * lines, no display items are produced and forced ranges have no effect.
  *
  * Ranges are expanded by the user via gap-expansion controls and merged with
  * {@link mergeRanges} before being applied, so overlapping or adjacent ranges
