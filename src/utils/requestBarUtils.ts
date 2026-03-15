@@ -52,7 +52,10 @@ export function buildAttemptSegments(
     const widthPx =
       i === outcomes.length - 1
         ? Math.max(0, barWidthPx - usedPx) // last segment gets the remainder
-        : Math.max(0, Math.round((segMs / totalMs) * barWidthPx));
+        : // Clamp to remaining pixels so usedPx never exceeds barWidthPx,
+          // preventing the last segment from getting a negative/zero remainder
+          // when multiple non-last segments round up simultaneously.
+          Math.min(barWidthPx - usedPx, Math.max(0, Math.round((segMs / totalMs) * barWidthPx)));
     segments.push({ leftPx: usedPx, widthPx, color: getAttemptSegmentColor(outcomes[i]) });
     usedPx += widthPx;
   }
