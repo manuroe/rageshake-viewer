@@ -14,7 +14,7 @@
  */
 
 import { execSync } from 'child_process';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -461,7 +461,9 @@ function main() {
   
   printLine('💾 Saving structured data...');
   const workspaceRoot = join(currentDirPath, '..');
-  const jsonPath = join(workspaceRoot, 'pr-comments.json');
+  const agentWorkspaceDir = join(workspaceRoot, 'agent-workspace');
+  mkdirSync(agentWorkspaceDir, { recursive: true });
+  const jsonPath = join(agentWorkspaceDir, 'pr-comments.json');
   const unresolvedComments = comments.filter(comment => !comment.isResolved);
   const batchReplyTemplate = {
     pr: prData.number,
@@ -502,13 +504,13 @@ function main() {
   );
   printLine(`   → ${jsonPath}`);
 
-  const batchTemplatePath = join(workspaceRoot, 'pr-replies-template.json');
+  const batchTemplatePath = join(agentWorkspaceDir, 'pr-replies-template.json');
   writeFileSync(batchTemplatePath, JSON.stringify(batchReplyTemplate, null, 2));
   printLine(`   → ${batchTemplatePath}`);
   
   printLine('📄 Formatting for agent...');
   const markdown = formatForAgent(prData, comments);
-  const mdPath = join(workspaceRoot, 'pr-comments-for-agent.md');
+  const mdPath = join(agentWorkspaceDir, 'pr-comments-for-agent.md');
   writeFileSync(mdPath, markdown);
   printLine(`   → ${mdPath}`);
   
@@ -516,7 +518,7 @@ function main() {
   printLine(markdown);
   printLine('='.repeat(60));
   printLine(`\n✨ Done! Found ${comments.length} comments (${comments.filter(c => !c.isResolved).length} unresolved)`);
-  printLine('\n💡 Copy the output above or the contents of pr-comments-for-agent.md');
+  printLine('\n💡 Copy the output above or the contents of agent-workspace/pr-comments-for-agent.md');
   printLine('   and paste it to the agent with the prompt: "Review PR comments"');
 }
 

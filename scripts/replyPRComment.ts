@@ -14,10 +14,13 @@
  */
 
 import { execFileSync, execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
 
 const commitRefPattern = /\b([0-9a-f]{7,40})\b/gi;
+
+/** Default output file for batch reply results, relative to cwd. */
+const DEFAULT_RESULTS_FILE = join('agent-workspace', 'pr-reply-results.json');
 
 type ReplyEndpointType = 'reviewCommentReply' | 'issueCommentCreate';
 
@@ -94,7 +97,7 @@ function parseArgs(): SingleArgs | BatchArgs {
       continueOnError: !failOnAnyError,
       resultsFile: resultsFileIdx !== -1 && args[resultsFileIdx + 1]
         ? args[resultsFileIdx + 1]
-        : 'pr-reply-results.json',
+        : DEFAULT_RESULTS_FILE,
     };
   }
 
@@ -261,7 +264,9 @@ function writeResultsFile(resultsFile: string, results: BatchReplyResult[]): voi
     results,
   };
 
-  writeFileSync(join(process.cwd(), resultsFile), JSON.stringify(payload, null, 2));
+  const resolvedResultsPath = join(process.cwd(), resultsFile);
+  mkdirSync(dirname(resolvedResultsPath), { recursive: true });
+  writeFileSync(resolvedResultsPath, JSON.stringify(payload, null, 2));
 }
 
 function runSingleReply(args: SingleArgs): void {

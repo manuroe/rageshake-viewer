@@ -41,10 +41,46 @@ This document is a lightweight guide for contributors and automated agents. It f
 - Performance benchmarks: `npm run bench`
   - Runs `.perf.test.ts` suites in Node runtime and reports results through CodSpeed in CI
 - Fetch PR review comments (unresolved actionable list): `npm run pr:comments` (auto-detects current branch) or `npm run pr:comments -- --pr <number>`
-- Batch-reply to PR comments from template file: `npm run pr:reply:batch` (reads `pr-replies-template.json`)
+- Batch-reply to PR comments from template file: `npm run pr:reply:batch` (reads `agent-workspace/pr-replies-template.json`)
 - Reply to a single PR review comment: `npm run pr:reply -- --comment-id <id> --message "<text>"`
 
-## When to Commit
+## AI Working Folder (`agent-workspace/`)
+
+A git-ignored sandbox at `agent-workspace/` exists for all transient AI-generated files. Nothing in this folder is ever committed or reviewed.
+
+**Use it for:**
+- Planning notes (e.g. `agent-workspace/plan.md`)
+- All PR script outputs (see below)
+- Commit message bodies and PR descriptions (see below)
+
+**PR script output files** (written automatically by `npm run pr:comments` and `npm run pr:reply:batch`):
+- `agent-workspace/pr-comments.json` — raw structured PR data
+- `agent-workspace/pr-comments-for-agent.md` — formatted comments for agent consumption
+- `agent-workspace/pr-replies-template.json` — batch reply template to fill in
+- `agent-workspace/pr-reply-results.json` — results after sending replies
+
+**Commit messages** — never pass long or multi-line messages inline. Write to a file and use `-F`:
+```sh
+# Write message to file (title on first line, blank line, then body)
+cat > agent-workspace/commit-msg.txt << 'EOF'
+feat: short title here
+
+Longer body explaining what changed and why.
+EOF
+git commit -F agent-workspace/commit-msg.txt
+```
+
+**PR descriptions** — use `--body-file` instead of `--body`:
+```sh
+cat > agent-workspace/pr-body.md << 'EOF'
+## Summary
+Describe the PR here.
+EOF
+gh pr create --title "feat: short title" --body-file agent-workspace/pr-body.md
+```
+
+**Never store source code or files meant to be reviewed in this folder.**
+
 
 Do **not** commit on the first iteration. Write the code, show the user what changed, and wait for feedback. Only commit once the user confirms the direction is correct — or explicitly asks you to commit.
 
@@ -66,11 +102,11 @@ Do not commit if any of these steps fail. Fix the issue first, then re-run the f
 
 When prompted **"Review PR comments"**:
 1. Run `npm run pr:comments`.
-2. Read `pr-comments-for-agent.md` for unresolved actionable comments (contains comment IDs and reply endpoint type).
+2. Read `agent-workspace/pr-comments-for-agent.md` for unresolved actionable comments (contains comment IDs and reply endpoint type).
 3. Create a todo list and address each comment systematically (fix or reject).
 4. Run the [Pre-Commit Checklist](#pre-commit-checklist-for-agents) before each commit.
-5. Fill `pr-replies-template.json` with one detailed reply per addressed comment.
-6. Send replies in one batch with `npm run pr:reply:batch` (or `npm run pr:reply -- --batch-file <path>`).
+5. Fill `agent-workspace/pr-replies-template.json` with one detailed reply per addressed comment.
+6. Send replies in one batch with `npm run pr:reply:batch` (or `npm run pr:reply -- --batch-file agent-workspace/pr-replies-template.json`).
 
 Reply quality guideline:
 - Do not send only `Fixed in <sha>`.

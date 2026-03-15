@@ -13,7 +13,7 @@
     "bench": "vitest bench --run --environment node --pool forks --minWorkers 1 --maxWorkers 1",
     "pr:comments": "tsx scripts/fetchPRComments.ts",
     "pr:reply": "tsx scripts/replyPRComment.ts",
-    "pr:reply:batch": "tsx scripts/replyPRComment.ts --batch-file pr-replies-template.json",
+    "pr:reply:batch": "tsx scripts/replyPRComment.ts --batch-file agent-workspace/pr-replies-template.json",
     "screenshots": "tsx scripts/screenshots.ts",
     "lint": "eslint .",
     "preview": "vite preview"
