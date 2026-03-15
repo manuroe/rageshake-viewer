@@ -72,9 +72,24 @@ export interface FilteredLine {
   index: number;
 }
 
+/**
+ * An inclusive-start, exclusive-end index range `[start, end)` that is applied
+ * in addition to the current `filteredLines` set.
+ *
+ * Lines covered by a forced range are eligible to be included in the
+ * virtualized display even if those lines don't pass the active search filter,
+ * but only when there is at least one filtered/displayed line to anchor the
+ * list (i.e. when `filteredLines.length > 0`). When there are no filtered
+ * lines, no display items are produced and forced ranges have no effect.
+ *
+ * Ranges are expanded by the user via gap-expansion controls and merged with
+ * {@link mergeRanges} before being applied, so overlapping or adjacent ranges
+ * always collapse into the minimum covering set.
+ */
 export interface ForcedRange {
-  /** Inclusive start, exclusive end (i.e., [start, end)) */
+  /** Inclusive start index into the raw log-line array. */
   start: number;
+  /** Exclusive end index into the raw log-line array. */
   end: number;
 }
 
@@ -140,8 +155,26 @@ function findPrevMatch(anchor: number, gapStart: number, matchingIndices?: Set<n
 }
 
 /**
- * Builds the full list of display items including filtered lines and forced ranges.
- * Forced ranges are inclusive-exclusive: [start, end).
+ * Build the ordered list of display items that the virtualized log list will
+ * render.
+ *
+ * Lines that pass the active filter (`filteredLines`) are always included.
+ * Additionally, any raw-log-line indices covered by `forcedRanges` are
+ * spliced in, allowing expanded gap lines to appear between filter matches.
+ * Adjacent expanded lines are merged before insertion so there are no
+ * duplicate entries.
+ *
+ * Each resulting {@link DisplayItem} carries optional `gapAbove`/`gapBelow`
+ * metadata so the renderer can show expansion controls between non-adjacent
+ * lines.
+ *
+ * @param filteredLines - Lines that satisfy the current search/log-level filter,
+ *   each paired with their absolute index in `rawLogLines`.
+ * @param rawLogLines - The full, unfiltered log-line array (used to resolve
+ *   forced-range indices to actual line data).
+ * @param forcedRanges - User-expanded ranges that must be shown regardless of
+ *   the active filter. Ranges use inclusive-start, exclusive-end semantics.
+ * @returns Ordered array of display items ready for virtualized rendering.
  */
 export function buildDisplayItems(
   filteredLines: FilteredLine[],
@@ -207,8 +240,35 @@ export function buildDisplayItems(
 }
 
 /**
- * Calculates the new forced ranges after expanding a gap.
- * Returns the updated ranges if expansion is valid, or the original reference if not.
+ * Calculate the updated set of forced ranges that results from the user
+ * expanding a gap.
+ *
+ * The gap is identified by `gapId` (e.g. `"up-42"` or `"down-42"`).
+ * The `count` parameter controls how many lines
+ * are added to the forced set:
+ *
+ * - `number` — expand exactly N lines toward the gap interior (capped to
+ *   the available gap size).
+ * - `"all"` — expand the entire gap.
+ * - `"next-match"` / `"prev-match"` — expand to the next/previous search
+ *   match within the gap; falls back to full expansion when no match exists.
+ *   If a request-boundary line range is provided it is preferred over a
+ *   plain search match.
+ *
+ * Returns the original `currentForcedRanges` reference (no allocation) when
+ * the expansion would produce no change, enabling cheap React bail-outs.
+ *
+ * @param gapId - Identifier of the gap to expand, e.g. `"down-42"`.
+ * @param count - How many lines to reveal, or a named expansion mode.
+ * @param displayedIndices - Sorted absolute indices currently visible in the list.
+ * @param totalLines - Total number of lines in the raw log.
+ * @param currentForcedRanges - Existing forced ranges to merge the new range into.
+ * @param matchingIndices - (Optional) Set of line indices matching the active search.
+ * @param prevRequestLineRange - (Optional) Line range of the request immediately
+ *   before the anchor; used by `"prev-match"` mode.
+ * @param nextRequestLineRange - (Optional) Line range of the request immediately
+ *   after the anchor; used by `"next-match"` mode.
+ * @returns The new merged forced-range array, or `currentForcedRanges` unchanged.
  */
 export function calculateGapExpansion(
   gapId: string,
@@ -305,7 +365,18 @@ export function calculateGapExpansion(
 }
 
 /**
- * Gets gap information for a specific line index within the context of displayed items.
+ * Compute the gap metadata (size, ID, boundary flags) for the gaps immediately
+ * above and below a given line index, given the current set of displayed indices.
+ *
+ * This is the single-line equivalent of the gap annotation performed inside
+ * {@link buildDisplayItems}, used when a caller needs gap info for one specific
+ * line without rebuilding the full display list.
+ *
+ * @param lineIndex - Absolute index of the line of interest in the raw log array.
+ * @param displayedIndices - Sorted list of all currently displayed line indices.
+ * @param totalLines - Total number of lines in the raw log.
+ * @returns An object with optional `up` and `down` {@link GapInfo} entries.
+ *   A key is absent when there is no gap in that direction.
  */
 export function getGapInfoForLine(
   lineIndex: number,

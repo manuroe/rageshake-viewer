@@ -10,10 +10,25 @@ export const CLIENT_ERROR_STATUS_KEY = 'Client Error';
 
 /**
  * Extract unique status codes from an array of requests.
- * Returns sorted status codes with 'Client Error' and 'Incomplete' at the end if applicable.
  *
- * @param requests - Array of requests with optional status and clientError fields
- * @returns Sorted array of unique status codes
+ * Numeric HTTP status codes are sorted ascending; the two synthetic keys
+ * (`CLIENT_ERROR_STATUS_KEY`, `INCOMPLETE_STATUS_KEY`) are always appended
+ * at the end when at least one matching request is present. This ordering
+ * keeps the filter dropdown predictable for users.
+ *
+ * @param requests - Array of requests with optional `status` (HTTP status code
+ *   string, e.g. `"200"`) and `clientError` (transport-level error string) fields.
+ * @returns Sorted array of unique status code strings, ready for display in the
+ *   status-filter dropdown.
+ *
+ * @example
+ * extractAvailableStatusCodes([
+ *   { status: '200' },
+ *   { status: '404' },
+ *   { clientError: 'TimedOut' },
+ *   {},
+ * ])
+ * // => ['200', '404', 'Client Error', 'Incomplete']
  */
 export function extractAvailableStatusCodes(
   requests: Array<{ status?: string; clientError?: string }>

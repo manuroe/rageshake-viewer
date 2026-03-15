@@ -26,6 +26,43 @@ function getHttpErrorStatus(rawText: string): string | null {
   return code >= 400 ? m[1] : null;
 }
 
+/**
+ * Props for LogDisplayView.
+ *
+ * ### `logLines` vs store lines
+ *
+ * When `logLines` is provided it is used as the source of truth instead of
+ * `rawLogLines` from the global store. This is the mechanism used by
+ * request-detail panels to show only the lines that belong to a specific
+ * request, without touching global state.
+ *
+ * When `logLines` is omitted the view reads from the store and shows the
+ * full log, subject to any active filters.
+ *
+ * ### `lineRange` — secondary scoping within the line array
+ *
+ * `lineRange` is an **inclusive** `[start, end]` filter on `lineNumber`
+ * that is applied *after* selecting the line source:
+ *
+ * - If `logLines` is also set, `lineRange` further restricts that slice
+ *   (e.g. a sub-range of lines within the request's own log segment).
+ * - If only `lineRange` is set (no `logLines`), the view searches the
+ *   full store log and initially renders lines whose `lineNumber` falls
+ *   within the range — typically used to open a focused view on a single
+ *   request from the waterfall without constructing a bespoke line array.
+ *
+ * Gap expansion controls are still computed against the selected source
+ * line array. Expanding a gap may therefore reveal lines outside `lineRange`.
+ *
+ * ### Precedence summary
+ *
+ * | `logLines` | `lineRange` | Result |
+ * |---|---|---|
+ * | provided | omitted | shows `logLines` (all) |
+ * | provided | provided | initially shows `logLines` filtered to `lineRange`; gap expansion can reveal surrounding lines |
+ * | omitted | provided | initially shows store lines filtered to `lineRange`; gap expansion can reveal surrounding lines |
+ * | omitted | omitted | shows all store lines |
+ */
 interface LogDisplayViewProps {
   requestFilter?: string;
   defaultShowOnlyMatching?: boolean;
@@ -35,8 +72,15 @@ interface LogDisplayViewProps {
   onFilterChange?: (filter: string) => void;
   prevRequestLineRange?: { start: number; end: number };
   nextRequestLineRange?: { start: number; end: number };
+  /** Override the line source; when absent, falls back to `rawLogLines` from the store. */
   logLines?: ParsedLogLine[];
-  /** When set, only lines whose lineNumber falls within [start, end] are shown. */
+  /**
+   * Inclusive line-number range `[start, end]`. When set, the initial
+   * rendered set is restricted to lines whose `lineNumber` falls within
+   * this range. Gap expansion may reveal lines outside the range. Applied
+   * after the `logLines` / store selection — see interface-level JSDoc for
+   * the full precedence table.
+   */
   lineRange?: { start: number; end: number };
 }
 

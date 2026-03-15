@@ -5,10 +5,27 @@ import { getWaterfallBarWidth } from './timelineUtils';
 type TimeoutResolver = (req: HttpRequest) => number | undefined;
 
 /**
- * Renders the timeout-exceeded (overflow) segment for a waterfall bar.
+ * Render the timeout-exceeded (overflow) segment for a waterfall bar.
  *
- * The base bar stays status-colored up to timeout; only overflow after timeout
- * is rendered with warning color.
+ * The waterfall bar is drawn in two layers: the base layer retains the
+ * request's status colour for the portion up to the configured timeout, and
+ * this overlay paints the remaining overflow portion with
+ * `var(--waterfall-timeout-exceeded)` (a warning colour).
+ *
+ * Returns `null` (no overlay) when:
+ * - the request has no associated timeout,
+ * - the timeout is zero,
+ * - or the request finished within the timeout.
+ *
+ * @param req - The HTTP request whose duration is being visualised.
+ * @param barWidthPx - Total rendered width of the waterfall bar in pixels.
+ * @param msPerPixel - Timeline scale factor: how many milliseconds one pixel represents.
+ * @param totalDuration - Total duration of the visible timeline window in milliseconds,
+ *   used by `getWaterfallBarWidth` to compute the timeout boundary position.
+ * @param timelineWidth - Pixel width of the full timeline container.
+ * @param resolveTimeout - Callback that returns the effective timeout (ms) for the
+ *   given request, or `undefined` when no timeout applies.
+ * @returns A positioned `<div>` overlay element, or `null` if no overflow exists.
  */
 export function renderTimeoutExceededOverlay(
   req: HttpRequest,

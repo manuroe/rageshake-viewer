@@ -1,6 +1,19 @@
 /**
- * Convert a size string from log output (e.g. "48B", "38.8k", "1.2M") to bytes.
- * Uses 1024-based multipliers to match the formatBytes display helper.
+ * Convert a size string from log output to a raw byte count.
+ *
+ * Parses the compact format emitted by the SDK (e.g. `"48B"`, `"38.8k"`, `"1.2M"`).
+ * Uses 1024-based multipliers to stay consistent with {@link formatBytes}.
+ *
+ * @param sizeStr - The size string to parse. Accepts an optional decimal part and
+ *   a unit suffix: `B`/`b` (bytes), `k`/`K` (kibibytes), `m`/`M` (mebibytes),
+ *   `g`/`G` (gibibytes). Returns `0` for empty or unrecognised input.
+ * @returns The equivalent byte count as an integer, or `0` on parse failure.
+ *
+ * @example
+ * parseSizeString('48B')   // => 48
+ * parseSizeString('38.8k') // => 39731
+ * parseSizeString('1.2M')  // => 1258291
+ * parseSizeString('')      // => 0
  */
 export function parseSizeString(sizeStr: string): number {
   if (!sizeStr) return 0;
@@ -18,8 +31,20 @@ export function parseSizeString(sizeStr: string): number {
 }
 
 /**
- * Format a byte count as a human-readable string (e.g. "1.2 MB", "38.8 KB").
- * Uses 1024-based multipliers.
+ * Format a raw byte count as a human-readable string.
+ *
+ * Uses 1024-based (binary) multipliers to stay consistent with
+ * {@link parseSizeString}. The result always has one decimal place for
+ * units ≥ 1 KB.
+ *
+ * @param bytes - Non-negative integer byte count.
+ * @returns A compact string like `"1.2 MB"`, `"38.8 KB"`, or `"512 B"`.
+ *
+ * @example
+ * formatBytes(512)        // => '512 B'
+ * formatBytes(39731)      // => '38.8 KB'
+ * formatBytes(1258291)    // => '1.2 MB'
+ * formatBytes(1073741824) // => '1.0 GB'
  */
 export function formatBytes(bytes: number): string {
   if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
