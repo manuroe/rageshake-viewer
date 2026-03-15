@@ -7,12 +7,13 @@
  * sync requests (`SyncRequest[]`) and HTTP requests (`HttpRequest[]`). Each
  * setter receives the **full** `rawLogLines` array because:
  *
- * 1. Either setter may be called first (the parser resolves them in parallel),
- *    and `rawLogLines` must be available as soon as the first dataset lands.
+ * 1. Parsing and loading can happen through either setter path depending on
+ *    caller flow, and `rawLogLines` must be available as soon as request data
+ *    is loaded.
  * 2. Both sync and HTTP views need the complete line array for timestamp
  *    lookups and gap navigation — not a subset scoped to their own requests.
  *
- * `loadLogParserResult` wraps both setters in a single store update so
+ * `loadLogParserResult` populates all parsed datasets in one store update so
  * subscribers never observe a half-loaded state.
  *
  * ## `statusCodeFilter` semantics
@@ -45,7 +46,7 @@ interface LogStore {
   showIncompleteHttp: boolean;
   
   /**
-   * Controls which HTTP status codes are visible in the requests table.
+    * Controls which status-code buckets are visible in request lists.
    *
    * - `null` — all codes are shown (default; no filtering applied).
    * - `Set<string>` — only requests whose status matches a value in the set
@@ -53,6 +54,8 @@ interface LogStore {
    *   `"404"`) as well as the synthetic keys `INCOMPLETE_STATUS_KEY` and
    *   `CLIENT_ERROR_STATUS_KEY` defined in `statusCodeUtils.ts`.
    *
+    * This filter is consumed by both sync-request and HTTP-request filtering.
+    *
    * The "null = all enabled" convention avoids enumerating every possible
    * code at store initialisation time.
    */

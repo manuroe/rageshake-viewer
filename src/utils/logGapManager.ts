@@ -238,8 +238,8 @@ export function buildDisplayItems(
  * Calculate the updated set of forced ranges that results from the user
  * expanding a gap.
  *
- * The gap is identified by `gapId` (format: `"up-<anchorIndex"` or
- * `"down-<anchorIndex>"`). The `count` parameter controls how many lines
+ * The gap is identified by `gapId` (e.g. `"up-42"` or `"down-42"`).
+ * The `count` parameter controls how many lines
  * are added to the forced set:
  *
  * - `number` — expand exactly N lines toward the gap interior (capped to

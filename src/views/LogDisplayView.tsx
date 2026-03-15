@@ -47,17 +47,20 @@ function getHttpErrorStatus(rawText: string): string | null {
  * - If `logLines` is also set, `lineRange` further restricts that slice
  *   (e.g. a sub-range of lines within the request's own log segment).
  * - If only `lineRange` is set (no `logLines`), the view searches the
- *   full store log but only renders lines whose `lineNumber` falls within
- *   the range — typically used to open a focused view on a single request
- *   from the waterfall without constructing a bespoke line array.
+ *   full store log and initially renders lines whose `lineNumber` falls
+ *   within the range — typically used to open a focused view on a single
+ *   request from the waterfall without constructing a bespoke line array.
+ *
+ * Gap expansion controls are still computed against the selected source
+ * line array. Expanding a gap may therefore reveal lines outside `lineRange`.
  *
  * ### Precedence summary
  *
  * | `logLines` | `lineRange` | Result |
  * |---|---|---|
  * | provided | omitted | shows `logLines` (all) |
- * | provided | provided | shows `logLines` filtered to `lineRange` |
- * | omitted | provided | shows store lines filtered to `lineRange` |
+ * | provided | provided | initially shows `logLines` filtered to `lineRange`; gap expansion can reveal surrounding lines |
+ * | omitted | provided | initially shows store lines filtered to `lineRange`; gap expansion can reveal surrounding lines |
  * | omitted | omitted | shows all store lines |
  */
 interface LogDisplayViewProps {
@@ -72,8 +75,9 @@ interface LogDisplayViewProps {
   /** Override the line source; when absent, falls back to `rawLogLines` from the store. */
   logLines?: ParsedLogLine[];
   /**
-   * Inclusive line-number range `[start, end]`. When set, only lines whose
-   * `lineNumber` falls within this range are rendered. Applied after the
+    * Inclusive line-number range `[start, end]`. When set, the initial
+    * rendered set is restricted to lines whose `lineNumber` falls within
+    * this range. Gap expansion may reveal lines outside the range. Applied after the
    * `logLines` / store selection — see interface-level JSDoc for the full
    * precedence table.
    */
