@@ -29,9 +29,10 @@ export interface HttpRequest {
   /**
    * Per-attempt outcome strings, one per attempt, in attempt order.
    * Each entry is either an HTTP status code (e.g. `'503'`) or a client error
-   * name (e.g. `'TimedOut'`). Only present when intermediate responses are
-   * available in the log (i.e. the SDK emitted a response/error span between
-   * retries). Length equals `numAttempts` when fully resolved.
+   * name (e.g. `'TimedOut'`). Always initialised to an array by the parser;
+   * may be empty for single-attempt requests. For retried requests it is
+   * backfilled to length `numAttempts`, using `INCOMPLETE_STATUS_KEY` for
+   * any attempt whose outcome could not be determined from the log.
    */
   readonly attemptOutcomes?: readonly string[];
 }

@@ -555,7 +555,7 @@ export function RequestTable({
                         ? buildAttemptSegments(req.attemptOutcomes!, req.attemptTimestampsUs as number[], req.requestDurationMs, barWidth)
                         : null;
                       // For retry requests, build a tooltip listing each attempt outcome with its
-                      // individual duration, e.g. "↻3: 503 (20ms) → 503 (100ms) → 200 OK (1500ms) — 1620ms"
+                      // individual duration, e.g. "↻3: 503 (20ms) → 503 (100ms) → 200 (1500ms) — 1620ms"
                       const retryTooltip = hasSegments
                         ? buildRetryTooltip(req.attemptOutcomes!, req.attemptTimestampsUs as number[], req.requestDurationMs, req.numAttempts!)
                         : null;
