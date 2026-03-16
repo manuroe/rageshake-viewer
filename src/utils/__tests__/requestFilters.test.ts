@@ -552,17 +552,17 @@ describe('filterHttpRequests', () => {
     // whose responseLineNumber is 0 (the "no response yet" sentinel).
     const rawLines = [
       createParsedLogLine({ lineNumber: 0, rawText: '2024-01-01 INFO target-keyword on line-zero' }),
-      createParsedLogLine({ lineNumber: 10, rawText: '2024-01-01 INFO Sending request keys/upload' }),
+      createParsedLogLine({ lineNumber: 10, rawText: '2024-01-01 INFO Sending target-keyword request keys/upload' }),
     ];
     const requests = [
-      // Complete request whose send line matches → should appear
+      // Complete request whose send line contains the keyword → should appear
       createHttpRequest({ requestId: 'complete', sendLineNumber: 10, responseLineNumber: 11 }),
       // Incomplete request: responseLineNumber is 0 (sentinel), send line does not match
       createHttpRequest({ requestId: 'incomplete', sendLineNumber: 99, responseLineNumber: 0 }),
     ];
     const result = filterHttpRequests(requests, rawLines, makeFilters({ logFilter: 'target-keyword' }));
 
-    // Only the line-zero content must NOT cause 'incomplete' to match
+    expect(result.map((r) => r.requestId)).toContain('complete');
     expect(result.map((r) => r.requestId)).not.toContain('incomplete');
   });
 
@@ -570,16 +570,17 @@ describe('filterHttpRequests', () => {
     // Line 0 exists in rawLines — it must NOT be consulted when sendLineNumber is 0.
     const rawLines = [
       createParsedLogLine({ lineNumber: 0, rawText: '2024-01-01 INFO target-keyword on line-zero' }),
-      createParsedLogLine({ lineNumber: 11, rawText: '2024-01-01 INFO Received 200 OK for keys/upload' }),
+      createParsedLogLine({ lineNumber: 11, rawText: '2024-01-01 INFO Received 200 OK target-keyword for keys/upload' }),
     ];
     const requests = [
-      // Complete request whose response line matches → should appear
+      // Complete request whose response line contains the keyword → should appear
       createHttpRequest({ requestId: 'complete', sendLineNumber: 10, responseLineNumber: 11 }),
       // Record with no send line: sendLineNumber is 0 (sentinel), response line does not match
       createHttpRequest({ requestId: 'nosend', sendLineNumber: 0, responseLineNumber: 99 }),
     ];
     const result = filterHttpRequests(requests, rawLines, makeFilters({ logFilter: 'target-keyword' }));
 
+    expect(result.map((r) => r.requestId)).toContain('complete');
     expect(result.map((r) => r.requestId)).not.toContain('nosend');
   });
 
