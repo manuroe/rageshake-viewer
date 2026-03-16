@@ -153,7 +153,7 @@ export function RequestTable({
   const [logFilterInput, setLogFilterInput] = useState(logFilter ?? '');
   const debouncedLogFilter = useDebouncedValue(logFilterInput, 300);
 
-  // Ref for Cmd+F shortcut (focus URI filter)
+  // Ref for Cmd+F shortcut (focus log filter)
   const filterInputRef = useRef<SearchInputHandle>(null);
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;

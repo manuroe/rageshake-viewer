@@ -128,6 +128,15 @@ export function filterHttpRequests(
 
   const timeRangeUs = getTimeRangeUs(rawLogLines, startTime, endTime);
 
+  // Hoist log-filter helpers outside the per-request callback to avoid
+  // repeated allocations when filtering large request sets.
+  const logQuery = logFilter && logFilter.length > 0 ? logFilter.toLowerCase() : null;
+  // sendLineNumber and responseLineNumber are both normalised to 0 as a sentinel meaning
+  // "not present" (e.g. incomplete request = no response, response-only record = no send).
+  // Skip the lookup when the sentinel is set to avoid accidentally matching line 0.
+  const getLine = (lineNum: number): ParsedLogLine | undefined =>
+    lineNumberIndex ? lineNumberIndex.get(lineNum) : rawLogLines.find((l) => l.lineNumber === lineNum);
+
   return requests.filter((r) => {
     // Incomplete filter — client errors always show (they are resolved, not truly incomplete)
     if (!showIncompleteHttp && !r.status && !r.clientError) return false;
@@ -150,18 +159,12 @@ export function filterHttpRequests(
 
     // Log filter: case-insensitive substring match against the raw text of the
     // request's send line and response line (the two lines the SDK emits per request).
-    if (logFilter && logFilter.length > 0) {
-      const query = logFilter.toLowerCase();
-      const getLine = (lineNum: number): ParsedLogLine | undefined =>
-        lineNumberIndex ? lineNumberIndex.get(lineNum) : rawLogLines.find((l) => l.lineNumber === lineNum);
-      // sendLineNumber and responseLineNumber are both normalised to 0 as a sentinel meaning
-      // "not present" (e.g. incomplete request = no response, response-only record = no send).
-      // Skip the lookup when the sentinel is set to avoid accidentally matching line 0.
+    if (logQuery !== null) {
       const sendRaw =
         r.sendLineNumber !== 0 ? (getLine(r.sendLineNumber)?.rawText.toLowerCase() ?? '') : '';
       const responseRaw =
         r.responseLineNumber !== 0 ? (getLine(r.responseLineNumber)?.rawText.toLowerCase() ?? '') : '';
-      if (!sendRaw.includes(query) && !responseRaw.includes(query)) return false;
+      if (!sendRaw.includes(logQuery) && !responseRaw.includes(logQuery)) return false;
     }
 
     // Time filter

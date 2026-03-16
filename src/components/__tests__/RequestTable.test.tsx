@@ -444,7 +444,7 @@ describe('RequestTable', () => {
   });
 
   // ============================================================================
-  // URI Filter Integration Tests
+  // Log Filter Integration Tests
   // ============================================================================
 
   describe('Log Filter SearchInput', () => {
