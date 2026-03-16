@@ -547,6 +547,25 @@ describe('filterHttpRequests', () => {
     expect(result[0].requestId).toBe('A');
   });
 
+  it('does not match line 0 for incomplete requests (responseLineNumber === 0 sentinel)', () => {
+    // Line 0 exists in rawLines — it must NOT be consulted for an incomplete request
+    // whose responseLineNumber is 0 (the "no response yet" sentinel).
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 0, rawText: '2024-01-01 INFO target-keyword on line-zero' }),
+      createParsedLogLine({ lineNumber: 10, rawText: '2024-01-01 INFO Sending request keys/upload' }),
+    ];
+    const requests = [
+      // Complete request whose send line matches → should appear
+      createHttpRequest({ requestId: 'complete', sendLineNumber: 10, responseLineNumber: 11 }),
+      // Incomplete request: responseLineNumber is 0 (sentinel), send line does not match
+      createHttpRequest({ requestId: 'incomplete', sendLineNumber: 99, responseLineNumber: 0 }),
+    ];
+    const result = filterHttpRequests(requests, rawLines, makeFilters({ logFilter: 'target-keyword' }));
+
+    // Only the line-zero content must NOT cause 'incomplete' to match
+    expect(result.map((r) => r.requestId)).not.toContain('incomplete');
+  });
+
   it('null logFilter shows all requests', () => {
     const requests = [
       createHttpRequest({ requestId: 'A', sendLineNumber: 0 }),

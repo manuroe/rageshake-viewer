@@ -155,7 +155,10 @@ export function filterHttpRequests(
       const getLine = (lineNum: number): ParsedLogLine | undefined =>
         lineNumberIndex ? lineNumberIndex.get(lineNum) : rawLogLines.find((l) => l.lineNumber === lineNum);
       const sendRaw = getLine(r.sendLineNumber)?.rawText.toLowerCase() ?? '';
-      const responseRaw = getLine(r.responseLineNumber)?.rawText.toLowerCase() ?? '';
+      // responseLineNumber === 0 is a sentinel meaning "no response yet" (incomplete request).
+      // Skip the lookup to avoid accidentally matching an unrelated line 0.
+      const responseRaw =
+        r.responseLineNumber !== 0 ? (getLine(r.responseLineNumber)?.rawText.toLowerCase() ?? '') : '';
       if (!sendRaw.includes(query) && !responseRaw.includes(query)) return false;
     }
 
