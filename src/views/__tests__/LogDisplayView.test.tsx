@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, waitFor, act } from '@testing-library/react';
 import { screen, fireEvent, createEvent } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -1344,3 +1344,39 @@ describe('LogDisplayView sentry and HTTP error text coloring', () => {
     expect(textSpan.style.color).toBe('');
   });
 });
+
+describe('LogDisplayView export button', () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    global.URL.createObjectURL = vi.fn(() => 'blob:mock');
+    global.URL.revokeObjectURL = vi.fn();
+  });
+
+  it('shows an export button in the toolbar', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView />);
+    expect(screen.getByRole('button', { name: /export logs/i })).toBeInTheDocument();
+  });
+
+  it('opens the export dialog when the export button is clicked', async () => {
+    const user = userEvent.setup();
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView />);
+    await user.click(screen.getByRole('button', { name: /export logs/i }));
+    expect(screen.getByRole('dialog', { name: /export logs/i })).toBeInTheDocument();
+  });
+
+  it('closes the export dialog when the dialog close button is clicked', async () => {
+    const user = userEvent.setup();
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView />);
+    await user.click(screen.getByRole('button', { name: /export logs/i }));
+    expect(screen.getByRole('dialog', { name: /export logs/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /close export dialog/i }));
+    expect(screen.queryByRole('dialog', { name: /export logs/i })).not.toBeInTheDocument();
+  });
+});
+

@@ -1,0 +1,296 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { MouseEvent, ChangeEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { buildExportText, type ExportContext, type ExportOptions } from '../utils/logExportUtils';
+import type { DisplayItem } from '../utils/logGapManager';
+import styles from './LogExportDialog.module.css';
+
+interface LogExportDialogProps {
+  /** The currently visible items from LogDisplayView, in display order. */
+  readonly displayItems: DisplayItem[];
+  /** Snapshot of the active view state, used to populate the intro header. */
+  readonly context: ExportContext;
+  /** Called when the dialog should be closed. */
+  readonly onClose: () => void;
+}
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Duration in ms that the "Copied!" / "Saved!" confirmation label is shown. */
+const CONFIRM_DURATION_MS = 2000;
+
+/**
+ * Modal dialog for configuring and triggering a log export.
+ *
+ * Users can choose formatting options (intro header, line numbers, gap
+ * indicators, strip prefix, max line width) and then either copy the result
+ * to the clipboard or save it as a `.log` file.
+ *
+ * The dialog follows the same backdrop + panel pattern as `ShortcutHelpOverlay`,
+ * with keyboard focus management and an Escape-to-close shortcut.
+ */
+export function LogExportDialog({ displayItems, context, onClose }: LogExportDialogProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // ---------------------------------------------------------------------------
+  // Option state (all off by default, except stripPrefix which mirrors the view)
+  // ---------------------------------------------------------------------------
+  const [showIntro, setShowIntro] = useState(false);
+  const [showLineNumbers, setShowLineNumbers] = useState(false);
+  const [showGaps, setShowGaps] = useState(false);
+  const [collapseDuplicates, setCollapseDuplicates] = useState(false);
+  const [stripPrefix, setStripPrefix] = useState(false);
+  const [maxWidthEnabled, setMaxWidthEnabled] = useState(false);
+  const [maxWidth, setMaxWidth] = useState(120);
+
+  /** `null` = no confirmation visible; `'copy'` or `'save'` = show label for that action. */
+  const [confirmation, setConfirmation] = useState<'copy' | 'save' | null>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Focus management
+  // ---------------------------------------------------------------------------
+
+  // Focus the close button when the dialog opens; restore previous focus on close
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    return () => {
+      prev?.focus();
+    };
+  }, []);
+
+  // Focus trap: cycle Tab / Shift+Tab within the panel
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    panel.addEventListener('keydown', handleKey);
+    return () => panel.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  // Close when clicking the backdrop (outside the panel)
+  const handleBackdropClick = useCallback(
+    (e: MouseEvent) => {
+      if (e.target === e.currentTarget) onClose();
+    },
+    [onClose],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Export helpers
+  // ---------------------------------------------------------------------------
+
+  const buildOptions = (): ExportOptions => ({
+    showIntro,
+    showLineNumbers,
+    showGaps,
+    stripPrefix,
+    maxWidthEnabled,
+    maxWidth: maxWidthEnabled ? maxWidth : 120,
+    collapseDuplicates,
+  });
+
+  const showConfirmation = (action: 'copy' | 'save') => {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    setConfirmation(action);
+    confirmTimerRef.current = setTimeout(() => setConfirmation(null), CONFIRM_DURATION_MS);
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+
+  const handleCopy = async () => {
+    const text = buildExportText(displayItems, buildOptions(), context);
+    await navigator.clipboard.writeText(text);
+    showConfirmation('copy');
+  };
+
+  const handleSave = () => {
+    const text = buildExportText(displayItems, buildOptions(), context);
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'export.log';
+    a.click();
+    URL.revokeObjectURL(url);
+    showConfirmation('save');
+  };
+
+  const handleMaxWidthChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = parseInt(e.target.value, 10);
+    if (!isNaN(val) && val >= 4) setMaxWidth(val);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
+  return createPortal(
+    <div className={styles.backdrop} onClick={handleBackdropClick}>
+      <div
+        ref={panelRef}
+        className={styles.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Export logs"
+      >
+        {/* Header */}
+        <div className={styles.header}>
+          <h2 className={styles.title}>Export Logs</h2>
+          <button
+            ref={closeButtonRef}
+            className={styles.closeButton}
+            onClick={onClose}
+            aria-label="Close export dialog"
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Options */}
+        <div className={styles.optionsSection}>
+          <label className={styles.optionRow}>
+            <input
+              type="checkbox"
+              checked={showIntro}
+              onChange={(e) => setShowIntro(e.target.checked)}
+            />
+            <span className={styles.optionLabel}>
+              Include introduction header
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-size-sm)', marginLeft: 6 }}>
+                (lists active filters and view settings)
+              </span>
+            </span>
+          </label>
+
+          <label className={styles.optionRow}>
+            <input
+              type="checkbox"
+              checked={showLineNumbers}
+              onChange={(e) => setShowLineNumbers(e.target.checked)}
+            />
+            <span className={styles.optionLabel}>Prefix lines with original line numbers</span>
+          </label>
+
+          <label className={styles.optionRow}>
+            <input
+              type="checkbox"
+              checked={showGaps}
+              onChange={(e) => setShowGaps(e.target.checked)}
+            />
+            <span className={styles.optionLabel}>Show line gaps (e.g. <code>... 12 lines ...</code>)</span>
+          </label>
+
+          <label className={styles.optionRow}>
+            <input
+              type="checkbox"
+              checked={collapseDuplicates}
+              onChange={(e) => setCollapseDuplicates(e.target.checked)}
+            />
+            <span className={styles.optionLabel}>
+              Collapse consecutive duplicate lines
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-size-sm)', marginLeft: 6 }}>
+                (shown in gaps when enabled)
+              </span>
+            </span>
+          </label>
+
+          <label className={styles.optionRow}>
+            <input
+              type="checkbox"
+              checked={stripPrefix}
+              onChange={(e) => setStripPrefix(e.target.checked)}
+            />
+            <span className={styles.optionLabel}>Strip timestamp and log-level prefix</span>
+          </label>
+
+          <label className={styles.optionRow}>
+            <input
+              type="checkbox"
+              checked={maxWidthEnabled}
+              onChange={(e) => setMaxWidthEnabled(e.target.checked)}
+            />
+            <span className={styles.optionLabel}>Wrap lines at</span>
+            <input
+              type="number"
+              min={4}
+              max={2000}
+              value={maxWidth}
+              onChange={handleMaxWidthChange}
+              disabled={!maxWidthEnabled}
+              className={styles.widthInput}
+              aria-label="Maximum line width in characters"
+              title="Wrap lines at this column (characters)"
+            />
+            <span className={styles.optionUnit}>chars</span>
+          </label>
+        </div>
+
+        <hr className={styles.divider} />
+
+        {/* Export actions */}
+        <div className={styles.actionRow}>
+          <button
+            className={styles.actionButton}
+            onClick={handleCopy}
+            title="Copy exported log to clipboard"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="5" y="4" width="8" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" fill="none"/>
+              <path d="M3 11V3a1 1 0 0 1 1-1h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            Copy to clipboard
+          </button>
+          <button
+            className={styles.actionButton}
+            onClick={handleSave}
+            title="Download exported log as a .log file"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 12h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            Save to file
+          </button>
+          {confirmation && (
+            <span className={styles.confirmLabel} role="status" aria-live="polite">
+              {confirmation === 'copy' ? 'Copied!' : 'Saved!'}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}

@@ -14,6 +14,8 @@ import { optionKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
+import { LogExportDialog } from '../components/LogExportDialog';
+import type { ExportContext } from '../utils/logExportUtils';
 import styles from './LogDisplayView.module.css';
 
 const HTTP_ERROR_RE = /\bstatus=(\d{3})\b/;
@@ -85,7 +87,7 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
-  const { rawLogLines, sentryEvents } = useLogStore();
+  const { rawLogLines, sentryEvents, startTime, endTime } = useLogStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
@@ -161,6 +163,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
   const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
   const [collapseEnabled, setCollapseEnabled] = useState(true);
+  const [showExport, setShowExport] = useState(false);
 
   // Option+w → toggle line wrap; Option+p → toggle strip prefix
   useEffect(() => {
@@ -239,6 +242,18 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const displayIndices = useMemo(() => {
     return displayItems.map((item) => item.data.index);
   }, [displayItems]);
+
+  // Snapshot of current view settings passed to the export dialog
+  const exportContext = useMemo<ExportContext>(() => ({
+    filterQuery,
+    contextLines,
+    lineWrap,
+    stripPrefix,
+    collapseEnabled,
+    lineRange,
+    startTime,
+    endTime,
+  }), [filterQuery, contextLines, lineWrap, stripPrefix, collapseEnabled, lineRange, startTime, endTime]);
 
   // Search determines highlighting within all currently rendered lines (including
   // lines expanded from collapsed groups via forcedRanges).
@@ -578,30 +593,39 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
               disabled={!filterQuery.trim()}
             />
           </div>
-          {(onExpand || onClose) && (
-            <div className={styles.logToolbarActions}>
-              {onExpand && (
-                <button
-                  className={`${styles.btnToolbar} ${styles.btnIcon}`}
-                  onClick={() => onExpand()}
-                  aria-label="Open in Logs view"
-                  title="Open in Logs view"
-                >
-                  ⤢
-                </button>
-              )}
-              {onClose && (
-                <button
-                  className={`${styles.btnToolbar} ${styles.btnIcon} ${styles.closeIcon}`}
-                  onClick={onClose}
-                  aria-label="Close log viewer"
-                  title="Close"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          )}
+          <div className={styles.logToolbarActions}>
+            <button
+              className={`${styles.btnToolbar} ${styles.btnIcon}`}
+              onClick={() => setShowExport(true)}
+              aria-label="Export logs"
+              title="Export visible logs"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M2 12h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </button>
+            {onExpand && (
+              <button
+                className={`${styles.btnToolbar} ${styles.btnIcon}`}
+                onClick={() => onExpand()}
+                aria-label="Open in Logs view"
+                title="Open in Logs view"
+              >
+                ⤢
+              </button>
+            )}
+            {onClose && (
+              <button
+                className={`${styles.btnToolbar} ${styles.btnIcon} ${styles.closeIcon}`}
+                onClick={onClose}
+                aria-label="Close log viewer"
+                title="Close"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -750,6 +774,14 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
         <div className={styles.logEmptyState}>
           No log data available. Please upload a log file.
         </div>
+      )}
+
+      {showExport && (
+        <LogExportDialog
+          displayItems={displayItems}
+          context={exportContext}
+          onClose={() => setShowExport(false)}
+        />
       )}
 
       {contextMenu && (

@@ -1,0 +1,177 @@
+/* LogExportDialog Component Styles */
+
+/* Dark backdrop */
+.backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 120ms ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* Modal panel */
+.panel {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: 24px 28px;
+    width: min(480px, calc(100vw - 32px));
+    animation: slideUp 140ms ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(8px); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+}
+
+/* Header row */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.title {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.closeButton {
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--font-size-xl);
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: color var(--transition-default), background var(--transition-default);
+}
+
+.closeButton:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+/* Options section */
+.optionsSection {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+/* A single option row — checkbox + label, and optional inline number input */
+.optionRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.optionRow input[type="checkbox"] {
+    cursor: pointer;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.optionLabel {
+    flex: 1;
+}
+
+.optionUnit {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+/* Inline number input next to "Max line width" */
+.widthInput {
+    width: 70px;
+    padding: 3px 6px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-md);
+    text-align: center;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    transition: border-color var(--transition-default);
+}
+
+.widthInput:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-muted);
+}
+
+.widthInput:disabled {
+    background: var(--bg-secondary);
+    color: var(--text-placeholder);
+    cursor: not-allowed;
+}
+
+/* Divider between options and export actions */
+.divider {
+    border: none;
+    border-top: 1px solid var(--border-default);
+    margin: 20px 0;
+}
+
+/* Export action buttons row */
+.actionRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.actionButton {
+    flex: 1;
+    padding: 9px 16px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all var(--transition-default);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.actionButton:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+.actionButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Transient confirmation label */
+.confirmLabel {
+    font-size: var(--font-size-sm);
+    color: var(--color-success, #22c55e);
+    min-width: 56px;
+    text-align: center;
+    flex-shrink: 0;
+}
