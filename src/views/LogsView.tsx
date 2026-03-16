@@ -7,16 +7,16 @@ import { TimeRangeSelector } from '../components/TimeRangeSelector';
 import { calculateTimeRangeMicros, getMinMaxTimestamps } from '../utils/timeUtils';
 
 export function LogsView() {
-  const { rawLogLines, startTime, endTime, uriFilter } = useLogStore();
-  const { setUriFilter } = useURLParams();
+  const { rawLogLines, startTime, endTime, logFilter } = useLogStore();
+  const { setLogFilter } = useURLParams();
   
   // Get filter from store (synced from URL via App.tsx)
-  const filterPrefill = uriFilter ?? '';
+  const filterPrefill = logFilter ?? '';
 
   // Callback to update URL when filter changes
   const handleFilterChange = useCallback((filter: string) => {
-    setUriFilter(filter || null);
-  }, [setUriFilter]);
+    setLogFilter(filter || null);
+  }, [setLogFilter]);
 
   // Filter log lines by time range only
   const filteredLines = useMemo(() => {

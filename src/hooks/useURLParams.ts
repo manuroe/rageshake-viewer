@@ -84,8 +84,8 @@ export function useURLParams() {
     });
   }, [updateParams]);
 
-  // Set URI filter
-  const setUriFilter = useCallback((newFilter: string | null) => {
+  // Set log content filter
+  const setLogFilter = useCallback((newFilter: string | null) => {
     updateParams({
       // Omit from URL if empty
       filter: newFilter && newFilter.length > 0 ? newFilter : null,
@@ -119,7 +119,7 @@ export function useURLParams() {
     setTimeFilter,
     setScale,
     setStatusFilter,
-    setUriFilter,
+    setLogFilter,
     setRequestId,
     setTimeoutFilter,
   };

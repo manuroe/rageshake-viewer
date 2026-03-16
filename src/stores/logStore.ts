@@ -61,8 +61,8 @@ interface LogStore {
    */
   statusCodeFilter: Set<string> | null;
   
-  // URI filter for HTTP requests (null = no filter, string = substring match)
-  uriFilter: string | null;
+  // Log content filter for HTTP requests (null = no filter, string = case-insensitive substring match against send/response line rawText)
+  logFilter: string | null;
   
   // Global filters (shared across all views)
   startTime: string | null;
@@ -101,7 +101,7 @@ interface LogStore {
   setHttpRequests: (requests: HttpRequest[], rawLines: ParsedLogLine[]) => void;
   setShowIncompleteHttp: (show: boolean) => void;
   setStatusCodeFilter: (filter: Set<string> | null) => void;
-  setUriFilter: (filter: string | null) => void;
+  setLogFilter: (filter: string | null) => void;
   filterHttpRequests: () => void;
   
   // Global actions
@@ -180,8 +180,8 @@ export const useLogStore = create<LogStore>((set, get) => ({
   // Status code filter (null = all enabled)
   statusCodeFilter: null,
   
-  // URI filter (null = no filter)
-  uriFilter: null,
+  // Log content filter (null = no filter)
+  logFilter: null,
   
   // Global filters
   startTime: null,
@@ -255,8 +255,8 @@ export const useLogStore = create<LogStore>((set, get) => ({
     get().filterRequests();
   },
 
-  setUriFilter: (filter) => {
-    set({ uriFilter: filter });
+  setLogFilter: (filter) => {
+    set({ logFilter: filter });
     get().filterHttpRequests();
   },
 
@@ -311,14 +311,14 @@ export const useLogStore = create<LogStore>((set, get) => ({
   },
 
   filterHttpRequests: () => {
-    const { allHttpRequests, rawLogLines, showIncompleteHttp, statusCodeFilter, uriFilter, startTime, endTime } = get();
+    const { allHttpRequests, rawLogLines, lineNumberIndex, showIncompleteHttp, statusCodeFilter, logFilter, startTime, endTime } = get();
     const filtered = filterHttpRequests(allHttpRequests, rawLogLines, {
       showIncompleteHttp,
       statusCodeFilter,
-      uriFilter,
+      logFilter,
       startTime,
       endTime,
-    });
+    }, lineNumberIndex);
     set({ filteredHttpRequests: filtered });
   },
 
@@ -332,7 +332,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       allHttpRequests: [],
       filteredHttpRequests: [],
       statusCodeFilter: null,
-      uriFilter: null,
+      logFilter: null,
       startTime: null,
       endTime: null,
       expandedRows: new Set(),

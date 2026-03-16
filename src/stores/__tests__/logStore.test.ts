@@ -32,7 +32,7 @@ describe('logStore', () => {
       expect(state.connectionIds).toEqual([]);
       expect(state.rawLogLines).toEqual([]);
       expect(state.statusCodeFilter).toBeNull();
-      expect(state.uriFilter).toBeNull();
+      expect(state.logFilter).toBeNull();
       expect(state.startTime).toBeNull();
       expect(state.endTime).toBeNull();
     });
@@ -438,9 +438,7 @@ describe('logStore', () => {
       useLogStore.getState().openLogViewer('REQ-2');
       useLogStore.getState().setTimeFilter('00:00:00', '00:00:10');
       useLogStore.getState().setStatusCodeFilter(new Set(['200']));
-      useLogStore.getState().setUriFilter('sync');
-
-      // Clear all data
+      useLogStore.getState().setLogFilter('sync');
       useLogStore.getState().clearData();
       const state = useLogStore.getState();
 
@@ -453,7 +451,7 @@ describe('logStore', () => {
       expect(state.expandedRows.size).toBe(0);
       expect(state.openLogViewerIds.size).toBe(0);
       expect(state.statusCodeFilter).toBeNull();
-      expect(state.uriFilter).toBeNull();
+      expect(state.logFilter).toBeNull();
       expect(state.startTime).toBeNull();
       expect(state.endTime).toBeNull();
     });
@@ -469,33 +467,47 @@ describe('logStore', () => {
     });
   });
 
-  describe('setUriFilter', () => {
-    it('sets the uri filter and triggers filterHttpRequests', () => {
-      const requests = [
-        createHttpRequest({ uri: 'https://matrix.org/sync' }),
-        createHttpRequest({ uri: 'https://matrix.org/keys/upload' }),
-        createHttpRequest({ uri: 'https://matrix.org/rooms/join' }),
+  describe('setLogFilter', () => {
+    it('sets the log filter and triggers filterHttpRequests', () => {
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, rawText: '2024-01-01 INFO Sending request https://matrix.org/sync' }),
+        createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01 INFO Received 200 OK' }),
+        createParsedLogLine({ lineNumber: 2, rawText: '2024-01-01 INFO Sending request https://matrix.org/keys/upload' }),
+        createParsedLogLine({ lineNumber: 3, rawText: '2024-01-01 INFO Received 200 OK' }),
+        createParsedLogLine({ lineNumber: 4, rawText: '2024-01-01 INFO Sending request https://matrix.org/rooms/join' }),
+        createParsedLogLine({ lineNumber: 5, rawText: '2024-01-01 INFO Received 200 OK' }),
       ];
-      useLogStore.getState().setHttpRequests(requests, []);
+      const requests = [
+        createHttpRequest({ requestId: 'A', sendLineNumber: 0, responseLineNumber: 1 }),
+        createHttpRequest({ requestId: 'B', sendLineNumber: 2, responseLineNumber: 3 }),
+        createHttpRequest({ requestId: 'C', sendLineNumber: 4, responseLineNumber: 5 }),
+      ];
+      useLogStore.getState().setHttpRequests(requests, rawLines);
 
-      // Filter to sync endpoint
-      useLogStore.getState().setUriFilter('sync');
+      // Filter to sync endpoint (matches rawText of request A)
+      useLogStore.getState().setLogFilter('sync');
       const state = useLogStore.getState();
 
-      expect(state.uriFilter).toBe('sync');
+      expect(state.logFilter).toBe('sync');
       expect(state.filteredHttpRequests).toHaveLength(1);
-      expect(state.filteredHttpRequests[0].uri).toContain('sync');
+      expect(state.filteredHttpRequests[0].requestId).toBe('A');
     });
 
     it('performs case-insensitive substring matching', () => {
-      const requests = [
-        createHttpRequest({ uri: 'https://matrix.org/SYNC' }),
-        createHttpRequest({ uri: 'https://matrix.org/keys' }),
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, rawText: '2024-01-01 INFO Sending request https://matrix.org/SYNC' }),
+        createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01 INFO Received 200 OK' }),
+        createParsedLogLine({ lineNumber: 2, rawText: '2024-01-01 INFO Sending request https://matrix.org/keys' }),
+        createParsedLogLine({ lineNumber: 3, rawText: '2024-01-01 INFO Received 200 OK' }),
       ];
-      useLogStore.getState().setHttpRequests(requests, []);
+      const requests = [
+        createHttpRequest({ requestId: 'A', sendLineNumber: 0, responseLineNumber: 1 }),
+        createHttpRequest({ requestId: 'B', sendLineNumber: 2, responseLineNumber: 3 }),
+      ];
+      useLogStore.getState().setHttpRequests(requests, rawLines);
 
-      // Lowercase filter should match uppercase URI
-      useLogStore.getState().setUriFilter('sync');
+      // Lowercase filter should match uppercase text in rawText
+      useLogStore.getState().setLogFilter('sync');
       const state = useLogStore.getState();
 
       expect(state.filteredHttpRequests).toHaveLength(1);
@@ -505,10 +517,10 @@ describe('logStore', () => {
       const requests = createHttpRequests(3);
       useLogStore.getState().setHttpRequests(requests, []);
 
-      useLogStore.getState().setUriFilter('nonexistent');
+      useLogStore.getState().setLogFilter('nonexistent');
       expect(useLogStore.getState().filteredHttpRequests).toHaveLength(0);
 
-      useLogStore.getState().setUriFilter(null);
+      useLogStore.getState().setLogFilter(null);
       expect(useLogStore.getState().filteredHttpRequests).toHaveLength(3);
     });
 
@@ -516,23 +528,31 @@ describe('logStore', () => {
       const requests = createHttpRequests(3);
       useLogStore.getState().setHttpRequests(requests, []);
 
-      useLogStore.getState().setUriFilter('');
+      useLogStore.getState().setLogFilter('');
       expect(useLogStore.getState().filteredHttpRequests).toHaveLength(3);
     });
 
     it('combines with other filters', () => {
-      const requests = [
-        createHttpRequest({ uri: 'https://matrix.org/sync', status: '200' }),
-        createHttpRequest({ uri: 'https://matrix.org/sync', status: '500' }),
-        createHttpRequest({ uri: 'https://matrix.org/keys', status: '200' }),
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, rawText: '2024-01-01 INFO Sending request https://matrix.org/sync' }),
+        createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01 INFO Received 200 OK' }),
+        createParsedLogLine({ lineNumber: 2, rawText: '2024-01-01 INFO Sending request https://matrix.org/sync' }),
+        createParsedLogLine({ lineNumber: 3, rawText: '2024-01-01 INFO Received 500 Internal Server Error' }),
+        createParsedLogLine({ lineNumber: 4, rawText: '2024-01-01 INFO Sending request https://matrix.org/keys' }),
+        createParsedLogLine({ lineNumber: 5, rawText: '2024-01-01 INFO Received 200 OK' }),
       ];
-      useLogStore.getState().setHttpRequests(requests, []);
+      const requests = [
+        createHttpRequest({ requestId: 'A', sendLineNumber: 0, responseLineNumber: 1, status: '200' }),
+        createHttpRequest({ requestId: 'B', sendLineNumber: 2, responseLineNumber: 3, status: '500' }),
+        createHttpRequest({ requestId: 'C', sendLineNumber: 4, responseLineNumber: 5, status: '200' }),
+      ];
+      useLogStore.getState().setHttpRequests(requests, rawLines);
 
-      // Filter by URI
-      useLogStore.getState().setUriFilter('sync');
+      // Filter by log content (matches requests A and B)
+      useLogStore.getState().setLogFilter('sync');
       expect(useLogStore.getState().filteredHttpRequests).toHaveLength(2);
 
-      // Also filter by status
+      // Also filter by status — only A remains
       useLogStore.getState().setStatusCodeFilter(new Set(['200']));
       expect(useLogStore.getState().filteredHttpRequests).toHaveLength(1);
     });

@@ -22,7 +22,8 @@ export interface SyncRequestFilters {
 export interface HttpRequestFilters {
   showIncompleteHttp: boolean;
   statusCodeFilter: Set<string> | null;
-  uriFilter: string | null;
+  /** Case-insensitive substring matched against the rawText of the request's send and response log lines. */
+  logFilter: string | null;
   startTime: TimeFilterValue | null;
   endTime: TimeFilterValue | null;
 }
@@ -113,13 +114,17 @@ export function filterSyncRequests(
 
 /**
  * Filter general HTTP requests according to current filter state.
+ *
+ * @param lineNumberIndex - Optional prebuilt line-number index for O(1) lookups.
+ *   When omitted, falls back to a linear scan of rawLogLines (used by tests).
  */
 export function filterHttpRequests(
   requests: HttpRequest[],
   rawLogLines: ParsedLogLine[],
-  filters: HttpRequestFilters
+  filters: HttpRequestFilters,
+  lineNumberIndex?: Map<number, ParsedLogLine>
 ): HttpRequest[] {
-  const { showIncompleteHttp, statusCodeFilter, uriFilter, startTime, endTime } = filters;
+  const { showIncompleteHttp, statusCodeFilter, logFilter, startTime, endTime } = filters;
 
   const timeRangeUs = getTimeRangeUs(rawLogLines, startTime, endTime);
 
@@ -143,9 +148,15 @@ export function filterHttpRequests(
       if (!matchesFinal && !matchesAttempt) return false;
     }
 
-    // URI filter (case-insensitive substring match)
-    if (uriFilter && uriFilter.length > 0) {
-      if (!r.uri.toLowerCase().includes(uriFilter.toLowerCase())) return false;
+    // Log filter: case-insensitive substring match against the raw text of the
+    // request's send line and response line (the two lines the SDK emits per request).
+    if (logFilter && logFilter.length > 0) {
+      const query = logFilter.toLowerCase();
+      const getLine = (lineNum: number): ParsedLogLine | undefined =>
+        lineNumberIndex ? lineNumberIndex.get(lineNum) : rawLogLines.find((l) => l.lineNumber === lineNum);
+      const sendRaw = getLine(r.sendLineNumber)?.rawText.toLowerCase() ?? '';
+      const responseRaw = getLine(r.responseLineNumber)?.rawText.toLowerCase() ?? '';
+      if (!sendRaw.includes(query) && !responseRaw.includes(query)) return false;
     }
 
     // Time filter

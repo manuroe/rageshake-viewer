@@ -192,9 +192,9 @@ describe('LogsView', () => {
     expect(shownCount).toBe(10);
   });
 
-  it('does not clear filter param on mount when uriFilter is set', async () => {
+  it('does not clear filter param on mount when logFilter is set', async () => {
     const logs = createParsedLogLines(10);
-    useLogStore.setState({ rawLogLines: logs, uriFilter: 'existing-filter' });
+    useLogStore.setState({ rawLogLines: logs, logFilter: 'existing-filter' });
 
     // Clear any previous calls
     mockSetSearchParams.mockClear();
@@ -217,14 +217,14 @@ describe('LogsView', () => {
     });
   });
 
-  it('uses uriFilter from store as filterPrefill (non-null uriFilter path)', () => {
-    // This exercises the `uriFilter ?? ''` left branch (idx=0) on L18
+  it('uses logFilter from store as filterPrefill (non-null logFilter path)', () => {
+    // This exercises the `logFilter ?? ''` left branch (idx=0) on L18
     const logs = createParsedLogLines(5);
-    useLogStore.setState({ rawLogLines: logs, uriFilter: 'my-uri-filter' });
+    useLogStore.setState({ rawLogLines: logs, logFilter: 'my-log-filter' });
 
     const { container } = render(<LogsView />);
 
-    // Component renders successfully with the non-null uriFilter
+    // Component renders successfully with the non-null logFilter
     expect(container.querySelector('.logs-view-container')).toBeInTheDocument();
   });
 
@@ -257,7 +257,7 @@ describe('LogsView', () => {
     expect(container.querySelector('.logs-view-container')).toBeInTheDocument();
   });
 
-  it('calls setUriFilter via handleFilterChange when filter input is changed', () => {
+  it('calls setLogFilter via handleFilterChange when filter input is changed', () => {
     // Use fake timers to control debounce
     vi.useFakeTimers();
 
@@ -279,19 +279,19 @@ describe('LogsView', () => {
       vi.advanceTimersByTime(400);
     });
 
-    // mockSetSearchParams should have been called since setUriFilter was invoked
+    // mockSetSearchParams should have been called since setLogFilter was invoked
     expect(mockSetSearchParams).toHaveBeenCalled();
 
     unmount();
     vi.useRealTimers();
   });
 
-  it('calls setUriFilter(null) when filter is cleared (falsy branch of filter || null)', () => {
+  it('calls setLogFilter(null) when filter is cleared (falsy branch of filter || null)', () => {
     vi.useFakeTimers();
 
     const logs = createParsedLogLines(3);
-    // Set uriFilter so requestFilter starts as non-empty
-    useLogStore.setState({ rawLogLines: logs, uriFilter: 'initial-filter' });
+    // Set logFilter so requestFilter starts as non-empty
+    useLogStore.setState({ rawLogLines: logs, logFilter: 'initial-filter' });
 
     const { unmount } = render(<LogsView />);
 
@@ -309,7 +309,7 @@ describe('LogsView', () => {
 
     act(() => { vi.advanceTimersByTime(400); });
 
-    // When filterQuery='' !== requestFilter='initial-filter' → onFilterChange('') → setUriFilter(null)
+    // When filterQuery='' !== requestFilter='initial-filter' → onFilterChange('') → setLogFilter(null)
     expect(mockSetSearchParams).toHaveBeenCalled();
 
     unmount();

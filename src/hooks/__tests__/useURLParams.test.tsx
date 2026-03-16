@@ -216,25 +216,25 @@ describe('useURLParams', () => {
       expect(result.current.status).toBeNull();
     });
 
-    it('setUriFilter updates filter param', () => {
+    it('setLogFilter updates filter param', () => {
       const { result } = renderHook(() => useURLParams(), {
         wrapper: createWrapper(['/']),
       });
 
       act(() => {
-        result.current.setUriFilter('/_matrix/sync');
+        result.current.setLogFilter('/_matrix/sync');
       });
 
       expect(result.current.filter).toBe('/_matrix/sync');
     });
 
-    it('setUriFilter with empty string clears filter', () => {
+    it('setLogFilter with empty string clears filter', () => {
       const { result } = renderHook(() => useURLParams(), {
         wrapper: createWrapper(['/?filter=sync']),
       });
 
       act(() => {
-        result.current.setUriFilter('');
+        result.current.setLogFilter('');
       });
 
       expect(result.current.filter).toBeNull();

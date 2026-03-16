@@ -175,7 +175,7 @@ export function SyncView() {
       headerSlot={connectionSelector}
       emptyMessage="No sync requests found in log file"
       rowSelector=".sync-view"
-      showUriFilter={false}
+      showLogFilter={false}
       showSyncFilter={false}
       renderBarOverlay={renderBarOverlay}
       getBarColor={getBarColor}

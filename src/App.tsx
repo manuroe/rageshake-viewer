@@ -59,7 +59,7 @@ function AppContent() {
       store.setTimelineScale(scale);
     }
     store.setStatusCodeFilter(status);
-    store.setUriFilter(filter);
+    store.setLogFilter(filter);
     store.setSelectedTimeout(!isNaN(timeout ?? NaN) ? timeout : null);
     // When request_id is absent, clear the selection.
     // When present, each view's useUrlRequestAutoScroll handles opening by rowKey.

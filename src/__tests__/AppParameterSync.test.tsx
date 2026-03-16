@@ -53,7 +53,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe('sync');
+        expect(useLogStore.getState().logFilter).toBe('sync');
       });
     });
 
@@ -68,7 +68,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('keys');
+        expect(state.logFilter).toBe('keys');
       });
     });
 
@@ -84,7 +84,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe('_matrix/client/r0/sync');
+        expect(useLogStore.getState().logFilter).toBe('_matrix/client/r0/sync');
       });
     });
 
@@ -99,7 +99,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       const { rerender } = render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe('sync');
+        expect(useLogStore.getState().logFilter).toBe('sync');
       });
 
       // Remove param from URL (same route)
@@ -108,7 +108,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
 
       // In URL-as-source-of-truth architecture, removing the param clears the filter
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBeNull();
+        expect(useLogStore.getState().logFilter).toBeNull();
       });
     });
 
@@ -123,7 +123,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       const { rerender } = render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe('sync');
+        expect(useLogStore.getState().logFilter).toBe('sync');
       });
 
       // Navigate to different route
@@ -131,7 +131,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       rerender(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBeNull();
+        expect(useLogStore.getState().logFilter).toBeNull();
       });
     });
 
@@ -146,7 +146,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
 
       await waitFor(() => {
         // Store should preserve the filter value as-is
-        expect(useLogStore.getState().uriFilter).toBe('SYNC');
+        expect(useLogStore.getState().logFilter).toBe('SYNC');
       });
     });
   });
@@ -206,7 +206,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       await waitFor(() => {
         const state = useLogStore.getState();
         // Both should be applied: uriFilter from App.tsx, and log viewer from useUrlRequestAutoScroll
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         // REQ-5 → sendLineNumber = 5*2 = 10, so rowKey = 10
         expect(state.openLogViewerIds.has(10)).toBe(true);
       }, { timeout: 2000 });
@@ -224,7 +224,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         expect(state.statusCodeFilter).not.toBeNull();
         expect(state.startTime).not.toBeNull();
         expect(state.endTime).not.toBeNull();
@@ -248,7 +248,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe(uri);
+        expect(useLogStore.getState().logFilter).toBe(uri);
       });
     });
 
@@ -263,7 +263,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe(uri);
+        expect(useLogStore.getState().logFilter).toBe(uri);
       });
     });
 
@@ -278,7 +278,7 @@ describe('App.tsx - URL Parameter Synchronization', () => {
 
       await waitFor(() => {
         // Empty string should be treated as no filter
-        expect(useLogStore.getState().uriFilter).toBeNull();
+        expect(useLogStore.getState().logFilter).toBeNull();
       });
     });
   });

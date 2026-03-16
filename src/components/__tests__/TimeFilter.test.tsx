@@ -10,7 +10,7 @@ vi.mock('../../hooks/useURLParams', () => ({
     setTimeFilter: mockSetTimeFilter,
     setScale: vi.fn(),
     setStatusFilter: vi.fn(),
-    setUriFilter: vi.fn(),
+    setLogFilter: vi.fn(),
   }),
 }));
 

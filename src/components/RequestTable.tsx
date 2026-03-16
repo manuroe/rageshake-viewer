@@ -69,8 +69,8 @@ export interface RequestTableProps {
   emptyMessage?: string;
   /** CSS selector prefix for row measurement (e.g., '.sync-view' or '') */
   rowSelector?: string;
-  /** Whether to show the URI filter (default: true) */
-  showUriFilter?: boolean;
+  /** Whether to show the log filter (default: true) */
+  showLogFilter?: boolean;
   /** Whether to show the /sync filter checkbox (default: true). Set to false in SyncView where all requests are already sync. */
   showSyncFilter?: boolean;
   /**
@@ -120,7 +120,7 @@ export function RequestTable({
   availableStatusCodes,
   headerSlot,
   emptyMessage = 'No requests found',
-  showUriFilter = true,
+  showLogFilter = true,
   showSyncFilter = true,
   getBarColor,
   renderBarOverlay,
@@ -133,10 +133,10 @@ export function RequestTable({
     toggleRowExpansion,
     closeLogViewer,
     setActiveRequest,
-    uriFilter,
+    logFilter,
   } = useLogStore();
   const navigate = useNavigate();
-  const { setUriFilter } = useURLParams();
+  const { setLogFilter } = useURLParams();
 
   const waterfallContainerRef = useRef<HTMLDivElement>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
@@ -149,47 +149,47 @@ export function RequestTable({
     ? filteredRequests
     : filteredRequests.filter((req) => !isSyncRequest(req));
 
-  // URI filter state with debouncing
-  const [uriFilterInput, setUriFilterInput] = useState(uriFilter ?? '');
-  const debouncedUriFilter = useDebouncedValue(uriFilterInput, 300);
+  // Log filter state with debouncing
+  const [logFilterInput, setLogFilterInput] = useState(logFilter ?? '');
+  const debouncedLogFilter = useDebouncedValue(logFilterInput, 300);
 
   // Ref for Cmd+F shortcut (focus URI filter)
   const filterInputRef = useRef<SearchInputHandle>(null);
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
 
-  // Register Cmd+F → focus URI filter while this RequestTable is mounted
+  // Register Cmd+F → focus log filter while this RequestTable is mounted
   useEffect(() => {
-    if (!registerFocusFilter || !showUriFilter) return;
+    if (!registerFocusFilter || !showLogFilter) return;
     const unregister = registerFocusFilter(() => {
       filterInputRef.current?.focus();
     });
     return unregister;
-  }, [registerFocusFilter, showUriFilter]);
+  }, [registerFocusFilter, showLogFilter]);
 
-  // Sync debounced URI filter to URL
+  // Sync debounced log filter to URL
   useEffect(() => {
-    const newFilter = debouncedUriFilter.length > 0 ? debouncedUriFilter : null;
-    if (newFilter !== uriFilter) {
-      setUriFilter(newFilter);
+    const newFilter = debouncedLogFilter.length > 0 ? debouncedLogFilter : null;
+    if (newFilter !== logFilter) {
+      setLogFilter(newFilter);
     }
-  }, [debouncedUriFilter, uriFilter, setUriFilter]);
+  }, [debouncedLogFilter, logFilter, setLogFilter]);
 
   // Sync store changes back to input (e.g., when URL changes externally)
   useEffect(() => {
-    const storeValue = uriFilter ?? '';
-    if (storeValue !== uriFilterInput && storeValue !== debouncedUriFilter) {
-      setUriFilterInput(storeValue);
+    const storeValue = logFilter ?? '';
+    if (storeValue !== logFilterInput && storeValue !== debouncedLogFilter) {
+      setLogFilterInput(storeValue);
     }
-    // uriFilterInput and debouncedUriFilter are intentionally excluded: this effect must only
+    // logFilterInput and debouncedLogFilter are intentionally excluded: this effect must only
     // react to external store changes (e.g., URL navigation). Including local input state
     // would create a sync loop between the input and the store.
-  }, [uriFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [logFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleUriFilterClear = useCallback(() => {
-    setUriFilterInput('');
-    setUriFilter(null);
-  }, [setUriFilter, setUriFilterInput]);
+  const handleLogFilterClear = useCallback(() => {
+    setLogFilterInput('');
+    setLogFilter(null);
+  }, [setLogFilter, setLogFilterInput]);
 
   // Use shared scroll sync hook
   useScrollSync(leftPanelRef, waterfallContainerRef);
@@ -434,15 +434,15 @@ export function RequestTable({
         </div>
 
         <div className="header-right">
-          {showUriFilter && (
+          {showLogFilter && (
             <SearchInput
               ref={filterInputRef}
-              value={uriFilterInput}
-              onChange={setUriFilterInput}
-              onClear={handleUriFilterClear}
-              placeholder="Filter URI..."
-              title={`Filter requests by URI (${optionKey}+/ or ${metaKey}+F)`}
-              aria-label="Filter requests by URI"
+              value={logFilterInput}
+              onChange={setLogFilterInput}
+              onClear={handleLogFilterClear}
+              placeholder="Filter logs..."
+              title={`Filter requests by log content (${optionKey}+/ or ${metaKey}+F)`}
+              aria-label="Filter requests by log content"
             />
           )}
           <StatusFilterDropdown availableStatusCodes={availableStatusCodes} />

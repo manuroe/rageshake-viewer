@@ -334,7 +334,7 @@ describe('filterHttpRequests', () => {
     return {
       showIncompleteHttp: false,
       statusCodeFilter: null,
-      uriFilter: null,
+      logFilter: null,
       startTime: null,
       endTime: null,
       ...overrides,
@@ -513,32 +513,55 @@ describe('filterHttpRequests', () => {
     expect(clientErrorResult).toHaveLength(0);
   });
 
-  it('performs case-insensitive URI filter', () => {
-    const requests = [
-      createHttpRequest({ requestId: 'A', uri: 'https://example.com/SYNC?timeout=30000' }),
-      createHttpRequest({ requestId: 'B', uri: 'https://example.com/keys/upload' }),
+  it('performs case-insensitive log filter against send/response line rawText', () => {
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 10, rawText: '2024-01-01 INFO Sending request SYNC timeout=30000' }),
+      createParsedLogLine({ lineNumber: 11, rawText: '2024-01-01 INFO Received 200 OK' }),
+      createParsedLogLine({ lineNumber: 20, rawText: '2024-01-01 INFO Sending request keys/upload' }),
+      createParsedLogLine({ lineNumber: 21, rawText: '2024-01-01 INFO Received 200 OK' }),
     ];
-    const result = filterHttpRequests(requests, [], makeFilters({ uriFilter: 'sync' }));
+    const requests = [
+      createHttpRequest({ requestId: 'A', sendLineNumber: 10, responseLineNumber: 11 }),
+      createHttpRequest({ requestId: 'B', sendLineNumber: 20, responseLineNumber: 21 }),
+    ];
+    const result = filterHttpRequests(requests, rawLines, makeFilters({ logFilter: 'sync' }));
 
     expect(result).toHaveLength(1);
     expect(result[0].requestId).toBe('A');
   });
 
-  it('null uriFilter shows all requests', () => {
-    const requests = [
-      createHttpRequest({ requestId: 'A', uri: 'https://example.com/sync' }),
-      createHttpRequest({ requestId: 'B', uri: 'https://example.com/keys' }),
+  it('matches on response line rawText when send line does not match', () => {
+    const rawLines = [
+      createParsedLogLine({ lineNumber: 10, rawText: '2024-01-01 INFO Sending request' }),
+      createParsedLogLine({ lineNumber: 11, rawText: '2024-01-01 INFO Received 429 rate-limited' }),
+      createParsedLogLine({ lineNumber: 20, rawText: '2024-01-01 INFO Sending request' }),
+      createParsedLogLine({ lineNumber: 21, rawText: '2024-01-01 INFO Received 200 OK' }),
     ];
-    const result = filterHttpRequests(requests, [], makeFilters({ uriFilter: null }));
+    const requests = [
+      createHttpRequest({ requestId: 'A', sendLineNumber: 10, responseLineNumber: 11 }),
+      createHttpRequest({ requestId: 'B', sendLineNumber: 20, responseLineNumber: 21 }),
+    ];
+    const result = filterHttpRequests(requests, rawLines, makeFilters({ logFilter: 'rate-limited' }));
+
+    expect(result).toHaveLength(1);
+    expect(result[0].requestId).toBe('A');
+  });
+
+  it('null logFilter shows all requests', () => {
+    const requests = [
+      createHttpRequest({ requestId: 'A', sendLineNumber: 0 }),
+      createHttpRequest({ requestId: 'B', sendLineNumber: 2 }),
+    ];
+    const result = filterHttpRequests(requests, [], makeFilters({ logFilter: null }));
     expect(result).toHaveLength(2);
   });
 
-  it('empty-string uriFilter shows all requests', () => {
+  it('empty-string logFilter shows all requests', () => {
     const requests = [
-      createHttpRequest({ requestId: 'A', uri: 'https://example.com/sync' }),
-      createHttpRequest({ requestId: 'B', uri: 'https://example.com/keys' }),
+      createHttpRequest({ requestId: 'A', sendLineNumber: 0 }),
+      createHttpRequest({ requestId: 'B', sendLineNumber: 2 }),
     ];
-    const result = filterHttpRequests(requests, [], makeFilters({ uriFilter: '' }));
+    const result = filterHttpRequests(requests, [], makeFilters({ logFilter: '' }));
     expect(result).toHaveLength(2);
   });
 

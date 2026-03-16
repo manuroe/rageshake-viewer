@@ -45,7 +45,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         expect(state.statusCodeFilter?.has('200')).toBe(true);
         expect(state.statusCodeFilter?.has('500')).toBe(true);
       });
@@ -63,7 +63,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         expect(state.startTime).not.toBeNull();
         expect(state.endTime).not.toBeNull();
       });
@@ -80,7 +80,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         // request_id should trigger auto-open
         // REQ-5: sendLineNumber = 5*2 = 10 → rowKey = 10
         expect(state.openLogViewerIds.has(10)).toBe(true);
@@ -107,7 +107,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         expect(state.statusCodeFilter?.size).toBeGreaterThan(0);
         expect(state.timelineScale).toBe(25);
         expect(state.startTime).not.toBeNull();
@@ -130,7 +130,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         expect(state.statusCodeFilter?.has('500')).toBe(true);
         expect(state.timelineScale).toBe(30);
         // REQ-2: sendLineNumber = 2*2 = 4 → rowKey = 4
@@ -154,7 +154,7 @@ describe('App routing fallback', () => {
       const { rerender } = render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe('sync');
+        expect(useLogStore.getState().logFilter).toBe('sync');
       });
 
       // Navigate to different route
@@ -164,7 +164,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         // Filter should be cleared on navigation
-        expect(useLogStore.getState().uriFilter).toBeNull();
+        expect(useLogStore.getState().logFilter).toBeNull();
       });
     });
 
@@ -179,7 +179,7 @@ describe('App routing fallback', () => {
       const { rerender } = render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe('sync');
+        expect(useLogStore.getState().logFilter).toBe('sync');
       });
 
       // Navigate away (true navigation)
@@ -189,7 +189,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         // Both should be cleared on navigation
-        expect(useLogStore.getState().uriFilter).toBeNull();
+        expect(useLogStore.getState().logFilter).toBeNull();
         expect(useLogStore.getState().openLogViewerIds.size).toBe(0);
       });
     });
@@ -229,7 +229,7 @@ describe('App routing fallback', () => {
       await waitFor(() => {
         const state = useLogStore.getState();
         // Empty filter should be treated as null
-        expect(state.uriFilter).toBeNull();
+        expect(state.logFilter).toBeNull();
         // Other parameters should still apply
         expect(state.statusCodeFilter?.has('200')).toBe(true);
       });
@@ -246,7 +246,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         const state = useLogStore.getState();
-        expect(state.uriFilter).toBe('sync');
+        expect(state.logFilter).toBe('sync');
         // Other params should have default values
         expect(state.statusCodeFilter).toBeNull();
         expect(state.startTime).toBeNull();
@@ -266,7 +266,7 @@ describe('App routing fallback', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(useLogStore.getState().uriFilter).toBe(longUri);
+        expect(useLogStore.getState().logFilter).toBe(longUri);
       });
     });
 
@@ -286,7 +286,7 @@ describe('App routing fallback', () => {
 
       await waitFor(() => {
         // Store gets decoded value (searchParams.get() decodes automatically)
-        expect(useLogStore.getState().uriFilter).toBe(matrixUri);
+        expect(useLogStore.getState().logFilter).toBe(matrixUri);
       });
     });
   });

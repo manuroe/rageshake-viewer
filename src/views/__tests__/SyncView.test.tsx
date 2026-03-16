@@ -560,7 +560,7 @@ describe('SyncView - formatTimeout edge cases and onChange handlers', () => {
       start: null, end: null, scale: 'hour', status: null,
       filter: null, requestId: null, timeout: null,
       setTimeFilter: vi.fn(), setScale: vi.fn(), setStatusFilter: vi.fn(),
-      setUriFilter: vi.fn(), setRequestId: vi.fn(),
+      setLogFilter: vi.fn(), setRequestId: vi.fn(),
       setTimeoutFilter: mockSetTimeoutFilter,
     });
 

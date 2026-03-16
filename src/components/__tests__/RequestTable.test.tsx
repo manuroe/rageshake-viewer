@@ -40,8 +40,8 @@ vi.mock('../BurgerMenu', () => ({
 // Mock useURLParams to directly update store (simulating App.tsx URL→Store sync)
 vi.mock('../../hooks/useURLParams', () => ({
   useURLParams: () => ({
-    setUriFilter: (filter: string | null) => {
-      useLogStore.getState().setUriFilter(filter);
+    setLogFilter: (filter: string | null) => {
+      useLogStore.getState().setLogFilter(filter);
     },
     setStatusFilter: (codes: Set<string> | null) => {
       useLogStore.getState().setStatusFilter(codes);
@@ -447,41 +447,41 @@ describe('RequestTable', () => {
   // URI Filter Integration Tests
   // ============================================================================
 
-  describe('URI Filter SearchInput', () => {
-    it('renders SearchInput when showUriFilter is true', () => {
+  describe('Log Filter SearchInput', () => {
+    it('renders SearchInput when showLogFilter is true', () => {
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: createRequests(2),
         totalCount: 2,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...');
+      const filterInput = screen.getByPlaceholderText('Filter logs...');
       expect(filterInput).toBeInTheDocument();
     });
 
-    it('does not render SearchInput when showUriFilter is false', () => {
+    it('does not render SearchInput when showLogFilter is false', () => {
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: false,
+        showLogFilter: false,
         filteredRequests: createRequests(2),
         totalCount: 2,
       })} />);
 
-      const filterInput = screen.queryByPlaceholderText('Filter URI...');
+      const filterInput = screen.queryByPlaceholderText('Filter logs...');
       expect(filterInput).not.toBeInTheDocument();
     });
 
-    it('renders SearchInput by default (showUriFilter defaults to true)', () => {
+    it('renders SearchInput by default (showLogFilter defaults to true)', () => {
       renderWithRouter(<RequestTable {...createProps({ 
         filteredRequests: createRequests(2),
         totalCount: 2,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...');
+      const filterInput = screen.getByPlaceholderText('Filter logs...');
       expect(filterInput).toBeInTheDocument();
     });
   });
 
-  describe('URI Filter Value Sync', () => {
+  describe('Log Filter Value Sync', () => {
     it('syncs SearchInput value to store via debounce', async () => {
       const requests = createRequests(5);
       const rawLines = Array.from({ length: 10 }, (_, i) => 
@@ -490,24 +490,24 @@ describe('RequestTable', () => {
       useLogStore.getState().setHttpRequests(requests, rawLines);
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       
       // Type in the input
       fireEvent.change(filterInput, { target: { value: 'sync' } });
       
       // Should not sync immediately (debounced 300ms)
-      expect(useLogStore.getState().uriFilter).toBeNull();
+      expect(useLogStore.getState().logFilter).toBeNull();
 
       // Wait for debounce to complete
       await new Promise(resolve => setTimeout(resolve, 350));
 
       // Now it should be synced to store
-      expect(useLogStore.getState().uriFilter).toBe('sync');
+      expect(useLogStore.getState().logFilter).toBe('sync');
     });
 
     it('debounces rapid typing - no intermediate filters', async () => {
@@ -518,12 +518,12 @@ describe('RequestTable', () => {
       useLogStore.getState().setHttpRequests(requests, rawLines);
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       
       // Rapid typing
       fireEvent.change(filterInput, { target: { value: 's' } });
@@ -535,13 +535,13 @@ describe('RequestTable', () => {
       fireEvent.change(filterInput, { target: { value: 'sync' } });
       
       // All typed within 150ms, so debounce not yet triggered
-      expect(useLogStore.getState().uriFilter).toBeNull();
+      expect(useLogStore.getState().logFilter).toBeNull();
 
       // Wait for debounce
       await new Promise(resolve => setTimeout(resolve, 350));
 
       // Should only apply final value after debounce
-      expect(useLogStore.getState().uriFilter).toBe('sync');
+      expect(useLogStore.getState().logFilter).toBe('sync');
     });
 
     it('clears filter when SearchInput is cleared', async () => {
@@ -550,15 +550,15 @@ describe('RequestTable', () => {
         createParsedLogLine({ lineNumber: i, timestampUs: 1700000000000000 + i * 1000000 })
       );
       useLogStore.getState().setHttpRequests(requests, rawLines);
-      useLogStore.getState().setUriFilter('sync');
+      useLogStore.getState().setLogFilter('sync');
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       expect(filterInput.value).toBe('sync');
 
       // Click clear button
@@ -568,12 +568,12 @@ describe('RequestTable', () => {
       // Wait for debounce to trigger sync
       await new Promise(resolve =>  setTimeout(resolve, 350));
 
-      expect(useLogStore.getState().uriFilter).toBeNull();
+      expect(useLogStore.getState().logFilter).toBeNull();
       expect(filterInput.value).toBe('');
     });
   });
 
-  describe('URI Filter Store to Input Sync', () => {
+  describe('Log Filter Store to Input Sync', () => {
     it('syncs store changes back to SearchInput', async () => {
       const requests = createRequests(5);
       const rawLines = Array.from({ length: 10 }, (_, i) => 
@@ -582,16 +582,16 @@ describe('RequestTable', () => {
       useLogStore.getState().setHttpRequests(requests, rawLines);
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       expect(filterInput.value).toBe('');
 
       // Change filter in store (e.g., via URL parameter)
-      useLogStore.getState().setUriFilter('keys');
+      useLogStore.getState().setLogFilter('keys');
 
       // Wait for input to reflect store change
       await waitFor(() => {
@@ -605,19 +605,19 @@ describe('RequestTable', () => {
         createParsedLogLine({ lineNumber: i, timestampUs: 1700000000000000 + i * 1000000 })
       );
       useLogStore.getState().setHttpRequests(requests, rawLines);
-      useLogStore.getState().setUriFilter('sync');
+      useLogStore.getState().setLogFilter('sync');
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       expect(filterInput.value).toBe('sync');
 
       // Clear filter from store
-      useLogStore.getState().setUriFilter(null);
+      useLogStore.getState().setLogFilter(null);
 
       // Wait for input to be cleared
       await waitFor(() => {
@@ -626,7 +626,7 @@ describe('RequestTable', () => {
     });
   });
 
-  describe('URI Filter with Special Characters', () => {
+  describe('Log Filter with Special Characters', () => {
     it('handles Matrix URIs with underscores and slashes', async () => {
       const requests = createRequests(5);
       const rawLines = Array.from({ length: 10 }, (_, i) => 
@@ -635,19 +635,19 @@ describe('RequestTable', () => {
       useLogStore.getState().setHttpRequests(requests, rawLines);
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       const uri = '_matrix/client/r0/sync';
       
       fireEvent.change(filterInput, { target: { value: uri } });
 
       await new Promise(resolve => setTimeout(resolve, 350));
 
-      expect(useLogStore.getState().uriFilter).toBe(uri);
+      expect(useLogStore.getState().logFilter).toBe(uri);
     });
 
     it('handles filter with query parameters', async () => {
@@ -658,19 +658,19 @@ describe('RequestTable', () => {
       useLogStore.getState().setHttpRequests(requests, rawLines);
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       const uri = '/sync?filter=state&limit=10';
       
       fireEvent.change(filterInput, { target: { value: uri } });
 
       await new Promise(resolve => setTimeout(resolve, 350));
 
-      expect(useLogStore.getState().uriFilter).toBe(uri);
+      expect(useLogStore.getState().logFilter).toBe(uri);
     });
 
     it('handles filter with spaces', async () => {
@@ -681,23 +681,23 @@ describe('RequestTable', () => {
       useLogStore.getState().setHttpRequests(requests, rawLines);
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       const uri = 'room list sync';
       
       fireEvent.change(filterInput, { target: { value: uri } });
 
       await new Promise(resolve => setTimeout(resolve, 350));
 
-      expect(useLogStore.getState().uriFilter).toBe(uri);
+      expect(useLogStore.getState().logFilter).toBe(uri);
     });
   });
 
-  describe('URI Filter Escaping Behavior', () => {
+  describe('Log Filter Escaping Behavior', () => {
     it('Escape key clears the filter input', async () => {
       const requests = createRequests(5);
       const rawLines = Array.from({ length: 10 }, (_, i) => 
@@ -706,46 +706,46 @@ describe('RequestTable', () => {
       useLogStore.getState().setHttpRequests(requests, rawLines);
 
       renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
       })} />);
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       
       fireEvent.change(filterInput, { target: { value: 'sync' } });
 
       await new Promise(resolve => setTimeout(resolve, 350));
       
-      expect(useLogStore.getState().uriFilter).toBe('sync');
+      expect(useLogStore.getState().logFilter).toBe('sync');
 
       // Press Escape
       fireEvent.keyDown(filterInput, { key: 'Escape' });
 
       await new Promise(resolve => setTimeout(resolve, 350));
 
-      expect(useLogStore.getState().uriFilter).toBeNull();
+      expect(useLogStore.getState().logFilter).toBeNull();
       expect(filterInput.value).toBe('');
     });
   });
 
-  describe('URI Filter Persistence', () => {
+  describe('Log Filter Persistence', () => {
     it('filter persists when other properties change', async () => {
       const requests = createRequests(5);
       const rawLines = Array.from({ length: 10 }, (_, i) => 
         createParsedLogLine({ lineNumber: i, timestampUs: 1700000000000000 + i * 1000000 })
       );
       useLogStore.getState().setHttpRequests(requests, rawLines);
-      useLogStore.getState().setUriFilter('sync');
+      useLogStore.getState().setLogFilter('sync');
 
       const { rerender } = renderWithRouter(<RequestTable {...createProps({ 
-        showUriFilter: true,
+        showLogFilter: true,
         filteredRequests: requests,
         totalCount: 5,
         msPerPixel: 10,
       })} />);
 
-      expect(useLogStore.getState().uriFilter).toBe('sync');
+      expect(useLogStore.getState().logFilter).toBe('sync');
 
       // Change timeline scale
       useLogStore.getState().setTimelineScale(25);
@@ -753,7 +753,7 @@ describe('RequestTable', () => {
       rerender(
         <MemoryRouter initialEntries={['/http_requests']}>
           <RequestTable {...createProps({ 
-            showUriFilter: true,
+            showLogFilter: true,
             filteredRequests: requests,
             totalCount: 5,
             msPerPixel: 25,
@@ -762,9 +762,9 @@ describe('RequestTable', () => {
       );
 
       // Filter should still be there
-      expect(useLogStore.getState().uriFilter).toBe('sync');
+      expect(useLogStore.getState().logFilter).toBe('sync');
 
-      const filterInput = screen.getByPlaceholderText('Filter URI...') as HTMLInputElement;
+      const filterInput = screen.getByPlaceholderText('Filter logs...') as HTMLInputElement;
       expect(filterInput.value).toBe('sync');
     });
   });
