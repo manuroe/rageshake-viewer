@@ -1,7 +1,5 @@
 import type { DisplayItem } from './logGapManager';
-
-/** Regular expression that strips ISO timestamp + log level from a raw log line, matching the same pattern as LogDisplayView's `getDisplayText`. */
-const STRIP_PREFIX_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+\w+\s+/;
+import { stripLogPrefix } from './logMessageUtils';
 
 /**
  * Options that control how exported log text is formatted.
@@ -120,7 +118,7 @@ export function wrapLine(text: string, maxWidth: number): string[] {
  * ```
  */
 export function formatExportLine(rawText: string, lineNumber: number, options: ExportOptions): string {
-  let text = options.stripPrefix ? rawText.replace(STRIP_PREFIX_RE, '') : rawText;
+  let text = options.stripPrefix ? stripLogPrefix(rawText) : rawText;
 
   if (options.showLineNumbers) {
     const pad = String(lineNumber).padStart(5, '0');
@@ -193,13 +191,13 @@ export function buildExportText(
       // We strip the timestamp/level prefix for comparison so that lines with
       // different timestamps but identical messages are treated as duplicates.
       // We stop the run as soon as a filtered gap appears between items.
-      const baseText = line.rawText.replace(STRIP_PREFIX_RE, '');
+      const baseText = stripLogPrefix(line.rawText);
       let dupCount = 0;
       let j = i + 1;
       while (
         j < displayItems.length &&
         !displayItems[j].gapAbove &&
-        displayItems[j].data.line.rawText.replace(STRIP_PREFIX_RE, '') === baseText
+        stripLogPrefix(displayItems[j].data.line.rawText) === baseText
       ) {
         dupCount++;
         j++;

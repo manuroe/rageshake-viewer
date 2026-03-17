@@ -51,6 +51,12 @@ function renderDialog(
 // ---------------------------------------------------------------------------
 
 describe('LogExportDialog', () => {
+  // Capture originals so we can restore them exactly after each test, preventing
+  // mock leakage into other test files (which would make failures order-dependent).
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
   beforeEach(() => {
     // Mock clipboard.writeText
     Object.defineProperty(navigator, 'clipboard', {
@@ -60,6 +66,19 @@ describe('LogExportDialog', () => {
     // mock URL.createObjectURL / revokeObjectURL
     global.URL.createObjectURL = vi.fn(() => 'blob:mock');
     global.URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    // Restore globals to avoid leaking mocks into other test files.
+    // URL.createObjectURL/revokeObjectURL are not implemented by jsdom, so their
+    // originals may be undefined. Fall back to a callable no-op to prevent a
+    // TypeError if a pending setTimeout fires after teardown (e.g. from revokeObjectURL).
+    if (originalClipboard) {
+      Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    }
+    global.URL.createObjectURL = (originalCreateObjectURL ?? vi.fn()) as typeof URL.createObjectURL;
+    global.URL.revokeObjectURL = originalRevokeObjectURL ?? vi.fn();
+    vi.restoreAllMocks();
   });
 
   // -------------------------------------------------------------------------

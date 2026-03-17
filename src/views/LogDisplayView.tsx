@@ -14,6 +14,7 @@ import { optionKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
+import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
 import type { ExportContext } from '../utils/logExportUtils';
 import styles from './LogDisplayView.module.css';
@@ -397,8 +398,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       return line.rawText;
     }
     // Strip ISO timestamp and log level from display (they're already shown in columns)
-    // Pattern: "YYYY-MM-DDTHH:MM:SS.ffffffZ LEVEL " -> keep just the message part
-    return line.rawText.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+\w+\s+/, '');
+    return stripLogPrefix(line.rawText);
   };
 
   const handleSourceLinkClick = async (
