@@ -89,6 +89,12 @@ export const SHORTCUTS = {
     category: 'filter',
     requiresNoInputFocus: false,
   },
+  openExport: {
+    label: 'Option+s',
+    description: 'Open export / save dialog (Logs view)',
+    category: 'filter',
+    requiresNoInputFocus: false,
+  },
   newSession: {
     label: 'Cmd+R',
     description: 'Refresh page for a new session (browser default)',

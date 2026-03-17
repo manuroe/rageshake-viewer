@@ -175,6 +175,9 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       } else if (e.code === 'KeyP') {
         e.preventDefault();
         setStripPrefix((v) => !v);
+      } else if (e.code === 'KeyS') {
+        e.preventDefault();
+        setShowExport(true);
       }
     };
     document.addEventListener('keydown', handleKey);
