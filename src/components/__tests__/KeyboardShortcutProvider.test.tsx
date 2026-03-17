@@ -524,4 +524,74 @@ describe('KeyboardShortcutProvider', () => {
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler2).not.toHaveBeenCalled();
   });
+
+  // ---------------------------------------------------------------------------
+  // registerDismiss
+  // ---------------------------------------------------------------------------
+
+  it('Escape key calls a registered dismiss handler when help overlay is closed', () => {
+    const dismissHandler = vi.fn();
+    function RegisterDismiss() {
+      const ctx = useKeyboardShortcutContext();
+      useEffect(() => ctx.registerDismiss(dismissHandler), [ctx]);
+      return null;
+    }
+    render(
+      <KeyboardShortcutProvider>
+        <RegisterDismiss />
+      </KeyboardShortcutProvider>,
+    );
+    act(() => { fireKey('Escape'); });
+    expect(dismissHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape key closes help overlay first, ignoring dismiss handler, when overlay is open', () => {
+    const dismissHandler = vi.fn();
+    function RegisterDismiss() {
+      const ctx = useKeyboardShortcutContext();
+      useEffect(() => ctx.registerDismiss(dismissHandler), [ctx]);
+      return null;
+    }
+    renderProvider();
+    render(
+      <KeyboardShortcutProvider>
+        <ContextConsumer />
+        <RegisterDismiss />
+      </KeyboardShortcutProvider>,
+    );
+    // Open the help overlay
+    act(() => { fireKey('?'); });
+    const helpIndicators = screen.getAllByTestId('show-help');
+    expect(helpIndicators.some((el) => el.textContent === 'true')).toBe(true);
+    // ESC should close help overlay, not call the dismiss handler
+    act(() => { fireKey('Escape'); });
+    expect(dismissHandler).not.toHaveBeenCalled();
+  });
+
+  it('registerDismiss cleans up when the returned function is called', () => {
+    const dismissHandler = vi.fn();
+    function RegisterDismiss() {
+      const ctx = useKeyboardShortcutContext();
+      useEffect(() => {
+        const unregister = ctx.registerDismiss(dismissHandler);
+        return unregister;
+      }, [ctx]);
+      return null;
+    }
+    const { unmount } = render(
+      <KeyboardShortcutProvider>
+        <RegisterDismiss />
+      </KeyboardShortcutProvider>,
+    );
+    unmount();
+    act(() => { fireKey('Escape'); });
+    expect(dismissHandler).not.toHaveBeenCalled();
+  });
+
+  it('Escape key does nothing when no dismiss handler is registered and help overlay is closed', () => {
+    renderProvider();
+    // Should not throw and help overlay must remain closed
+    expect(() => act(() => { fireKey('Escape'); })).not.toThrow();
+    expect(screen.getByTestId('show-help').textContent).toBe('false');
+  });
 });

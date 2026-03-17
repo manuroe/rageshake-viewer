@@ -20,6 +20,7 @@ function makeCtx(overrides?: Partial<KeyboardShortcutContextValue>): KeyboardSho
     pendingChord: null,
     registerFocusSearch: vi.fn(() => vi.fn()),
     registerFocusFilter: vi.fn(() => vi.fn()),
+    registerDismiss: vi.fn(() => vi.fn()),
     ...overrides,
   };
 }

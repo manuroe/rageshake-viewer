@@ -3,6 +3,7 @@ import type { MouseEvent, ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildExportText, type ExportContext, type ExportOptions } from '../utils/logExportUtils';
 import type { DisplayItem } from '../utils/logGapManager';
+import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import styles from './LogExportDialog.module.css';
 
 interface LogExportDialogProps {
@@ -34,6 +35,15 @@ export function LogExportDialog({ displayItems, context, onClose }: LogExportDia
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Register onClose with the central shortcut system so the global Escape
+  // handler can close this dialog. When the context is unavailable (e.g. in
+  // standalone tests), the focus-trap below falls back to a local ESC handler.
+  const shortcutCtx = useKeyboardShortcutContextOptional();
+  useEffect(() => {
+    if (!shortcutCtx) return;
+    return shortcutCtx.registerDismiss(onClose);
+  }, [shortcutCtx, onClose]);
+
   // ---------------------------------------------------------------------------
   // Option state (all off by default)
   // ---------------------------------------------------------------------------
@@ -62,14 +72,16 @@ export function LogExportDialog({ displayItems, context, onClose }: LogExportDia
     };
   }, []);
 
-  // Focus trap: cycle Tab / Shift+Tab within the panel
+  // Focus trap: cycle Tab / Shift+Tab within the panel.
+  // ESC is handled via the central shortcut context (registerDismiss above);
+  // when no context is available the fallback below closes the dialog locally.
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
+    const hasCentralEsc = !!shortcutCtx;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
+        if (!hasCentralEsc) onClose();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -91,7 +103,7 @@ export function LogExportDialog({ displayItems, context, onClose }: LogExportDia
     };
     panel.addEventListener('keydown', handleKey);
     return () => panel.removeEventListener('keydown', handleKey);
-  }, [onClose]);
+  }, [onClose, shortcutCtx]);
 
   // Close when clicking the backdrop (outside the panel)
   const handleBackdropClick = useCallback(

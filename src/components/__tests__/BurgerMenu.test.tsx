@@ -307,6 +307,7 @@ describe('BurgerMenu', () => {
         pendingChord: null,
         registerFocusSearch: vi.fn(() => vi.fn()),
         registerFocusFilter: vi.fn(() => vi.fn()),
+        registerDismiss: vi.fn(() => vi.fn()),
       };
       render(
         <KeyboardShortcutContext.Provider value={ctx}>

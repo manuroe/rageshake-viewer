@@ -21,6 +21,13 @@ export interface KeyboardShortcutContextValue {
    * Returns an unregister function.
    */
   registerFocusFilter: (fn: () => void) => () => void;
+  /**
+   * Register a handler to be called when Escape is pressed and no higher-priority
+   * overlay (e.g. the shortcut help panel) is open. Follows the same LIFO stack
+   * pattern as `registerFocusSearch` so nested dialogs close correctly.
+   * Returns an unregister function.
+   */
+  registerDismiss: (fn: () => void) => () => void;
 }
 
 export const KeyboardShortcutContext = createContext<KeyboardShortcutContextValue | null>(null);

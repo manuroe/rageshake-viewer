@@ -33,8 +33,10 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
   // Registered handlers for view-specific actions (LIFO stacks for nested registrations)
   const focusSearchHandlerRef = useRef<(() => void) | null>(null);
   const focusFilterHandlerRef = useRef<(() => void) | null>(null);
+  const dismissHandlerRef = useRef<(() => void) | null>(null);
   const focusSearchHandlerStackRef = useRef<(() => void)[]>([]);
   const focusFilterHandlerStackRef = useRef<(() => void)[]>([]);
+  const dismissHandlerStackRef = useRef<(() => void)[]>([]);
 
   // startChord ref — populated after useKeyboardShortcuts hook runs below;
   // declared here so handleKey can call it without a stale closure.
@@ -67,6 +69,21 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
       currentStack.splice(index, 1);
       focusFilterHandlerStackRef.current = currentStack;
       focusFilterHandlerRef.current = currentStack.length > 0 ? currentStack[currentStack.length - 1] : null;
+    };
+  }, []);
+
+  const registerDismiss = useCallback((fn: () => void) => {
+    const stack = dismissHandlerStackRef.current.slice();
+    stack.push(fn);
+    dismissHandlerStackRef.current = stack;
+    dismissHandlerRef.current = fn;
+    return () => {
+      const currentStack = dismissHandlerStackRef.current.slice();
+      const index = currentStack.lastIndexOf(fn);
+      if (index === -1) return;
+      currentStack.splice(index, 1);
+      dismissHandlerStackRef.current = currentStack;
+      dismissHandlerRef.current = currentStack.length > 0 ? currentStack[currentStack.length - 1] : null;
     };
   }, []);
 
@@ -143,12 +160,13 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
         }
       }
 
-      // Escape → close help overlay
+      // Escape → close help overlay first; otherwise call registered dismiss handler
       if (e.key === 'Escape') {
-        setShowHelp((current) => {
-          if (current) return false;
-          return current;
-        });
+        if (showHelp) {
+          setShowHelp(false);
+          return;
+        }
+        dismissHandlerRef.current?.();
         return;
       }
 
@@ -207,6 +225,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
     pendingChord,
     registerFocusSearch,
     registerFocusFilter,
+    registerDismiss,
   };
 
   return (
