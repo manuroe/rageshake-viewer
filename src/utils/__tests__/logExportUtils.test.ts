@@ -57,6 +57,17 @@ describe('wrapLine', () => {
     expect(result[0]).toBe('1234');
     expect(result[1]).toMatch(/^  /);
   });
+
+  it('does not enter an infinite loop when maxWidth is 1 or 2 (clamps to 3)', () => {
+    // maxWidth <= 2 would give contWidth <= 0, causing an infinite loop without
+    // the guard. Verify that the function returns a finite result instead.
+    const result = wrapLine('hello', 1);
+    // Should produce a finite array of lines (not hang)
+    expect(result.length).toBeGreaterThan(0);
+    // All original characters are present (ignoring continuation indentation)
+    const stripped = result.map((l) => l.trimStart()).join('');
+    expect(stripped).toBe('hello');
+  });
 });
 
 // --------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { LogExportDialog } from '../LogExportDialog';
 import type { ExportContext } from '../../utils/logExportUtils';
@@ -155,32 +155,42 @@ describe('LogExportDialog', () => {
     expect(text).toContain('line 2');
   });
 
-  it('shows "Copied!" confirmation after copying', async () => {
-    vi.useFakeTimers();
-    renderDialog();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /copy to clipboard/i }));
+  // Confirmation labels and timer-sensitive operations use a nested describe
+  // with beforeEach/afterEach to avoid leaking scheduled timeouts between tests.
+  describe('with fake timers', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+      vi.runAllTimers();
+      vi.useRealTimers();
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Copied!');
-    vi.useRealTimers();
-  });
 
-  // -------------------------------------------------------------------------
-  // Save to file
-  // -------------------------------------------------------------------------
+    it('shows "Copied!" confirmation after copying', async () => {
+      renderDialog();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /copy to clipboard/i }));
+      });
+      expect(screen.getByRole('status')).toHaveTextContent('Copied!');
+    });
 
-  it('triggers a file download when save button is clicked', () => {
-    // Spy on anchor click (jsdom does not navigate)
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    // -------------------------------------------------------------------------
+    // Save to file
+    // -------------------------------------------------------------------------
 
-    renderDialog({ displayItems: makeDisplayItems(1) });
-    fireEvent.click(screen.getByRole('button', { name: /save to file/i }));
+    it('triggers a file download when save button is clicked', () => {
+      // Spy on anchor click (jsdom does not navigate)
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock');
+      renderDialog({ displayItems: makeDisplayItems(1) });
+      fireEvent.click(screen.getByRole('button', { name: /save to file/i }));
 
-    clickSpy.mockRestore();
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      // revokeObjectURL is scheduled via setTimeout; flush before asserting
+      vi.runAllTimers();
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock');
+
+      clickSpy.mockRestore();
+    });
   });
 
   it('shows "Saved!" confirmation after saving', () => {

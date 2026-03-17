@@ -6,8 +6,8 @@ const STRIP_PREFIX_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+\w+\s+/;
 /**
  * Options that control how exported log text is formatted.
  *
- * All options default to `false` / disabled so the simplest call site can
- * pass a minimal object and let defaults do the right thing.
+ * All fields are required; the dialog creates a fresh object each time the
+ * user triggers an export action.
  */
 export interface ExportOptions {
   /**
@@ -90,11 +90,13 @@ export interface ExportContext {
  * ```
  */
 export function wrapLine(text: string, maxWidth: number): string[] {
-  if (text.length <= maxWidth) return [text];
+  // Guard against values that would make contWidth <= 0 and cause an infinite loop.
+  const safeWidth = Math.max(maxWidth, 3);
+  if (text.length <= safeWidth) return [text];
   const lines: string[] = [];
-  lines.push(text.slice(0, maxWidth));
-  let offset = maxWidth;
-  const contWidth = maxWidth - 2; // account for two-space indent
+  lines.push(text.slice(0, safeWidth));
+  let offset = safeWidth;
+  const contWidth = safeWidth - 2; // account for two-space indent
   while (offset < text.length) {
     lines.push('  ' + text.slice(offset, offset + contWidth));
     offset += contWidth;

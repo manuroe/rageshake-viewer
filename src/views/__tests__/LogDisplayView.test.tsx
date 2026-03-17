@@ -1355,6 +1355,11 @@ describe('LogDisplayView export button', () => {
     global.URL.revokeObjectURL = vi.fn();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useLogStore.setState({ rawLogLines: [] });
+  });
+
   it('shows an export button in the toolbar', () => {
     useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
     render(<LogDisplayView />);

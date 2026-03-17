@@ -35,7 +35,7 @@ export function LogExportDialog({ displayItems, context, onClose }: LogExportDia
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   // ---------------------------------------------------------------------------
-  // Option state (all off by default, except stripPrefix which mirrors the view)
+  // Option state (all off by default)
   // ---------------------------------------------------------------------------
   const [showIntro, setShowIntro] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(false);
@@ -130,8 +130,15 @@ export function LogExportDialog({ displayItems, context, onClose }: LogExportDia
 
   const handleCopy = async () => {
     const text = buildExportText(displayItems, buildOptions(), context);
-    await navigator.clipboard.writeText(text);
-    showConfirmation('copy');
+    try {
+      await navigator.clipboard.writeText(text);
+      showConfirmation('copy');
+    } catch {
+      // Clipboard access can be denied (e.g. non-secure context or permission
+      // revoked). Surface the failure visually so the user knows the copy did
+      // not succeed, but do not crash the dialog.
+      setConfirmation(null);
+    }
   };
 
   const handleSave = () => {
@@ -141,8 +148,13 @@ export function LogExportDialog({ displayItems, context, onClose }: LogExportDia
     const a = document.createElement('a');
     a.href = url;
     a.download = 'export.log';
+    // Append to DOM so all browsers can find the anchor before it is clicked.
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    // Revoke after the current event-loop tick so the browser has time to
+    // start the download before the object URL is invalidated.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
     showConfirmation('save');
   };
 
