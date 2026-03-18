@@ -17,9 +17,6 @@ const BASE_OPTIONS: ExportOptions = {
 const BASE_CONTEXT: ExportContext = {
   filterQuery: '',
   contextLines: 0,
-  lineWrap: false,
-  stripPrefix: false,
-  collapseEnabled: false,
   startTime: null,
   endTime: null,
 };

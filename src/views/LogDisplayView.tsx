@@ -251,13 +251,10 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const exportContext = useMemo<ExportContext>(() => ({
     filterQuery,
     contextLines,
-    lineWrap,
-    stripPrefix,
-    collapseEnabled,
     lineRange,
     startTime,
     endTime,
-  }), [filterQuery, contextLines, lineWrap, stripPrefix, collapseEnabled, lineRange, startTime, endTime]);
+  }), [filterQuery, contextLines, lineRange, startTime, endTime]);
 
   // Search determines highlighting within all currently rendered lines (including
   // lines expanded from collapsed groups via forcedRanges).

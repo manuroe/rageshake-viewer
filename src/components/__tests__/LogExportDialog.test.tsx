@@ -25,9 +25,6 @@ function makeDisplayItems(count: number): DisplayItem[] {
 const BASE_CONTEXT: ExportContext = {
   filterQuery: '',
   contextLines: 0,
-  lineWrap: false,
-  stripPrefix: true,
-  collapseEnabled: false,
   startTime: null,
   endTime: null,
 };
@@ -75,6 +72,10 @@ describe('LogExportDialog', () => {
     // TypeError if a pending setTimeout fires after teardown (e.g. from revokeObjectURL).
     if (originalClipboard) {
       Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    } else {
+      // clipboard didn't exist before — remove the mock so it doesn't leak
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deleting a non-standard JSDOM property
+      delete (navigator as any).clipboard;
     }
     global.URL.createObjectURL = (originalCreateObjectURL ?? vi.fn()) as typeof URL.createObjectURL;
     global.URL.revokeObjectURL = originalRevokeObjectURL ?? vi.fn();
@@ -124,12 +125,6 @@ describe('LogExportDialog', () => {
   // -------------------------------------------------------------------------
   // Options
   // -------------------------------------------------------------------------
-
-  it('strip-prefix starts unchecked regardless of context', () => {
-    renderDialog({ context: { ...BASE_CONTEXT, stripPrefix: true } });
-    const checkbox = screen.getByRole('checkbox', { name: /strip timestamp/i });
-    expect((checkbox as HTMLInputElement).checked).toBe(false);
-  });
 
   it('all options start unchecked', () => {
     renderDialog();

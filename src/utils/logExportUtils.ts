@@ -63,12 +63,6 @@ export interface ExportContext {
   readonly filterQuery: string;
   /** Number of context lines shown around filter matches. */
   readonly contextLines: number;
-  /** Whether line-wrap was enabled in the view. */
-  readonly lineWrap: boolean;
-  /** Whether strip-prefix was enabled in the view. */
-  readonly stripPrefix: boolean;
-  /** Whether collapse-duplicates was enabled in the view. */
-  readonly collapseEnabled: boolean;
   /** Active line range restriction, if any. */
   readonly lineRange?: { readonly start: number; readonly end: number };
   /** Global time filter start (ISO string or null). */

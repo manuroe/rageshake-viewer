@@ -1365,6 +1365,10 @@ describe('LogDisplayView export button', () => {
   afterEach(() => {
     if (originalClipboard) {
       Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    } else {
+      // clipboard didn't exist before — remove the mock so it doesn't leak
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deleting a non-standard JSDOM property
+      delete (navigator as any).clipboard;
     }
     global.URL.createObjectURL = (originalCreateObjectURL ?? vi.fn()) as typeof URL.createObjectURL;
     global.URL.revokeObjectURL = originalRevokeObjectURL ?? vi.fn();
