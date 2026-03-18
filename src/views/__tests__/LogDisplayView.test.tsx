@@ -1347,6 +1347,12 @@ describe('LogDisplayView sentry and HTTP error text coloring', () => {
 });
 
 describe('LogDisplayView export button', () => {
+  // Capture originals before the suite so afterEach can restore them exactly,
+  // preventing mock leakage into other test files.
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
   beforeEach(() => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -1357,6 +1363,11 @@ describe('LogDisplayView export button', () => {
   });
 
   afterEach(() => {
+    if (originalClipboard) {
+      Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    }
+    global.URL.createObjectURL = (originalCreateObjectURL ?? vi.fn()) as typeof URL.createObjectURL;
+    global.URL.revokeObjectURL = originalRevokeObjectURL ?? vi.fn();
     vi.restoreAllMocks();
     useLogStore.setState({ rawLogLines: [] });
   });

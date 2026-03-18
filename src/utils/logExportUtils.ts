@@ -180,7 +180,7 @@ export function buildExportText(
 
     // Gap indicator above this line, but only when it is not the leading edge
     // (i.e. there must be a previous visible line for the gap to be "between" two lines).
-    if (options.showGaps && i > 0 && item.gapAbove && !item.gapAbove.isFirst) {
+    if (options.showGaps && i > 0 && item.gapAbove) {
       lines.push(`... ${item.gapAbove.gapSize} lines ...`);
     }
 
