@@ -276,9 +276,9 @@ describe('LogExportDialog', () => {
 
   it('saves file content that matches selected options', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    let capturedText = '';
     const blobSpy = vi.spyOn(global, 'Blob').mockImplementation(function (content) {
-      // Capture the content for assertion
-      (this as unknown as { capturedContent: string[] }).capturedContent = content as string[];
+      capturedText = (content as string[])[0] ?? '';
       return { size: 0, type: '' } as Blob;
     });
 
@@ -288,6 +288,8 @@ describe('LogExportDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /save to file/i }));
 
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    // Line-number prefix (bracketed 5 zero-padded digits) should appear in the exported text
+    expect(capturedText).toMatch(/^\[00001\] /m);
     clickSpy.mockRestore();
     blobSpy.mockRestore();
   });

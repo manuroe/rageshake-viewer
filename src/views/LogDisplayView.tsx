@@ -166,7 +166,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [collapseEnabled, setCollapseEnabled] = useState(true);
   const [showExport, setShowExport] = useState(false);
 
-  // Option+w → toggle line wrap; Option+p → toggle strip prefix
+  // Option+w → toggle line wrap; Option+p → toggle strip prefix; Option+s → open export dialog
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;

@@ -7,36 +7,6 @@
  */
 
 /**
- * Strip the ISO timestamp prefix and log-level token from a raw log message,
- * returning only the payload text.
- *
- * Matrix Rust SDK log lines follow the pattern:
- *   `<ISO-timestamp>  <LEVEL>  <payload>`
- *
- * For example:
- *   `"2026-01-28T13:24:43.950890Z  WARN  Something went wrong"`
- * becomes:
- *   `"Something went wrong"`
- *
- * This is used to group duplicate error/warning messages by their semantic
- * content rather than by the full raw text (which would never be equal because
- * each line has a unique timestamp).
- *
- * If the input does not match the expected pattern the original string is
- * returned unchanged so callers never receive an empty result unexpectedly.
- *
- * @param message - Raw log message string (may contain leading timestamp + level).
- * @returns The payload portion of the message, or the original string if no
- *   timestamp prefix is recognised.
- *
- * @example
- * extractCoreMessage("2026-01-28T13:24:43.950890Z WARN Something went wrong")
- * // => "Something went wrong"
- *
- * extractCoreMessage("No timestamp here")
- * // => "No timestamp here"
- */
-/**
  * Regular expression that matches the ISO timestamp + log-level prefix of a
  * Matrix Rust SDK log line, allowing the prefix to be stripped via
  * {@link stripLogPrefix}.
@@ -69,6 +39,31 @@ export function stripLogPrefix(rawText: string): string {
   return rawText.replace(LOG_PREFIX_RE, '');
 }
 
+/**
+ * Strip the ISO timestamp prefix and log-level token from a raw log message,
+ * returning only the payload text.
+ *
+ * Matrix Rust SDK log lines follow the pattern:
+ *   `<ISO-timestamp>  <LEVEL>  <payload>`
+ *
+ * This is used to group duplicate error/warning messages by their semantic
+ * content rather than by the full raw text (which would never be equal because
+ * each line has a unique timestamp).
+ *
+ * If the input does not match the expected pattern the original string is
+ * returned unchanged so callers never receive an empty result unexpectedly.
+ *
+ * @param message - Raw log message string (may contain leading timestamp + level).
+ * @returns The payload portion of the message, or the original string if no
+ *   timestamp prefix is recognised.
+ *
+ * @example
+ * extractCoreMessage("2026-01-28T13:24:43.950890Z WARN Something went wrong")
+ * // => "Something went wrong"
+ *
+ * extractCoreMessage("No timestamp here")
+ * // => "No timestamp here"
+ */
 export function extractCoreMessage(message: string): string {
   // Pattern: ISO timestamp followed by TRACE|DEBUG|INFO|WARN|ERROR and the payload.
   // The timestamp and level are separated from the payload by arbitrary whitespace.
