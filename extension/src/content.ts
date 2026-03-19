@@ -8,12 +8,14 @@
  * all rows. Summaries are fetched in reverse order (newest files first) with a
  * concurrency limit of 3 to avoid overloading the server.
  *
- * An "Open in Visualizer" link in the last column triggers `fetchAndStore` in
- * the background worker, then opens the bundled viewer page with the file key
- * as a query parameter so `useExtensionFile` can load it automatically.
+ * An "Open in Visualizer" button in the File column (`rs-name-btn`) triggers
+ * `fetchAndStore` in the background worker, then opens the bundled viewer page
+ * with the file key as a query parameter so `useExtensionFile` can load it
+ * automatically.
  */
 
 import type { LogSummary } from './summarize';
+import { formatBytes } from '../../src/utils/sizeUtils';
 
 // ── Theme detection ──────────────────────────────────────────────────────────
 
@@ -62,16 +64,6 @@ let keyCounter = 0;
 /** Generate a unique storage key for a log file hand-off. */
 function nextStorageKey(): string {
   return `${KEY_PREFIX}${Date.now()}_${keyCounter++}`;
-}
-
-// ── Size formatting ────────────────────────────────────────────────────────
-
-/** Format a byte count as a human-readable string (e.g. "1.2 MB"). */
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1_048_576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
 // ── DOM helpers ────────────────────────────────────────────────────────────

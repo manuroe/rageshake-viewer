@@ -24,7 +24,7 @@
   "web_accessible_resources": [
     {
       "resources": ["viewer.html", "assets/*"],
-      "matches": ["*://*/*"]
+      "matches": ["*://*/api/listing/*"]
     }
   ],
   "browser_specific_settings": {

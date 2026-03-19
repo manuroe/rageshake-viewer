@@ -121,19 +121,22 @@
    ========================================================================== */
 
 /* Darken the whole page — the rageshake listing is bare HTML with no styles,
-   so <body> and <pre> both render with the browser's default white background. */
-html[data-rs-theme="dark"] body:has(.rs-table),
-html[data-rs-theme="dark"] pre:has(.rs-table) {
+   so <body> and <pre> both render with the browser's default white background.
+   No :has() needed: data-rs-theme is only set by this content script, so its
+   presence already implies the table exists — and :has() is unsupported on
+   Firefox < 121 (our min is 109). */
+html[data-rs-theme="dark"] body,
+html[data-rs-theme="dark"] pre {
   background-color: #1e1e1e !important;
   color: #d4d4d4 !important;
 }
 
 /* Re-color remaining plain anchors (e.g. details.json) — the browser default
    blue is near-invisible on a dark background. */
-html[data-rs-theme="dark"] pre:has(.rs-table) a:not(.rs-raw-link) {
+html[data-rs-theme="dark"] pre a:not(.rs-raw-link) {
   color: #6ab0f5;
 }
-html[data-rs-theme="dark"] pre:has(.rs-table) a:visited:not(.rs-raw-link) {
+html[data-rs-theme="dark"] pre a:visited:not(.rs-raw-link) {
   color: #967fdb;
 }
 

@@ -10,8 +10,9 @@
  * - `fetchAndStore`: Fetches the raw (compressed) gz bytes for a given URL,
  *   encodes them as base64, stores them in `chrome.storage.session` under the
  *   provided key, and replies with `{ ok: true }`. The viewer page later reads
- *   this key, reconstructs a `File` object, and passes it to the existing app
- *   upload flow which already handles gz decompression.
+ *   this key via `useExtensionFile`, decodes the base64 bytes, decompresses
+ *   the gzip data inline, parses the resulting log text, and calls
+ *   `loadLogParserResult` directly — bypassing the file-upload flow.
  *
  * Both fetch calls use `credentials: 'include'` so that the user's existing
  * rageshakes session cookies are forwarded — allowing authenticated access to
