@@ -83,7 +83,7 @@ export function useExtensionFile(): void {
         // address and a refresh does not attempt to re-load a gone session entry.
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete(EXTENSION_FILE_PARAM);
-        await navigate(
+        void navigate(
           { pathname: '/summary', search: nextParams.toString() },
           { replace: true }
         );

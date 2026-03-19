@@ -171,8 +171,8 @@ function validateAndNormalizeUrl(
     throw new Error('Invalid URL');
   }
 
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Unsupported URL protocol');
+  if (url.protocol !== 'https:') {
+    throw new Error('Only https: URLs are allowed');
   }
   if (url.origin !== senderOrigin) {
     throw new Error('Cross-origin URL is not allowed');
@@ -196,7 +196,7 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
         return false;
       }
-      handleFetchAndSummarize(validatedUrl).then(sendResponse).catch((err: unknown) => {
+      void handleFetchAndSummarize(validatedUrl).then(sendResponse).catch((err: unknown) => {
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
       });
       // Return true to keep the message channel open for the async response.
@@ -211,7 +211,7 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
         return false;
       }
-      handleFetchAndStore(validatedUrl, message.key).then(sendResponse).catch((err: unknown) => {
+      void handleFetchAndStore(validatedUrl, message.key).then(sendResponse).catch((err: unknown) => {
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
       });
       return true;
