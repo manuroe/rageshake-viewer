@@ -97,6 +97,10 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const displayLogLines = logLines || rawLogLines;
 
   const sentryLineNumbers = useMemo(() => new Set(sentryEvents.map((e) => e.lineNumber)), [sentryEvents]);
+  const sentryEventByLineNumber = useMemo(
+    () => new Map(sentryEvents.map((event) => [event.lineNumber, event])),
+    [sentryEvents]
+  );
 
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [filterQueryInput, setFilterQueryInput] = useState(requestFilter);
@@ -320,6 +324,27 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     const isMatch = searchMatchingLineIndices.has(originalIndex);
     const displayText = getDisplayText(line);
     const isHovered = hoveredLineIndex === originalIndex;
+    const highlightOpts = searchQuery && isMatch
+      ? { query: searchQuery, caseSensitive: false, highlightClassName: styles.searchHighlight }
+      : null;
+
+    const renderWithSearchHighlights = (text: string, keySuffix: string): React.ReactNode => {
+      if (!highlightOpts) {
+        return text;
+      }
+      return highlightTextUtil(text, { ...highlightOpts, keyPrefix: `line-${originalIndex}-${keySuffix}` });
+    };
+
+    type LinkSpec = {
+      readonly start: number;
+      readonly end: number;
+      readonly href: string;
+      readonly title: string;
+      readonly keyPrefix: string;
+      readonly onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+    };
+
+    const linkSpecs: LinkSpec[] = [];
 
     // Always render the anchor so the first click lands on the element.
     // The link only receives visible link styling when the row is hovered/focused;
@@ -330,39 +355,72 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
         const sourceRef = `${line.filePath}:${line.sourceLineNumber}`;
         const sourceRefIndex = displayText.indexOf(sourceRef);
         if (sourceRefIndex >= 0) {
-          const before = displayText.slice(0, sourceRefIndex);
-          const after = displayText.slice(sourceRefIndex + sourceRef.length);
-          // Preserve search highlights in the segments surrounding the link.
-          const highlightOpts = searchQuery && isMatch
-            ? { query: searchQuery, caseSensitive: false, highlightClassName: styles.searchHighlight }
-            : null;
-          const renderedBefore = highlightOpts
-            ? highlightTextUtil(before, { ...highlightOpts, keyPrefix: `line-${originalIndex}-b` })
-            : before;
-          const renderedSourceRef = highlightOpts
-            ? highlightTextUtil(sourceRef, { ...highlightOpts, keyPrefix: `line-${originalIndex}-r` })
-            : sourceRef;
-          const renderedAfter = highlightOpts
-            ? highlightTextUtil(after, { ...highlightOpts, keyPrefix: `line-${originalIndex}-a` })
-            : after;
-          return (
-            <>
-              {renderedBefore}
-              <a
-                href={githubUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={isHovered ? styles.sourceLink : styles.sourceLinkInactive}
-                title={isHovered ? 'View on GitHub' : undefined}
-                onClick={(e) => handleSourceLinkClick(e, line.filePath, line.sourceLineNumber)}
-              >
-                {renderedSourceRef}
-              </a>
-              {renderedAfter}
-            </>
-          );
+          linkSpecs.push({
+            start: sourceRefIndex,
+            end: sourceRefIndex + sourceRef.length,
+            href: githubUrl,
+            title: 'View on GitHub',
+            keyPrefix: 'source',
+            onClick: (e) => handleSourceLinkClick(e, line.filePath, line.sourceLineNumber),
+          });
         }
       }
+    }
+
+    const sentryEvent = sentryEventByLineNumber.get(line.lineNumber);
+    if (sentryEvent?.sentryId && sentryEvent.sentryUrl) {
+      const sentryIdIndex = displayText.indexOf(sentryEvent.sentryId);
+      if (sentryIdIndex >= 0) {
+        linkSpecs.push({
+          start: sentryIdIndex,
+          end: sentryIdIndex + sentryEvent.sentryId.length,
+          href: sentryEvent.sentryUrl,
+          title: 'View in Sentry',
+          keyPrefix: 'sentry',
+        });
+      }
+    }
+
+    if (linkSpecs.length > 0) {
+      linkSpecs.sort((a, b) => a.start - b.start);
+      const renderedParts: React.ReactNode[] = [];
+      let cursor = 0;
+
+      for (let i = 0; i < linkSpecs.length; i++) {
+        const spec = linkSpecs[i];
+        if (spec.start < cursor) {
+          continue;
+        }
+
+        const before = displayText.slice(cursor, spec.start);
+        if (before.length > 0) {
+          renderedParts.push(renderWithSearchHighlights(before, `${spec.keyPrefix}-before-${i}`));
+        }
+
+        const linkedText = displayText.slice(spec.start, spec.end);
+        renderedParts.push(
+          <a
+            key={`line-${originalIndex}-${spec.keyPrefix}-link-${i}`}
+            href={spec.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={isHovered ? styles.sourceLink : styles.sourceLinkInactive}
+            title={isHovered ? spec.title : undefined}
+            onClick={spec.onClick}
+          >
+            {renderWithSearchHighlights(linkedText, `${spec.keyPrefix}-text-${i}`)}
+          </a>
+        );
+
+        cursor = spec.end;
+      }
+
+      const after = displayText.slice(cursor);
+      if (after.length > 0) {
+        renderedParts.push(renderWithSearchHighlights(after, 'tail'));
+      }
+
+      return <>{renderedParts}</>;
     }
     
     if (!searchQuery || !isMatch) {

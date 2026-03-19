@@ -264,6 +264,8 @@ describe('LogDisplayView gap arrows & expansion', () => {
 
     const RUST_LINE = '2026-02-04T13:01:45.365379Z DEBUG matrix_sdk::http_client::native: Sending request num_attempt=1 | crates/matrix-sdk/src/http_client/native.rs:78 | spans: root';
     const SWIFT_LINE = '2026-02-04T13:10:37.511766Z  INFO elementx: Received room list update: running | ClientProxy.swift:1092 | spans: root';
+    const SENTRY_CRASH_ID = '04f4668abb144c5f9818734e6ea88896';
+    const SENTRY_CRASH_LINE = `2026-03-18T18:00:07.580609Z ERROR elementx: Sentry detected a crash in the previous run: ${SENTRY_CRASH_ID} | AppCoordinator.swift:1002 | spans: root`;
 
     it('shows source links with hover styling for source-tagged lines', async () => {
       const user = userEvent.setup();
@@ -405,6 +407,41 @@ describe('LogDisplayView gap arrows & expansion', () => {
       // Blur to outside: inactive styling restored.
       act(() => { container.blur(); });
       await waitFor(() => expect(link.className).toMatch(/sourceLinkInactive/));
+    });
+
+    it('shows sentry crash ID as clickable link with hover styling', async () => {
+      const user = userEvent.setup();
+      const parsed = parseAllHttpRequests(SENTRY_CRASH_LINE);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines, sentryEvents: parsed.sentryEvents });
+
+      render(<LogDisplayView />);
+
+      const sentryLink = screen.getByRole('link', { name: SENTRY_CRASH_ID });
+      expect(sentryLink).toHaveAttribute(
+        'href',
+        `https://sentry.tools.element.io/organizations/element/issues/?project=44&query=${SENTRY_CRASH_ID}`
+      );
+      expect(sentryLink.className).toMatch(/sourceLinkInactive/);
+
+      await user.hover(getLineContainer(1));
+      await waitFor(() => expect(sentryLink.className).toMatch(/sourceLink(?!Inactive)/));
+    });
+
+    it('highlights search matches inside sentry crash ID link text', async () => {
+      const user = userEvent.setup();
+      const parsed = parseAllHttpRequests(SENTRY_CRASH_LINE);
+      useLogStore.setState({ rawLogLines: parsed.rawLogLines, sentryEvents: parsed.sentryEvents });
+
+      render(<LogDisplayView />);
+
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      await user.type(searchInput, '9818734e');
+      await waitFor(() => expect(getLineContainer(1).className).toMatch(/matchLine/));
+
+      const sentryLink = await screen.findByRole('link', { name: /9818734e/ });
+      const markInLink = sentryLink.querySelector('mark');
+      expect(markInLink).not.toBeNull();
+      expect(markInLink?.textContent).toBe('9818734e');
     });
   });
 
