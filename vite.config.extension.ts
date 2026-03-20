@@ -19,12 +19,13 @@
  * Run: `npm run build:extension`
  */
 
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import { copyFileSync, mkdirSync } from 'fs';
 
-const root = resolve(__dirname);
+const root = fileURLToPath(new URL('.', import.meta.url));
 const outDir = resolve(root, 'extension-dist');
 
 export default defineConfig({

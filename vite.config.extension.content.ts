@@ -13,10 +13,11 @@
  * Run: `npm run build:extension` (calls this automatically after the main build)
  */
 
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
-const root = resolve(__dirname);
+const root = fileURLToPath(new URL('.', import.meta.url));
 const outDir = resolve(root, 'extension-dist');
 
 export default defineConfig({
