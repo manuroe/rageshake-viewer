@@ -61,7 +61,7 @@ A git-ignored sandbox at `agent-workspace/` exists for all transient AI-generate
 - `agent-workspace/pr-replies-template.json` — batch reply template to fill in
 - `agent-workspace/pr-reply-results.json` — results after sending replies
 
-**Writing files** — always use your native file-writing tool (e.g. `create_file` or `str_replace`) to create or update files in `agent-workspace/`. Never use shell workarounds such as `echo "…" >> file`, `python3 -c "open(…).write(…)"`, or heredoc `cat > file << 'EOF'` to write file content — those exist only as a last resort when no file tool is available, which is never the case here.
+**Writing files** — always use your platform’s native file-writing capability (for example, the file creation and in-place edit tools provided in your environment) to create or update files in `agent-workspace/`. Never use shell workarounds such as `echo "…" >> file`, `python3 -c "open(…).write(…)"`, or heredoc `cat > file << 'EOF'` to write file content — those exist only as a last resort when no file tool is available, which is never the case here.
 
 **Commit messages** — never pass long or multi-line messages inline. Write to a file with your file tool and use `-F`:
 ```sh
