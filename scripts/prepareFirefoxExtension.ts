@@ -36,4 +36,7 @@ async function prepareFirefoxExtension(): Promise<void> {
   process.stdout.write(`Prepared Firefox extension build at ${targetDir}\n`);
 }
 
-void prepareFirefoxExtension();
+void prepareFirefoxExtension().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
