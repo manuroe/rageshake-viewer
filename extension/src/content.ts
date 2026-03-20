@@ -255,18 +255,32 @@ async function handleOpenInVisualizer(url: string, nameBtn: HTMLButtonElement): 
   const originalText = nameBtn.textContent ?? '';
   nameBtn.disabled = true;
   nameBtn.textContent = 'Loading…';
+  // Open a provisional window synchronously so popup blockers treat this as
+  // directly user-initiated. We navigate it to the real URL once the handoff
+  // completes, or close it on error.
+  const viewerWindow = window.open('about:blank', '_blank');
   try {
     const key = nextStorageKey();
     const response = await chrome.runtime.sendMessage({ type: 'fetchAndStore', url, key });
     nameBtn.textContent = originalText;
     nameBtn.disabled = false;
-    if (!response.ok) return;
+    if (!response.ok) {
+      if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
+      return;
+    }
     const viewerUrl = chrome.runtime.getURL(`viewer.html#/?extensionFile=${encodeURIComponent(key)}`);
-    window.open(viewerUrl, '_blank');
+    if (viewerWindow && !viewerWindow.closed) {
+      viewerWindow.location.href = viewerUrl;
+      try { viewerWindow.focus(); } catch { /* focusing may be blocked by the browser */ }
+    } else {
+      // Fallback: provisional window was blocked; try opening the final URL directly.
+      window.open(viewerUrl, '_blank');
+    }
     nameBtn.classList.add('rs-name-btn--visited');
   } catch {
     nameBtn.textContent = originalText;
     nameBtn.disabled = false;
+    if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
   }
 }
 

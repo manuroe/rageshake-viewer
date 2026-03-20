@@ -57,6 +57,11 @@ export function useExtensionFile(): void {
           return;
         }
 
+        // Fire-and-forget cleanup — free session quota regardless of whether
+        // decode/parse succeeds. A rejection here must never block the happy
+        // path or surface as an unhandled rejection.
+        void session.remove(key).catch(() => {});
+
         // Decode base64 → raw bytes. If the bytes are gzip-compressed (magic
         // bytes 0x1f 0x8b), decompress with gunzipSync. Otherwise the browser's
         // fetch already transparently decompressed them (Content-Encoding: gzip)
@@ -68,11 +73,6 @@ export function useExtensionFile(): void {
         }
         const decoded = isValidGzipHeader(rawBytes) ? gunzipSync(rawBytes) : rawBytes;
         const text = decodeTextBytes(decoded);
-
-        // Remove the session entry immediately after decoding — the base64 gz
-        // payload can be several MB and chrome.storage.session has a limited
-        // quota. Self-cleaning here ensures subsequent opens don't fail.
-        await session.remove(key);
 
         if (cancelled) return;
 

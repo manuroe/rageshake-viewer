@@ -139,5 +139,18 @@ describe('themeStore', () => {
       expect(() => useThemeStore.getState().setTheme('dark')).not.toThrow();
       vi.unstubAllGlobals();
     });
+
+    it('swallows promise rejections from chrome.storage.local.set', async () => {
+      // If chrome.storage.local.set returns a rejected promise (async quota/permission
+      // error), applyTheme must not produce an unhandled rejection.
+      vi.stubGlobal('chrome', {
+        storage: { local: { set: () => Promise.reject(new Error('quota exceeded')) } },
+      });
+      expect(() => useThemeStore.getState().setTheme('dark')).not.toThrow();
+      // Give the microtask queue a tick so the .catch() callback runs and
+      // prevents an unhandled-rejection warning.
+      await new Promise((r) => setTimeout(r, 0));
+      vi.unstubAllGlobals();
+    });
   });
 });

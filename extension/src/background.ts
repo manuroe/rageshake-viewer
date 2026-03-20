@@ -115,15 +115,28 @@ async function decodeLogTextFromBuffer(buffer: ArrayBuffer): Promise<string> {
   return new TextDecoder('utf-8').decode(bytes);
 }
 
+/** Chunk size for `arrayBufferToBase64` — 32 KiB is safely below the
+ * ~65 535 argument-count limit that most JS engines impose on `Function.apply`. */
+const BASE64_CHUNK_SIZE = 0x8000;
+
 /**
  * Encode an `ArrayBuffer` as a base64 string.
- * Uses `TextDecoder('latin1')` which maps byte values 0–255 to the same
- * Unicode code points, giving a string that `btoa` can encode without
- * iterating over individual bytes — and without the `String.fromCharCode`
- * spread that can hit the ~65\u00a0535 max-arguments limit on large files.
+ *
+ * Builds a binary string where every code unit is a single byte (0–255)
+ * and then passes it to `btoa`. Processing in 32 KiB chunks avoids hitting
+ * JS engine argument-count limits for large files.
+ *
+ * Note: `TextDecoder('latin1')` is intentionally avoided here because browsers
+ * treat 'latin1' as Windows-1252, which maps bytes 0x80–0x9F to code points
+ * above 255 — causing `btoa` to throw `InvalidCharacterError`.
  */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  return btoa(new TextDecoder('latin1').decode(new Uint8Array(buffer)));
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK_SIZE) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + BASE64_CHUNK_SIZE) as unknown as number[]);
+  }
+  return btoa(binary);
 }
 
 // ── URL validation ─────────────────────────────────────────────────────────

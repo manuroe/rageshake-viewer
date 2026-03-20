@@ -30,7 +30,7 @@ function applyTheme(theme: Theme) {
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       // eslint-disable-next-line @typescript-eslint/naming-convention -- chrome.storage key follows extension convention, not camelCase
-      void chrome.storage.local.set({ 'rs-theme': theme });
+      void chrome.storage.local.set({ 'rs-theme': theme }).catch(() => {});
     }
   } catch {
     // Not in an extension context, or storage API unavailable

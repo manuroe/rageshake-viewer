@@ -190,6 +190,28 @@ describe('useExtensionFile', () => {
     expect(mockLoadLogParserResult).not.toHaveBeenCalled();
   });
 
+  it('continues to parse and navigate even when session.remove rejects', async () => {
+    // session.remove is best-effort — a rejection must not abort parsing.
+    const key = 'remove-err-key';
+    mockSearchParams = new URLSearchParams(`extensionFile=${key}`);
+    const base64 = btoa('a');
+    globalThis.chrome = makeChromeSession(
+      () => Promise.resolve({ [key]: { base64, fileName: 'test.log.gz' } }),
+      () => Promise.reject(new Error('quota exceeded'))
+    );
+
+    renderHook(() => useExtensionFile());
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Parse and navigate must still have been called
+    expect(mockParseLogFile).toHaveBeenCalledTimes(1);
+    expect(mockLoadLogParserResult).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/summary' }),
+      { replace: true }
+    );
+  });
+
   it('silently swallows errors from gunzipSync', async () => {
     const key = 'decomp-err-key';
     mockSearchParams = new URLSearchParams(`extensionFile=${key}`);
