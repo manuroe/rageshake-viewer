@@ -19,6 +19,7 @@ import { DEFAULT_MS_PER_PIXEL } from './utils/timelineUtils';
 import { parseStatusParam } from './hooks/useURLParams';
 import { KeyboardShortcutProvider } from './components/KeyboardShortcutProvider';
 import { ShortcutHelpOverlay, ChordToast } from './components/ShortcutHelpOverlay';
+import { useExtensionFile } from './hooks/useExtensionFile';
 
 function AppContent() {
   const [searchParams] = useSearchParams();
@@ -28,6 +29,9 @@ function AppContent() {
   
   // Ref to prevent redirect loops
   const isRedirecting = useRef(false);
+
+  // Load log file passed by the browser extension (no-op outside extension context).
+  useExtensionFile();
 
   // Reset redirect flag when location changes
   useEffect(() => {

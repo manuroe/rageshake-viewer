@@ -1,0 +1,169 @@
+/* Rageshakes Log Summarizer — content script styles
+ *
+ * Each log file is rendered as a single compact inline row that inherits the
+ * host page's typography — no explicit background, no card chrome.
+ * A 3 px colored left border is the only visual decoration.
+ */
+
+/* ── Table layout ─────────────────────────────────────────────────────────────── */
+
+.rs-table {
+  border-collapse: collapse;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  /* Reset white-space: pre inherited from the host <pre> block */
+  white-space: normal;
+  margin: 4px 0;
+}
+
+.rs-table th {
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.45;
+  padding: 0 12px 3px 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.rs-table td {
+  padding: 1px 12px 1px 0;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+/* ── Column types ────────────────────────────────────────────────────────────── */
+
+/* th and td both carry these classes for shared text-align */
+.rs-col--num    { text-align: right; }
+.rs-col--name   { font-weight: 600; padding-right: 24px !important; }
+/* Status column absorbs leftover width so other columns stay tight */
+.rs-col--status { width: 99%; }
+
+/* ── Muted zero values ──────────────────────────────────────────────────────── */
+
+.rs-muted { opacity: 0.3; }
+
+/* ── Severity coloring on non-zero values ───────────────────────────────── */
+
+.rs-s--error  { color: #d44; font-weight: 600; }
+.rs-s--warn   { color: #b80; font-weight: 600; }
+.rs-s--sentry { color: #a7c; }
+
+/* ── Status codes — plain colored text, no chips ───────────────────────── */
+
+.rs-sc {
+  align-items: baseline;
+  column-gap: 0.35em;
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.6em;
+  white-space: nowrap;
+}
+
+.rs-sc--numeric .rs-sc__code {
+  display: inline-block;
+  text-align: right;
+  width: 3ch;
+}
+
+.rs-sc--numeric .rs-sc__count {
+  display: inline-block;
+  text-align: right;
+  width: 4ch;
+}
+
+.rs-sc--2xx   { color: #4a8; }
+.rs-sc--3xx   { color: #5ae; }
+.rs-sc--4xx   { color: #b80; }
+.rs-sc--5xx   { color: #d44; }
+.rs-sc--other { opacity: 0.6; }
+
+/* —— File name button — text link, no box ——————————————————————————————— */
+
+.rs-name-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  padding: 0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rs-name-btn:disabled { cursor: default; opacity: 0.6; }
+.rs-name-btn--visited { opacity: 0.5; }
+
+/* ── Raw log link ─────────────────────────────────────────────────────────── */
+
+.rs-raw-link {
+  margin-left: 0.5em;
+  font-size: 0.8em;
+  opacity: 0.4;
+  text-decoration: none;
+}
+
+.rs-raw-link:hover { opacity: 0.8; }
+
+/* ── Loading / error text ────────────────────────────────────────────────── */
+
+.rs-loading { opacity: 0.45; font-style: italic; }
+.rs-error   { color: #d44; }
+
+/* ==========================================================================
+   Dark theme — set by content.ts reading viewer's theme-storage localStorage
+   key (light / dark / system). System resolves via matchMedia so the OS
+   preference is still respected when the viewer is set to "system".
+   ========================================================================== */
+
+/* Darken the whole page — the rageshake listing is bare HTML with no styles,
+   so <body> and <pre> both render with the browser's default white background.
+   No :has() needed: data-rs-theme is only set by this content script, so its
+   presence already implies the table exists — and :has() is unsupported on
+   Firefox < 121 (our min is 109). */
+html[data-rs-theme="dark"] body,
+html[data-rs-theme="dark"] pre {
+  background-color: #1e1e1e !important;
+  color: #d4d4d4 !important;
+}
+
+/* Re-color remaining plain anchors (e.g. details.json) — the browser default
+   blue is near-invisible on a dark background. */
+html[data-rs-theme="dark"] pre a:not(.rs-raw-link) {
+  color: #6ab0f5;
+}
+html[data-rs-theme="dark"] pre a:visited:not(.rs-raw-link) {
+  color: #967fdb;
+}
+
+/* Table itself — fallback for browsers without :has() support. */
+html[data-rs-theme="dark"] .rs-table {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+}
+html[data-rs-theme="dark"] .rs-table th,
+html[data-rs-theme="dark"] .rs-table td {
+  color: #d4d4d4;
+}
+
+/* Severity: brighter variants for dark backgrounds */
+html[data-rs-theme="dark"] .rs-s--error  { color: #f77; }
+html[data-rs-theme="dark"] .rs-s--warn   { color: #fc0; }
+html[data-rs-theme="dark"] .rs-s--sentry { color: #c8a; }
+
+/* Status codes: brighter variants for dark backgrounds */
+html[data-rs-theme="dark"] .rs-sc--2xx   { color: #6c8; }
+html[data-rs-theme="dark"] .rs-sc--3xx   { color: #7cf; }
+html[data-rs-theme="dark"] .rs-sc--4xx   { color: #fc0; }
+html[data-rs-theme="dark"] .rs-sc--5xx   { color: #f77; }
+
+html[data-rs-theme="dark"] .rs-error     { color: #f77; }
+
+/* Raw link: explicit muted color so it remains legible rather than nearly
+   invisible (opacity-dimmed on a dark background = near-black). */
+html[data-rs-theme="dark"] .rs-raw-link       { color: #888; opacity: 1; }
+html[data-rs-theme="dark"] .rs-raw-link:hover { color: #bbb; opacity: 1; }

@@ -23,6 +23,18 @@ function applyTheme(theme: Theme) {
   } catch {
     // document may not be available in tests
   }
+
+  // Sync to chrome.storage.local so the content script (which runs on a
+  // different origin and cannot read the extension's localStorage) can also
+  // observe the user's explicit preference.
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- chrome.storage key follows extension convention, not camelCase
+      void chrome.storage.local.set({ 'rs-theme': theme }).catch(() => {});
+    }
+  } catch {
+    // Not in an extension context, or storage API unavailable
+  }
 }
 
 // Get initial theme from localStorage or default to system

@@ -28,6 +28,57 @@ npm start
 
 Open http://localhost:5173
 
+## Browser extension
+
+The extension enhances listing pages of any [rageshake](https://github.com/matrix-org/rageshake) server deployment by replacing each log-file row with a parsed summary card and an "Open in Visualizer" button. It auto-detects rageshake listing pages using the standard `/api/listing/*` path — no configuration needed.
+
+> **Note:** The extension is not yet published on the Chrome Web Store or Firefox Add-ons. It must be installed manually as an unpacked/temporary extension.
+
+### Install
+
+**Chrome / Edge**
+
+```bash
+npm run build:extension
+```
+
+Output is written to `extension-dist/`.
+
+1. Go to `chrome://extensions` (or `edge://extensions`).
+2. Enable **Developer mode** (toggle, top-right).
+3. Click **Load unpacked** and select the `extension-dist/` folder.
+
+To pick up changes: run `npm run build:extension`, then click the ↺ refresh icon on the extension card.
+
+**Firefox — temporary (session only)**
+
+`extension-dist/` uses a Chrome-format manifest that Firefox does not support. Build the Firefox-specific bundle first:
+
+```bash
+npm run build:extension:firefox
+```
+
+Then:
+
+1. Go to `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…** and select `extension-dist-firefox/manifest.json`.
+
+To pick up changes: re-run `npm run build:extension:firefox`, click **Reload** next to the extension, then reload the rageshakes tab (Cmd+R).
+
+The extension is removed when Firefox closes.
+
+**Firefox — persistent (via web-ext)**
+
+```bash
+npm run webext:run
+```
+
+This builds the Firefox bundle and launches a dedicated Firefox profile with the extension pre-loaded. Preferred for active development.
+
+### Usage
+
+Navigate to any rageshake listing URL (e.g. `https://<your-rageshake-server>/api/listing/<id>/`). The content script runs automatically and replaces each `.log.gz` row with a summary card.
+
 ## Contributing
 
 See [AGENTS.MD](AGENTS.MD) for architecture notes and agent/contributor guidance.

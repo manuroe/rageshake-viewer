@@ -1,7 +1,7 @@
 # Agent Context: Matrix Rust SDK Log Visualiser
 
 ## Project Overview
-A web application for visualizing and analyzing Matrix Rust SDK logs.
+A web application for visualizing and analyzing Matrix Rust SDK logs. It also ships a **browser extension** that enhances [rageshake](https://github.com/matrix-org/rageshake) listing pages with parsed summary cards and an "Open in Visualizer" button.
 
 ## Audience & Scope
 This document is a lightweight guide for contributors and automated agents. It focuses on stable concepts and boundaries, not implementation details.
@@ -23,6 +23,8 @@ This document is a lightweight guide for contributors and automated agents. It f
 - Domain utilities: [src/utils](src/utils)
 - Types: [src/types](src/types)
 - Tests: [src/__tests__](src/__tests__), [src/components/__tests__](src/components/__tests__), [src/views/__tests__](src/views/__tests__), [src/utils/__tests__](src/utils/__tests__)
+- Browser extension source: [extension/](extension/) (manifest, content script, background, viewer)
+- Extension build output: [extension-dist/](extension-dist/) (Chrome/Edge), [extension-dist-firefox/](extension-dist-firefox/) (Firefox)
 
 ## Core Principles
 - Precompute expensive parsing once; filtering should be cheap.
@@ -40,6 +42,8 @@ This document is a lightweight guide for contributors and automated agents. It f
 - Unit tests: `npm test -- --run` (exits after completion; omit `-- --run` for watch mode)
 - Performance benchmarks: `npm run bench`
   - Runs `.perf.test.ts` suites in Node runtime and reports results through CodSpeed in CI
+- Build extension (Chrome/Edge): `npm run build:extension` → `extension-dist/`
+- Build extension (Firefox): `npm run build:extension:firefox` → `extension-dist-firefox/`
 - Fetch PR review comments (unresolved actionable list): `npm run pr:comments` (auto-detects current branch) or `npm run pr:comments -- --pr <number>`
 - Batch-reply to PR comments from template file: `npm run pr:reply:batch` (reads `agent-workspace/pr-replies-template.json`)
 - Reply to a single PR review comment: `npm run pr:reply -- --comment-id <id> --message "<text>"`
@@ -126,6 +130,10 @@ Rejecting a comment:
 - Ask the reviewer to confirm or clarify before proceeding.
 - No code change should accompany a rejection reply.
 
+## Browser Extension
+
+The extension lives in [extension/](extension/) and is built separately from the main web app. It is **not yet published** on the Chrome Web Store or Firefox Add-ons — installation is manual only (see [README.md](README.md)). Chrome/Edge and Firefox require separate builds due to manifest format differences.
+
 ## Architecture
 1. Parse log text into structured records once.
 2. Store parsed results and filters centrally in Zustand. Global filters (time range) are shared across views; each view applies its own view-specific filters on top.
@@ -179,4 +187,6 @@ Screenshots in [`public/demo/screenshot-*.png`](public/demo/) are **generated an
 - Time utilities: [src/utils/timeUtils.ts](src/utils/timeUtils.ts)
 - Log views: [src/views](src/views)
 - Demo log: [public/demo/demo.log](public/demo/demo.log)
+- Extension manifest: [extension/manifest.json](extension/manifest.json)
+- Extension build config: [vite.config.extension.ts](vite.config.extension.ts)
 

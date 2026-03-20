@@ -11,6 +11,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+extension-dist/
+extension-dist-firefox/
 *.local
 .vite
 

@@ -32,6 +32,9 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
 
+      - name: Build extension (Chrome/Edge and Firefox)
+        run: npm run build:extension:firefox
+
       - name: Upload coverage to Codecov
         if: ${{ github.event_name == 'push' || env.CODECOV_TOKEN != '' }}
         env:

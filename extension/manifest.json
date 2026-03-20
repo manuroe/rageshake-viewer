@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Rageshakes Log Summarizer",
+  "version": "1.0.0",
+  "description": "Enhances listing pages of any rageshake server (https://github.com/matrix-org/rageshake) with parsed summaries for each Matrix Rust SDK log file.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*/api/listing/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/api/listing/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["viewer.html", "assets/*"],
+      "matches": ["https://*/api/listing/*"]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "rageshakes-log-summarizer@manuroe.github.io",
+      "strict_min_version": "109.0"
+    }
+  }
+}
