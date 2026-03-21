@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileUpload } from '../components/FileUpload';
 import { parseLogFile } from '../utils/logParser';
 import { useLogStore } from '../stores/logStore';
@@ -7,12 +7,50 @@ import { wrapError } from '../utils/errorHandling';
 import type { AppError } from '../utils/errorHandling';
 import ErrorDisplay from '../components/ErrorDisplay';
 import uploadStyles from '../components/FileUpload.module.css';
+import { EXTENSION_FILE_URL_PARAM, EXTENSION_FILE_NAME_PARAM } from '../hooks/useExtensionFile';
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
   const [demoError, setDemoError] = useState<AppError | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
+
+  // When opened by the extension, show a loading screen immediately so the
+  // user never sees the upload UI while useExtensionFile fetches the log.
+  const extensionFileUrl = searchParams.get(EXTENSION_FILE_URL_PARAM);
+  let extensionFileNameFromUrl: string | undefined;
+  if (extensionFileUrl) {
+    try {
+      const parsedUrl = new URL(extensionFileUrl);
+      const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+      extensionFileNameFromUrl = pathSegments[pathSegments.length - 1];
+    } catch {
+      // Fall back to simple split if URL parsing fails.
+      extensionFileNameFromUrl = extensionFileUrl.split('/').pop() ?? undefined;
+    }
+  }
+  const extensionFileName =
+    searchParams.get(EXTENSION_FILE_NAME_PARAM) ??
+    extensionFileNameFromUrl ??
+    'log file';
+
+  // Only show the loading screen when we are actually inside the extension
+  // context and the sendMessage API is available. Without that guard, a stale
+  // or manually crafted extensionFileUrl param would leave the user stuck on
+  // the loading screen with no way to upload a file.
+  const isExtensionContext =
+    typeof chrome !== 'undefined' && !!chrome.runtime?.sendMessage;
+
+  if (extensionFileUrl && isExtensionContext) {
+    return (
+      <div className={uploadStyles.dropZone}>
+        <div className={uploadStyles.dropZoneContent}>
+          <p>Loading {extensionFileName}…</p>
+        </div>
+      </div>
+    );
+  }
 
   const prNumber = import.meta.env.VITE_PR_NUMBER;
   const githubUrl = prNumber

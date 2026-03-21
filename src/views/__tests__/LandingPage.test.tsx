@@ -128,4 +128,58 @@ describe('LandingPage', () => {
 
     vi.unstubAllEnvs();
   });
+
+  describe('with chrome extension APIs available', () => {
+    beforeEach(() => {
+      // Simulate extension context: chrome.runtime.sendMessage must be available
+      // for the loading-screen guard to activate.
+      (globalThis as Record<string, unknown>).chrome = { runtime: { sendMessage: vi.fn() } };
+    });
+
+    afterEach(() => {
+      delete (globalThis as Record<string, unknown>).chrome;
+    });
+
+    it('renders the extension loading screen when extensionFileUrl param is present', () => {
+      render(
+        <MemoryRouter initialEntries={['/?extensionFileUrl=https%3A%2F%2Fexample.com%2Fapi%2Flisting%2Ffoo.log.gz&extensionFileName=foo.log.gz']}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      expect(screen.getByText(/Loading foo\.log\.gz/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('file-upload')).not.toBeInTheDocument();
+    });
+
+    it('derives the filename from extensionFileUrl pathname when extensionFileName param is absent', () => {
+      render(
+        <MemoryRouter initialEntries={['/?extensionFileUrl=https%3A%2F%2Fexample.com%2Fapi%2Flisting%2Fderived.log.gz']}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      expect(screen.getByText(/Loading derived\.log\.gz/i)).toBeInTheDocument();
+    });
+  });
+
+  it('falls back to the upload UI when extensionFileUrl is present but chrome APIs are unavailable', () => {
+    // Ensure chrome is NOT in globalThis (non-extension context)
+    if ('chrome' in globalThis) delete (globalThis as Record<string, unknown>).chrome;
+
+    render(
+      <MemoryRouter initialEntries={['/?extensionFileUrl=https%3A%2F%2Fexample.com%2Fapi%2Flisting%2Ffoo.log.gz']}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Should show the normal upload UI, not the loading screen
+    expect(screen.queryByText(/Loading/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('file-upload')).toBeInTheDocument();
+  });
 });

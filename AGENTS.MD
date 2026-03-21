@@ -66,7 +66,7 @@ A git-ignored sandbox at `agent-workspace/` exists for all transient AI-generate
 - `agent-workspace/pr-reply-results.json` — results after sending replies
 
 **Writing files** — always use your platform’s native file-writing capability (for example, the file creation and in-place edit tools provided in your environment) to create or update files in `agent-workspace/`. Never use shell workarounds such as `echo "…" >> file`, `python3 -c "open(…).write(…)"`, or heredoc `cat > file << 'EOF'` to write file content — those exist only as a last resort when no file tool is available, which is never the case here.
-
+**Replacing file content** — when a file (e.g. `pr-body.md`, `commit-msg.txt`) needs to be overwritten with new content, **always replace the entire file** using the create/overwrite file tool, not `replace_string_in_file`. Partial replacement with `replace_string_in_file` risks leaving stale content from earlier versions appended at the end of the file.
 **Commit messages** — never pass long or multi-line messages inline. Write to a file with your file tool and use `-F`:
 ```sh
 git commit -F agent-workspace/commit-msg.txt

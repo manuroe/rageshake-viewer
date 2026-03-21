@@ -1,27 +1,30 @@
 /**
  * Extension background service worker.
  *
- * Handles two message types from the content script:
+ * Handles two message types:
  *
- * - `fetchAndSummarize`: Fetches a `.log.gz` URL, decompresses it via the
- *   native `DecompressionStream` API, runs `summarizeLog`, and replies with
- *   the resulting `LogSummary`.
+ * - `fetchAndSummarize` (from content script): Fetches a `.log.gz` URL,
+ *   decompresses it via the native `DecompressionStream` API, runs
+ *   `summarizeLog`, and replies with the resulting `LogSummary`.
  *
- * - `fetchAndStore`: Fetches the raw (compressed) gz bytes for a given URL,
- *   encodes them as base64, stores them in `chrome.storage.session` under the
- *   provided key, and replies with `{ ok: true }`. The viewer page later reads
- *   this key via `useExtensionFile`, decodes the base64 bytes, decompresses
- *   the gzip data inline, parses the resulting log text, and calls
- *   `loadLogParserResult` directly — bypassing the file-upload flow.
+ * - `fetchForViewer` (from the viewer extension page): Fetches the raw
+ *   (compressed) gz bytes for a given URL, encodes them as base64, and
+ *   returns them directly in the message response — no session storage is
+ *   used. This avoids `chrome.storage.session`'s 10 MB quota entirely, which
+ *   was the cause of large files (e.g. ≥ 1 MB compressed) silently failing.
+ *   The viewer page decodes the base64, decompresses inline, parses the log,
+ *   and calls `loadLogParserResult`.
  *
  * Both fetch calls use `credentials: 'include'` so that the user's existing
  * rageshakes session cookies are forwarded — allowing authenticated access to
  * private listing pages without requiring the user to re-authenticate.
  *
- * URL validation: every incoming URL is validated with `validateAndNormalizeUrl`
- * before it is fetched. Only same-origin `.log.gz` URLs are permitted, which
- * prevents a malicious page from coercing the service-worker into making
- * credentialed requests to arbitrary third-party origins.
+ * URL validation: every incoming URL is validated before it is fetched.
+ * - `fetchAndSummarize` uses `validateAndNormalizeUrl` (strict same-origin check).
+ * - `fetchForViewer` uses `validateViewerFileUrl` (HTTPS + rageshake path check)
+ *   and additionally requires the sender to be an extension page (not a
+ *   content script), preventing a compromised listing page from coercing the
+ *   service worker into fetching arbitrary URLs.
  */
 
 import { summarizeLog } from './summarize';
@@ -36,18 +39,19 @@ interface FetchAndSummarizeMessage {
 }
 
 /**
- * Request the background to fetch raw gz bytes, encode as base64, and store
- * in `chrome.storage.session` under `key`. Used by the "Open in Visualizer"
- * flow: the viewer page retrieves this key and reconstructs a File object.
+ * Request the background to fetch the file at `url`, encode it as base64,
+ * and return it in the message response. Only accepted from extension pages
+ * (not content scripts). Used by the viewer's `useExtensionFile` hook.
  */
-interface FetchAndStoreMessage {
-  readonly type: 'fetchAndStore';
+interface FetchForViewerMessage {
+  readonly type: 'fetchForViewer';
+  /** Absolute HTTPS URL of the `.log.gz` file to fetch. */
   readonly url: string;
-  /** Storage key under which the base64 gz data is stored. */
-  readonly key: string;
+  /** Plain filename extracted from the URL (e.g. `console.log.gz`). */
+  readonly fileName: string;
 }
 
-type BackgroundMessage = FetchAndSummarizeMessage | FetchAndStoreMessage;
+type BackgroundMessage = FetchAndSummarizeMessage | FetchForViewerMessage;
 
 /** Successful response for `fetchAndSummarize`. */
 interface SummarizeResponse {
@@ -55,9 +59,11 @@ interface SummarizeResponse {
   readonly summary: LogSummary;
 }
 
-/** Successful response for `fetchAndStore`. */
-interface StoreResponse {
+/** Successful response for `fetchForViewer`. */
+interface ViewerFileResponse {
   readonly ok: true;
+  readonly base64: string;
+  readonly fileName: string;
 }
 
 /** Error response for any message type. */
@@ -66,7 +72,7 @@ interface ErrorResponse {
   readonly error: string;
 }
 
-type BackgroundResponse = SummarizeResponse | StoreResponse | ErrorResponse;
+type BackgroundResponse = SummarizeResponse | ViewerFileResponse | ErrorResponse;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -198,6 +204,39 @@ function validateAndNormalizeUrl(
   return url.toString();
 }
 
+/**
+ * Validate a URL supplied by the viewer extension page for `fetchForViewer`.
+ *
+ * Less strict than `validateAndNormalizeUrl` (no same-origin requirement,
+ * since the viewer doesn't have a tab origin to compare against), but still
+ * constrains the URL to HTTPS rageshake listing paths ending in `.log.gz`.
+ * This prevents a compromised listing page from opening the viewer with an
+ * arbitrary URL and coercing the service worker into making credentialled
+ * requests to third-party origins.
+ *
+ * @example
+ * validateViewerFileUrl('https://rageshakes.example.com/api/listing/2024/abc/console.log.gz');
+ * // => 'https://rageshakes.example.com/api/listing/2024/abc/console.log.gz'
+ */
+function validateViewerFileUrl(rawUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error('Invalid URL');
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error('Only https: URLs are allowed');
+  }
+  if (!url.pathname.endsWith('.log.gz')) {
+    throw new Error('Only .log.gz log URLs are allowed');
+  }
+  if (!url.pathname.startsWith('/api/listing/')) {
+    throw new Error('URL must be under /api/listing/');
+  }
+  return url.toString();
+}
+
 // ── Message handler ────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener(
@@ -217,15 +256,27 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
-    if (message.type === 'fetchAndStore') {
+    if (message.type === 'fetchForViewer') {
+      // Only extension pages (not content scripts) may request file content.
+      // When viewer.html is open in a tab, Chrome/Firefox sets sender.tab — so
+      // we cannot use sender.tab === undefined to detect extension pages.
+      // Use chrome.runtime.getURL('') to get the correct extension origin:
+      //   Chrome/Edge → 'chrome-extension://<id>/'
+      //   Firefox     → 'moz-extension://<id>/'
+      // Content scripts have the https:// URL of the page they run in.
+      const extensionOrigin = chrome.runtime.getURL('');
+      if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(extensionOrigin)) {
+        sendResponse({ ok: false, error: 'fetchForViewer is only available from extension pages' });
+        return false;
+      }
       let validatedUrl: string;
       try {
-        validatedUrl = validateAndNormalizeUrl(message.url, sender);
+        validatedUrl = validateViewerFileUrl(message.url);
       } catch (err) {
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
         return false;
       }
-      void handleFetchAndStore(validatedUrl, message.key).then(sendResponse).catch((err: unknown) => {
+      void handleFetchForViewer(validatedUrl, message.fileName).then(sendResponse).catch((err: unknown) => {
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
       });
       return true;
@@ -246,15 +297,19 @@ async function handleFetchAndSummarize(url: string): Promise<SummarizeResponse |
   return { ok: true, summary };
 }
 
-async function handleFetchAndStore(url: string, key: string): Promise<StoreResponse | ErrorResponse> {
+/**
+ * Fetch the raw gz bytes for `url` and return them as a base64 string.
+ *
+ * The file content is returned directly in the message response rather than
+ * being stored in `chrome.storage.session`, which avoids the 10 MB session
+ * quota limit that caused large log files to silently fail.
+ */
+async function handleFetchForViewer(url: string, fileName: string): Promise<ViewerFileResponse | ErrorResponse> {
   const response = await fetch(url, { credentials: 'include' });
   if (!response.ok) {
     return { ok: false, error: `HTTP ${response.status} fetching ${url}` };
   }
   const buffer = await response.arrayBuffer();
   const base64 = arrayBufferToBase64(buffer);
-  // Extract plain filename from URL (e.g. "console.2026-03-04-09.log.gz")
-  const fileName = url.split('/').pop() ?? 'log.gz';
-  await chrome.storage.session.set({ [key]: { base64, fileName } });
-  return { ok: true };
+  return { ok: true, base64, fileName };
 }
