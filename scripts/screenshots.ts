@@ -12,6 +12,8 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
+import { parseLogFile } from '../src/utils/logParser.ts';
+import { summarizeLogResult } from '../extension/src/summarize.ts';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = dirname(currentFilePath);
@@ -20,6 +22,7 @@ const OUT_DIR = resolve(ROOT, 'public', 'demo');
 const PORT = 4173;
 const BASE_URL = `http://localhost:${PORT}`;
 const VITE_BIN = resolve(ROOT, 'node_modules', '.bin', 'vite');
+const EXTENSION_DIST = resolve(ROOT, 'extension-dist');
 
 // Build the app with VITE_BASE=/ so assets resolve correctly on localhost
 console.warn('Building app...');
@@ -34,6 +37,17 @@ if (buildResult.status !== 0) {
   process.exit(1);
 }
 
+// Build the extension so content.js and content.css are up to date.
+console.warn('Building extension...');
+const extensionBuildResult = spawnSync('npm', ['run', 'build:extension'], {
+  cwd: ROOT,
+  stdio: 'inherit',
+  shell: true,
+});
+if (extensionBuildResult.status !== 0) {
+  console.error('Extension build failed.');
+  process.exit(1);
+}
 
 async function waitForServer(url: string, timeoutMs = 15_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -169,6 +183,47 @@ async function main(): Promise<void> {
   await shot('sync-light');
   await setTheme('dark');
   await shot('sync-dark');
+
+  // Extension listing page — navigate to the demo rageshake-style HTML, inject
+  // a chrome API shim returning real parsed data from the demo log, then run
+  // the actual content script IIFE so the DOM transformation is the real thing.
+  const demoLogText = await readFile(resolve(ROOT, 'public', 'demo', 'demo.log'), 'utf-8');
+  const demoSummary = summarizeLogResult(parseLogFile(demoLogText));
+
+  await page.goto(`${BASE_URL}/demo/api/listing/demo/`, { waitUntil: 'domcontentloaded' });
+
+  // Set up chrome global before the content script runs so chrome.storage and
+  // chrome.runtime.sendMessage resolve with the real demo summary instead of
+  // requiring an actual extension context.
+  // Pass as a string (not a function) so that tsx/esbuild does not transform
+  // the code — transformed output references __name which is undefined in the
+  // browser when Playwright serialises the function via .toString().
+  await page.evaluate(`
+    window.chrome = {
+      storage: { local: { get: function() { return Promise.resolve({}); } } },
+      runtime: {
+        sendMessage: function() {
+          return Promise.resolve({ ok: true, summary: ${JSON.stringify(demoSummary)} });
+        }
+      }
+    };
+  `);
+
+  await page.addStyleTag({ path: resolve(EXTENSION_DIST, 'content.css') });
+  await page.addScriptTag({ path: resolve(EXTENSION_DIST, 'content.js') });
+
+  // Wait until all loading placeholders have been replaced with real data.
+  await page.waitForFunction(
+    () => document.querySelectorAll('.rs-loading').length === 0,
+    { timeout: 15_000 },
+  );
+
+  // Extension uses data-rs-theme (not data-theme like the main app).
+  await page.evaluate(() => { document.documentElement.removeAttribute('data-rs-theme'); });
+  await shot('extension-light');
+  await page.evaluate(() => { document.documentElement.setAttribute('data-rs-theme', 'dark'); });
+  await page.waitForTimeout(300);
+  await shot('extension-dark');
 
   await browser.close();
   console.warn('All screenshots captured.');
