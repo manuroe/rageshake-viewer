@@ -11,7 +11,7 @@ argument-hint: 'PR number (optional, defaults to current branch)'
 - Responding to GitHub pull request review threads
 
 ## Procedure
-1. Run `npm run pr:comments` to fetch unresolved actionable comments.
+1. Run `npm run pr:comments` to fetch unresolved actionable comments for the current branch, or `npm run pr:comments -- --pr <number>` to target a specific pull request.
 2. Read `agent-workspace/pr-comments-for-agent.md` — contains structured comment list with IDs and reply endpoint types.
 3. Create a to-do list and address each comment systematically (fix or explicitly reject).
 4. Run the Pre-Commit Checklist before each commit (see AGENTS.MD): `npm run build && npm run lint && npm test -- --run --coverage`. Use conventional commit format for commit messages (type/scope reference: `.github/skills/create-pr/SKILL.md`).
