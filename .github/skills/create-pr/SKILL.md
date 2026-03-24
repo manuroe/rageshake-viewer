@@ -46,7 +46,7 @@ Examples: `feat/search-filter`, `fix/parser-crash`, `chore/update-deps`
 
 ### 3. Commit each logical group
 
-Write each commit message to `agent-workspace/commit-msg.txt`, then:
+Use the file creation/edit tool to write each commit message to `agent-workspace/commit-msg.txt`. **Never use shell (`echo`, heredoc, `cat >`) — terminal encoding corrupts the content.** Then:
 
 ```sh
 git add <files for this group>
@@ -86,7 +86,9 @@ git commit -F agent-workspace/commit-msg.txt
 
 ### 4. Write the PR description
 
-Write to `agent-workspace/pr-body.md`:
+Use the file creation/edit tool to write `agent-workspace/pr-body.md`. **Never use shell (`echo`, heredoc, `cat >`) — terminal encoding corrupts the content.**
+
+Template:
 
 ```markdown
 ## Summary
