@@ -44,54 +44,17 @@ This document is a lightweight guide for contributors and automated agents. It f
   - Runs `.perf.test.ts` suites in Node runtime and reports results through CodSpeed in CI
 - Build extension (Chrome/Edge): `npm run build:extension` → `extension-dist/`
 - Build extension (Firefox): `npm run build:extension:firefox` → `extension-dist-firefox/`
-- Fetch PR review comments (unresolved actionable list): `npm run pr:comments` (auto-detects current branch) or `npm run pr:comments -- --pr <number>`
-- Batch-reply to PR comments from template file: `npm run pr:reply:batch` (reads `agent-workspace/pr-replies-template.json`)
-- Reply to a single PR review comment: `npm run pr:reply -- --comment-id <id> --message "<text>"`
 
 ## AI Working Folder (`agent-workspace/`)
 
-A git-ignored sandbox at `agent-workspace/` exists for all transient AI-generated files. Nothing in this folder is ever committed or reviewed.
+A git-ignored sandbox for all transient AI-generated files. **Never use `/tmp/` or paths outside the workspace.**
 
-**Always use `agent-workspace/` for any temporary or scratch files.** Never use `/tmp/`, the system temp directory, or any path outside the workspace. The agent has full read/write access to `agent-workspace/` and must use it exclusively for all transient output.
-
-**Use it for:**
-- Planning notes (e.g. `agent-workspace/plan.md`)
-- All PR script outputs (see below)
-- Commit message bodies and PR descriptions (see below)
-
-**PR script output files** (written automatically by `npm run pr:comments` and `npm run pr:reply:batch`):
-- `agent-workspace/pr-comments.json` — raw structured PR data
-- `agent-workspace/pr-comments-for-agent.md` — formatted comments for agent consumption
-- `agent-workspace/pr-replies-template.json` — batch reply template to fill in
-- `agent-workspace/pr-reply-results.json` — results after sending replies
-
-**Writing files** — always use your platform’s native file-writing capability (for example, the file creation and in-place edit tools provided in your environment) to create or update files in `agent-workspace/`. Never use shell workarounds such as `echo "…" >> file`, `python3 -c "open(…).write(…)"`, or heredoc `cat > file << 'EOF'` to write file content — those exist only as a last resort when no file tool is available, which is never the case here.
-**Replacing file content** — when a file (e.g. `pr-body.md`, `commit-msg.txt`) needs to be overwritten with new content, **always replace the entire file** using the create/overwrite file tool, not `replace_string_in_file`. Partial replacement with `replace_string_in_file` risks leaving stale content from earlier versions appended at the end of the file.
-**Commit messages** — never pass long or multi-line messages inline. Write to a file with your file tool and use `-F`:
-```sh
-git commit -F agent-workspace/commit-msg.txt
-```
-
-Example content for `agent-workspace/commit-msg.txt` (written with your file tool, not via the shell):
-```
-feat: short title here
-
-Longer body explaining what changed and why.
-```
-
-**PR descriptions** — use `--body-file` instead of `--body`:
-```sh
-gh pr create --title "feat: short title" --body-file agent-workspace/pr-body.md
-```
-
-Example content for `agent-workspace/pr-body.md` (written with your file tool):
-```
-## Summary
-Describe the PR here.
-```
-
-**Never store source code or files meant to be reviewed in this folder.**
-
+- Use for planning notes, PR script outputs, commit messages, and PR descriptions
+- **Write files** using file tools — never shell workarounds (`echo >>`, heredoc, etc.)
+- **Overwriting**: always replace entire files; never partial `replace_string_in_file` edits on files like `pr-body.md`
+- **Commit messages**: write to `agent-workspace/commit-msg.txt` and use `git commit -F agent-workspace/commit-msg.txt`
+- **PR descriptions**: write to `agent-workspace/pr-body.md` and use `gh pr create --body-file agent-workspace/pr-body.md`
+- **Never store source code** or files meant to be reviewed here
 
 Do **not** commit on the first iteration. Write the code, show the user what changed, and wait for feedback. Only commit once the user confirms the direction is correct — or explicitly asks you to commit.
 
@@ -109,26 +72,23 @@ Do not commit if any of these steps fail. Fix the issue first, then re-run the f
 
 **Manual review** — before committing, scan the diff against each pillar in [Code Quality Standards](#code-quality-standards) and verify all apply.
 
+## Creating PRs (for Agents)
+
+When asked to commit and create a PR, follow `.github/skills/create-pr/SKILL.md` (also available as `/create-pr` in Copilot). Core steps:
+1. Pass the Pre-Commit Checklist above.
+2. Analyze `git diff` and group changes into logical commits.
+3. Create a branch (`feat/`, `fix/`, etc.) and commit each group with a conventional commit message: `type(scope): description`.
+4. Write PR description to `agent-workspace/pr-body.md`.
+5. Push and run `gh pr create --body-file agent-workspace/pr-body.md`.
+
 ## PR Review Workflow (for Agents)
 
-When prompted **"Review PR comments"**:
-1. Run `npm run pr:comments`.
-2. Read `agent-workspace/pr-comments-for-agent.md` for unresolved actionable comments (contains comment IDs and reply endpoint type).
-3. Create a todo list and address each comment systematically (fix or reject).
-4. Run the [Pre-Commit Checklist](#pre-commit-checklist-for-agents) before each commit.
-5. Fill `agent-workspace/pr-replies-template.json` with one detailed reply per addressed comment.
-6. Send replies in one batch with `npm run pr:reply:batch` (or `npm run pr:reply -- --batch-file agent-workspace/pr-replies-template.json`).
-
-Reply quality guideline:
-- Do not send only `Fixed in <sha>`.
-- Prefer a concise detailed format: what changed, where it changed, and the commit reference/link.
-
-Rejecting a comment:
-- If a requested change contradicts the user's requirements or prior discussions in the session or makes no sense, **do not apply it**.
-- Set `"skip": true` for that item in `pr-replies-template.json`.
-- Write a reply explaining clearly why the change was not applied and what the correct behavior is.
-- Ask the reviewer to confirm or clarify before proceeding.
-- No code change should accompany a rejection reply.
+When prompted **"Review PR comments"**, follow `.github/skills/fix-review-comments/SKILL.md` (also available as `/fix-review-comments` in Copilot). Core steps:
+1. Run `npm run pr:comments` → read `agent-workspace/pr-comments-for-agent.md`.
+2. Create a to-do list and address each comment (fix or reject).
+3. Run the [Pre-Commit Checklist](#pre-commit-checklist-for-agents) before each commit.
+4. Fill `agent-workspace/pr-replies-template.json` with one reply per comment.
+5. Send replies with `npm run pr:reply:batch`.
 
 ## Browser Extension
 
