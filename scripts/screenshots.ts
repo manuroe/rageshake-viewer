@@ -23,6 +23,12 @@ const PORT = 4173;
 const BASE_URL = `http://localhost:${PORT}`;
 const VITE_BIN = resolve(ROOT, 'node_modules', '.bin', 'vite');
 const EXTENSION_DIST = resolve(ROOT, 'extension-dist');
+const EXTENSION_LISTING_SCREENSHOT_CLIP = {
+  x: 0,
+  y: 0,
+  width: 1280,
+  height: 320,
+} as const;
 
 // Build the app with VITE_BASE=/ so assets resolve correctly on localhost
 console.warn('Building app...');
@@ -108,9 +114,12 @@ async function main(): Promise<void> {
     return differentPixels === 0;
   }
 
-  async function shot(name: string): Promise<void> {
+  async function shot(
+    name: string,
+    options?: { readonly clip?: { x: number; y: number; width: number; height: number } },
+  ): Promise<void> {
     const outputPath = resolve(OUT_DIR, `screenshot-${name}.png`);
-    const nextPng = await page.screenshot({ type: 'png' });
+    const nextPng = await page.screenshot({ type: 'png', clip: options?.clip });
 
     try {
       const existingPng = await readFile(outputPath);
@@ -196,10 +205,10 @@ async function main(): Promise<void> {
 
   // Before extension enhancement
   await page.evaluate(() => { document.documentElement.removeAttribute('data-rs-theme'); });
-  await shot('extension-before-light');
+  await shot('extension-before-light', { clip: EXTENSION_LISTING_SCREENSHOT_CLIP });
   await page.evaluate(() => { document.documentElement.setAttribute('data-rs-theme', 'dark'); });
   await page.waitForTimeout(300);
-  await shot('extension-before-dark');
+  await shot('extension-before-dark', { clip: EXTENSION_LISTING_SCREENSHOT_CLIP });
 
   // Set up chrome global before the content script runs so chrome.storage and
   // chrome.runtime.sendMessage resolve with the real demo summary instead of
@@ -229,10 +238,10 @@ async function main(): Promise<void> {
 
   // Extension uses data-rs-theme (not data-theme like the main app).
   await page.evaluate(() => { document.documentElement.removeAttribute('data-rs-theme'); });
-  await shot('extension-light');
+  await shot('extension-light', { clip: EXTENSION_LISTING_SCREENSHOT_CLIP });
   await page.evaluate(() => { document.documentElement.setAttribute('data-rs-theme', 'dark'); });
   await page.waitForTimeout(300);
-  await shot('extension-dark');
+  await shot('extension-dark', { clip: EXTENSION_LISTING_SCREENSHOT_CLIP });
 
   await browser.close();
   console.warn('All screenshots captured.');
