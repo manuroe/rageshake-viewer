@@ -32,8 +32,22 @@ Open http://localhost:5173
 
 The extension enhances listing pages of any [rageshake](https://github.com/matrix-org/rageshake) server deployment by replacing each log-file row with a parsed summary card and an "Open in Visualizer" button. It auto-detects rageshake listing pages using the standard `/api/listing/*` path — no configuration needed.
 
-![Extension listing page](public/demo/screenshot-extension-light.png#gh-light-mode-only)
-![Extension listing page](public/demo/screenshot-extension-dark.png#gh-dark-mode-only)
+<table>
+	<tr>
+		<td align="center"><strong>Without extension</strong></td>
+		<td align="center"><strong>With extension</strong></td>
+	</tr>
+	<tr>
+		<td>
+			<img src="public/demo/screenshot-extension-before-light.png#gh-light-mode-only" alt="Rageshake listing page without extension" />
+			<img src="public/demo/screenshot-extension-before-dark.png#gh-dark-mode-only" alt="Rageshake listing page without extension" />
+		</td>
+		<td>
+			<img src="public/demo/screenshot-extension-light.png#gh-light-mode-only" alt="Rageshake listing page enhanced by extension" />
+			<img src="public/demo/screenshot-extension-dark.png#gh-dark-mode-only" alt="Rageshake listing page enhanced by extension" />
+		</td>
+	</tr>
+</table>
 
 > **Note:** The extension is not yet published on the Chrome Web Store or Firefox Add-ons. It must be installed manually as an unpacked/temporary extension.
 
