@@ -1,7 +1,7 @@
-# Agent Context: Matrix Rust SDK Log Visualiser
+# Agent Context: Rageshake Viewer
 
 ## Project Overview
-A web application for visualizing and analyzing Matrix Rust SDK logs. It also ships a **browser extension** that enhances [rageshake](https://github.com/matrix-org/rageshake) listing pages with parsed summary cards and an "Open in Visualizer" button.
+A web application for visualizing and analyzing rageshake logs. It also ships a **browser extension** that enhances [rageshake](https://github.com/matrix-org/rageshake) listing pages with parsed summary cards and an "Open in Visualizer" button.
 
 ## Audience & Scope
 This document is a lightweight guide for contributors and automated agents. It focuses on stable concepts and boundaries, not implementation details.
@@ -125,7 +125,7 @@ CI runs benchmark suites via CodSpeed and publishes performance tracking/results
 
 A hand-crafted demo log lives at [`public/demo/demo.log`](public/demo/demo.log). It is served as a static asset and loaded by the **"Try with demo logs"** link on the landing page, letting users explore the app without a real log file.
 
-**When adding a new feature**, extend `public/demo/demo.log` so the feature is visible and exercisable in the demo. The log must remain a valid, parseable Matrix Rust SDK log that exercises all existing app capabilities as well as the new one.
+**When adding a new feature**, extend `public/demo/demo.log` so the feature is visible and exercisable in the demo. The log must remain a valid, parseable rageshake log that exercises all existing app capabilities as well as the new one.
 
 ## Demo Screenshots
 

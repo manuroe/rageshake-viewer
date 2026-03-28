@@ -8,7 +8,7 @@
 
 /**
  * Regular expression that matches the ISO timestamp + log-level prefix of a
- * Matrix Rust SDK log line, allowing the prefix to be stripped via
+ * rageshake log line, allowing the prefix to be stripped via
  * {@link stripLogPrefix}.
  *
  * Exported so consumers can reuse the canonical pattern without duplicating the
@@ -43,7 +43,7 @@ export function stripLogPrefix(rawText: string): string {
  * Strip the ISO timestamp prefix and log-level token from a raw log message,
  * returning only the payload text.
  *
- * Matrix Rust SDK log lines follow the pattern:
+ * Rageshake log lines follow the pattern:
  *   `<ISO-timestamp>  <LEVEL>  <payload>`
  *
  * This is used to group duplicate error/warning messages by their semantic

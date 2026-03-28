@@ -1,16 +1,16 @@
-# Matrix Rust SDK Log Visualiser
+# Rageshake Viewer
 
-[![codecov](https://codecov.io/gh/manuroe/matrix-rust-sdk-log-visualiser/graph/badge.svg)](https://codecov.io/gh/manuroe/matrix-rust-sdk-log-visualiser)
+[![codecov](https://codecov.io/gh/manuroe/rageshake-viewer/graph/badge.svg)](https://codecov.io/gh/manuroe/rageshake-viewer)
 
-A web viewer for [matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk) logs. **All processing runs locally in your browser** — no data is sent anywhere.
+A web viewer for **rageshake logs** produced by the [Matrix Rust SDK](https://github.com/matrix-org/matrix-rust-sdk) and Element X apps ([Android](https://github.com/element-hq/element-x-android), [iOS](https://github.com/element-hq/element-x-ios)). **All processing runs locally in your browser** — no data is sent anywhere.
 
-Live at **https://manuroe.github.io/matrix-rust-sdk-log-visualiser/**
-
-![Logs view](public/demo/screenshot-logs-light.png#gh-light-mode-only)
-![Logs view](public/demo/screenshot-logs-dark.png#gh-dark-mode-only)
+Live at **https://manuroe.github.io/rageshake-viewer/**
 
 ![Summary view](public/demo/screenshot-summary-light.png#gh-light-mode-only)
 ![Summary view](public/demo/screenshot-summary-dark.png#gh-dark-mode-only)
+
+![Logs view](public/demo/screenshot-logs-light.png#gh-light-mode-only)
+![Logs view](public/demo/screenshot-logs-dark.png#gh-dark-mode-only)
 
 ![Sync waterfall](public/demo/screenshot-sync-light.png#gh-light-mode-only)
 ![Sync waterfall](public/demo/screenshot-sync-dark.png#gh-dark-mode-only)

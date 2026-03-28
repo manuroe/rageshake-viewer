@@ -7,7 +7,7 @@ import codspeedPlugin from '@codspeed/vitest-plugin'
 export default mergeConfig(
   defineConfig({
     plugins: [react()],
-    base: process.env.VITE_BASE || '/matrix-rust-sdk-log-visualiser/',
+    base: process.env.VITE_BASE || '/rageshake-viewer/',
   }),
   defineVitestConfig({
     plugins: [codspeedPlugin()],

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Rageshakes Log Summarizer",
+  "name": "Rageshake Viewer",
   "version": "1.0.0",
-  "description": "Enhances listing pages of any rageshake server (https://github.com/matrix-org/rageshake) with parsed summaries for each Matrix Rust SDK log file.",
+  "description": "Enhances rageshake listing pages with parsed summaries and quick-view buttons for each log file.",
   "permissions": [
     "storage"
   ],
