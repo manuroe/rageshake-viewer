@@ -14,9 +14,9 @@
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage",
     "bench": "vitest bench --run --environment node --pool forks --minWorkers 1 --maxWorkers 1",
-    "pr:comments": "tsx scripts/fetchPRComments.ts",
-    "pr:reply": "tsx scripts/replyPRComment.ts",
-    "pr:reply:batch": "tsx scripts/replyPRComment.ts --batch-file agent-workspace/pr-replies-template.json",
+    "pr:comments": "tsx .github/skills/fix-review-comments/fetchPRComments.ts",
+    "pr:reply": "tsx .github/skills/fix-review-comments/replyPRComment.ts",
+    "pr:reply:batch": "tsx .github/skills/fix-review-comments/replyPRComment.ts --batch-file agent-workspace/pr-replies-template.json",
     "screenshots": "tsx scripts/screenshots.ts",
     "lint": "eslint .",
     "preview": "vite preview"
