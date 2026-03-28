@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { parseAllHttpRequests, parseLogFile } from '../logParser';
 import { ParsingError } from '../errorHandling';
 
-// Sample log line formats from real Matrix Rust SDK logs
+// Sample log line formats from real rageshake logs
 const SEND_LINE = '2026-01-26T17:02:25.042916Z DEBUG matrix_sdk::http_client::native: Sending request num_attempt=1 | crates/matrix-sdk/src/http_client/native.rs:78 | spans: root > sync_once{conn_id="room-list"} > send{request_id="REQ-62" method=POST uri="https://matrix-client.matrix.org/_matrix/client/unstable/org.matrix.simplified_msc3575/sync" request_size="5.9k"}';
 const SEND_LINE_WITH_TIMEOUT = SEND_LINE.replace('sync_once{conn_id="room-list"}', 'sync_once{conn_id="room-list" timeout=0}');
 const SEND_LINE_WITH_URI_TIMEOUT = SEND_LINE.replace(

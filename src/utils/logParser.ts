@@ -434,7 +434,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   const timestampPercentage = rawLogLines.length > 0 ? (linesWithTimestamps / rawLogLines.length) * 100 : 0;
   if (rawLogLines.length > 100 && timestampPercentage < 10) {
     throw new ParsingError(
-      'Log file appears to be invalid. Please ensure this is a Matrix Rust SDK log file.',
+      'Log file appears to be invalid. Please ensure this is a valid rageshake log file.',
       'error'
     );
   }

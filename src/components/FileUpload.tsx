@@ -171,7 +171,7 @@ export function FileUpload() {
           <polyline points="17 8 12 3 7 8"></polyline>
           <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
-        <h2>Drop Matrix SDK Log File Here</h2>
+        <h2>Drop Rageshake Here</h2>
         <p>or click to browse</p>
         <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
           Supports .log or .log.gz files

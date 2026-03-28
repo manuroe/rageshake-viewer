@@ -54,8 +54,8 @@ export function LandingPage() {
 
   const prNumber = import.meta.env.VITE_PR_NUMBER;
   const githubUrl = prNumber
-    ? `https://github.com/manuroe/matrix-rust-sdk-log-visualiser/pull/${prNumber}`
-    : 'https://github.com/manuroe/matrix-rust-sdk-log-visualiser';
+    ? `https://github.com/manuroe/rageshake-viewer/pull/${prNumber}`
+    : 'https://github.com/manuroe/rageshake-viewer';
 
   const handleLoadDemo = async () => {
     setDemoError(null);
