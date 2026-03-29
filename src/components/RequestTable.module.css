@@ -76,7 +76,7 @@
 }
 
 .requestRow .stickyCol {
-    background-color: var(--row-bg, transparent);
+    background-color: transparent;
     min-width: 0;
 }
 
@@ -178,9 +178,14 @@
     --row-bg: var(--row-bg-expanded);
 }
 
-.selected {
-    --row-bg: #d0e5f5;
-    font-weight: 600;
+.requestRow.selected,
+.requestRow.selected:hover {
+    --row-bg: var(--color-primary-muted);
+}
+
+.timelineRowsLeft .requestRow.selected,
+.timelineRowsLeft .requestRow.selected:hover {
+    box-shadow: inset 3px 0 0 var(--color-primary);
 }
 
 .incomplete {
