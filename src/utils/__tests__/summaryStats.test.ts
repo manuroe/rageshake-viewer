@@ -277,6 +277,7 @@ describe('computeSummaryStats — syncRequestsByConnection', () => {
     const rawLines = makeLines(2);
     const index = buildIndex(rawLines);
 
+
     const syncRequests = [
       createSyncRequest({ requestId: 'S1', connId: 'active', responseLineNumber: 0 }),
     ];
@@ -469,5 +470,131 @@ describe('computeSummaryStats — topFailedUrls with client errors', () => {
       (e) => e.requestId === 'RETRY_INC_CHART' && e.status === 'client-error'
     );
     expect(clientErrorEntry).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// httpRequestsWithBandwidth
+// ---------------------------------------------------------------------------
+
+describe('computeSummaryStats — httpRequestsWithBandwidth', () => {
+  it('includes completed requests with both upload and download bytes', () => {
+    const rawLines = makeLines(3);
+    const index = buildIndex(rawLines);
+
+    const req = createHttpRequest({
+      requestId: 'R1',
+      requestSize: 200,
+      responseSize: 1000,
+      sendLineNumber: 0,
+      responseLineNumber: 1,
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestsWithBandwidth).toHaveLength(1);
+    expect(result.httpRequestsWithBandwidth[0].uploadBytes).toBe(200);
+    expect(result.httpRequestsWithBandwidth[0].downloadBytes).toBe(1000);
+    expect(result.httpRequestsWithBandwidth[0].timestampUs).toBe(rawLines[1].timestampUs);
+  });
+
+  it('preserves the URI on each entry', () => {
+    const rawLines = makeLines(3);
+    const index = buildIndex(rawLines);
+
+    const req = createHttpRequest({
+      requestId: 'R1',
+      uri: 'https://matrix.example.org/_matrix/client/v3/rooms',
+      requestSize: 100,
+      responseSize: 500,
+      sendLineNumber: 0,
+      responseLineNumber: 1,
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestsWithBandwidth[0].uri).toBe(
+      'https://matrix.example.org/_matrix/client/v3/rooms',
+    );
+  });
+
+  it('includes in-flight requests with upload bytes only (downloadBytes = 0)', () => {
+    const rawLines = makeLines(3);
+    const index = buildIndex(rawLines);
+
+    // No responseLineNumber → in-flight / incomplete
+    const req = createHttpRequest({
+      requestId: 'R2',
+      status: '',
+      requestSize: 300,
+      responseSize: 0,
+      sendLineNumber: 1,
+      responseLineNumber: 0,
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestsWithBandwidth).toHaveLength(1);
+    expect(result.httpRequestsWithBandwidth[0].uploadBytes).toBe(300);
+    expect(result.httpRequestsWithBandwidth[0].downloadBytes).toBe(0);
+    expect(result.httpRequestsWithBandwidth[0].timestampUs).toBe(rawLines[1].timestampUs);
+  });
+
+  it('excludes requests where both requestSize and responseSize are zero', () => {
+    const rawLines = makeLines(3);
+    const index = buildIndex(rawLines);
+
+    const req = createHttpRequest({
+      requestId: 'R3',
+      requestSize: 0,
+      responseSize: 0,
+      sendLineNumber: 0,
+      responseLineNumber: 1,
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestsWithBandwidth).toHaveLength(0);
+  });
+
+  it('excludes requests whose timestamp falls outside the active time range', () => {
+    const rawLines = makeLines(5);
+    const index = buildIndex(rawLines);
+
+    // Line 4 is outside the range we will specify (lines 0-2)
+    const inRange = createHttpRequest({
+      requestId: 'IN',
+      requestSize: 100,
+      responseSize: 500,
+      sendLineNumber: 0,
+      responseLineNumber: 1,
+    });
+    const outOfRange = createHttpRequest({
+      requestId: 'OUT',
+      requestSize: 200,
+      responseSize: 800,
+      sendLineNumber: 3,
+      responseLineNumber: 4,
+    });
+
+    const localRange = {
+      startUs: rawLines[0].timestampUs,
+      endUs: rawLines[2].timestampUs,
+    };
+
+    const result = computeSummaryStats(
+      rawLines,
+      [inRange, outOfRange],
+      [],
+      [],
+      [],
+      null,
+      null,
+      localRange,
+      index,
+    );
+
+    expect(result.httpRequestsWithBandwidth).toHaveLength(1);
+    expect(result.httpRequestsWithBandwidth[0].uploadBytes).toBe(100);
   });
 });

@@ -34,8 +34,8 @@ const DOWNLOAD_COLOR = 'var(--bandwidth-download)';
 const CATEGORIES: BandwidthCategory[] = [DOWNLOAD_KEY, UPLOAD_KEY];
 
 interface BandwidthBucket extends ActivityBucket {
-  readonly uploadBytes: number;
-  readonly downloadBytes: number;
+  uploadBytes: number;
+  downloadBytes: number;
 }
 
 interface BandwidthChartProps {
@@ -122,14 +122,9 @@ export function BandwidthChart({
       const k = Math.floor(req.timestampUs / bucketSize) * bucketSize;
       const bucket = bucketMap.get(k);
       if (bucket) {
-        // BandwidthBucket properties are readonly — replace the entry with
-        // an updated copy rather than mutating.
-        bucketMap.set(k, {
-          ...bucket,
-          uploadBytes: bucket.uploadBytes + req.uploadBytes,
-          downloadBytes: bucket.downloadBytes + req.downloadBytes,
-          total: bucket.total + req.uploadBytes + req.downloadBytes,
-        });
+        bucket.uploadBytes += req.uploadBytes;
+        bucket.downloadBytes += req.downloadBytes;
+        bucket.total += req.uploadBytes + req.downloadBytes;
       }
     }
 
