@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BandwidthChart } from '../BandwidthChart';
+import { renderBandwidthTooltip, type BandwidthBucket } from '../BandwidthChartTooltip';
 import type { BandwidthRequestEntry } from '../../types/log.types';
 import type { TimestampMicros } from '../../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../../types/time.types';
@@ -147,5 +148,55 @@ describe('BandwidthChart', () => {
       // (full drag-selection behaviour is tested in BaseActivityChart/useChartInteraction)
       expect(container.querySelector('rect[fill="transparent"]')).toBeInTheDocument();
     });
+  });
+});
+
+// ─── renderBandwidthTooltip unit tests ──────────────────────────────────────
+
+function makeBucket(overrides: Partial<BandwidthBucket> = {}): BandwidthBucket {
+  return {
+    timestamp: 0,
+    timeLabel: '00:00:01',
+    total: 1536,
+    uploadBytes: 512,
+    downloadBytes: 1024,
+    ...overrides,
+  };
+}
+
+describe('renderBandwidthTooltip', () => {
+  it('shows the time label', () => {
+    render(renderBandwidthTooltip(makeBucket({ timeLabel: '12:34:56' })));
+    expect(screen.getByText('12:34:56')).toBeInTheDocument();
+  });
+
+  it('shows download row when downloadBytes > 0', () => {
+    render(renderBandwidthTooltip(makeBucket({ downloadBytes: 1024 })));
+    expect(screen.getByText(/download/i)).toBeInTheDocument();
+  });
+
+  it('hides download row when downloadBytes = 0', () => {
+    render(renderBandwidthTooltip(makeBucket({ downloadBytes: 0 })));
+    expect(screen.queryByText(/download/i)).not.toBeInTheDocument();
+  });
+
+  it('shows upload row when uploadBytes > 0', () => {
+    render(renderBandwidthTooltip(makeBucket({ uploadBytes: 512 })));
+    expect(screen.getByText(/upload/i)).toBeInTheDocument();
+  });
+
+  it('hides upload row when uploadBytes = 0', () => {
+    render(renderBandwidthTooltip(makeBucket({ uploadBytes: 0 })));
+    expect(screen.queryByText(/upload/i)).not.toBeInTheDocument();
+  });
+
+  it('shows total row when total > 0', () => {
+    render(renderBandwidthTooltip(makeBucket({ total: 1536 })));
+    expect(screen.getByText(/total/i)).toBeInTheDocument();
+  });
+
+  it('hides total row when total = 0', () => {
+    render(renderBandwidthTooltip(makeBucket({ total: 0 })));
+    expect(screen.queryByText(/total/i)).not.toBeInTheDocument();
   });
 });

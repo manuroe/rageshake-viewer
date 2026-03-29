@@ -1,9 +1,10 @@
 import { useMemo, useCallback } from 'react';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_SECOND, MICROS_PER_MILLISECOND } from '../types/time.types';
-import { BaseActivityChart, type ActivityBucket } from './BaseActivityChart';
+import { BaseActivityChart } from './BaseActivityChart';
 import { formatBytes } from '../utils/sizeUtils';
 import type { BandwidthRequestEntry } from '../types/log.types';
+import { renderBandwidthTooltip, type BandwidthBucket } from './BandwidthChartTooltip';
 
 /**
  * Upload category key for the bandwidth stacked bar chart.
@@ -32,11 +33,6 @@ const DOWNLOAD_COLOR = 'var(--bandwidth-download)';
  * upload on top.
  */
 const CATEGORIES: BandwidthCategory[] = [DOWNLOAD_KEY, UPLOAD_KEY];
-
-interface BandwidthBucket extends ActivityBucket {
-  uploadBytes: number;
-  downloadBytes: number;
-}
 
 interface BandwidthChartProps {
   /** Bandwidth data points to chart, one per HTTP request. */
@@ -146,53 +142,7 @@ export function BandwidthChart({
   );
 
   const renderTooltipContent = useCallback(
-    (bucket: BandwidthBucket) => (
-      <>
-        <div style={{ marginBottom: '2px', fontWeight: 'bold', fontSize: '10px' }}>
-          {bucket.timeLabel}
-        </div>
-        {bucket.downloadBytes > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                width: '6px',
-                height: '6px',
-                backgroundColor: DOWNLOAD_COLOR,
-                borderRadius: '1px',
-              }}
-            />
-            <span style={{ fontSize: '9px' }}>↓ Download: {formatBytes(bucket.downloadBytes)}</span>
-          </div>
-        )}
-        {bucket.uploadBytes > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                width: '6px',
-                height: '6px',
-                backgroundColor: UPLOAD_COLOR,
-                borderRadius: '1px',
-              }}
-            />
-            <span style={{ fontSize: '9px' }}>↑ Upload: {formatBytes(bucket.uploadBytes)}</span>
-          </div>
-        )}
-        {bucket.total > 0 && (
-          <div
-            style={{
-              marginTop: '2px',
-              paddingTop: '2px',
-              borderTop: '1px solid #555',
-              fontSize: '9px',
-            }}
-          >
-            Total: {formatBytes(bucket.total)}
-          </div>
-        )}
-      </>
-    ),
+    (bucket: BandwidthBucket) => renderBandwidthTooltip(bucket),
     [],
   );
 
