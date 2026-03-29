@@ -343,7 +343,7 @@ function extractComments(prData: PRData): FormattedComment[] {
  * Read code context from file
  */
 function getCodeContext(filePath: string, line: number, startLine?: number): string {
-  const workspaceRoot = join(currentDirPath, '..');
+  const workspaceRoot = join(currentDirPath, '..', '..', '..');
   const fullPath = join(workspaceRoot, filePath);
   
   if (!existsSync(fullPath)) {
@@ -460,7 +460,7 @@ function main() {
   const comments = extractComments(prData);
   
   printLine('💾 Saving structured data...');
-  const workspaceRoot = join(currentDirPath, '..');
+  const workspaceRoot = join(currentDirPath, '..', '..', '..');
   const agentWorkspaceDir = join(workspaceRoot, 'agent-workspace');
   mkdirSync(agentWorkspaceDir, { recursive: true });
   const jsonPath = join(agentWorkspaceDir, 'pr-comments.json');
