@@ -14,7 +14,7 @@
  *   once in `logStore` on parse — O(1) lookups instead of repeated `.find()`.
  */
 
-import type { HttpRequest, HttpRequestWithTimestamp, SyncRequest, ParsedLogLine, SentryEvent } from '../types/log.types';
+import type { HttpRequest, HttpRequestWithTimestamp, SyncRequest, ParsedLogLine, SentryEvent, BandwidthRequestEntry } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { getTimeRangeUs } from './requestFilters';
 import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
@@ -94,6 +94,8 @@ export interface SummaryStats {
   readonly syncRequestsByConnection: readonly SyncByConnection[];
   /** HTTP requests with resolved timestamps (used by `HttpActivityChart`). */
   readonly httpRequestsWithTimestamps: HttpRequestWithTimestamp[];
+  /** HTTP requests with upload/download byte counts (used by `BandwidthChart`). */
+  readonly httpRequestsWithBandwidth: readonly BandwidthRequestEntry[];
   /**
    * Total number of unique HTTP requests (completed + incomplete), used for the
    * "N requests" headline. Distinct from `httpRequestsWithTimestamps.length`,
@@ -127,6 +129,7 @@ const EMPTY_STATS: SummaryStats = Object.freeze({
   slowestHttpRequests: [] as readonly SlowHttpRequest[],
   syncRequestsByConnection: [] as readonly SyncByConnection[],
   httpRequestsWithTimestamps: [] as HttpRequestWithTimestamp[],
+  httpRequestsWithBandwidth: [] as readonly BandwidthRequestEntry[],
   httpRequestCount: 0,
   incompleteRequestCount: 0,
   totalUploadBytes: 0,
@@ -381,6 +384,12 @@ export function computeSummaryStats(
   // sets ensures the numbers are always consistent.
   let totalUploadBytes = 0;
   let totalDownloadBytes = 0;
+
+  // ── HTTP requests with bandwidth data (for BandwidthChart) ───────────────
+  // Mirrors the same timestamp logic used for httpRequestsWithTimestamps but
+  // captures requestSize / responseSize instead of status.
+  const httpRequestsWithBandwidth: BandwidthRequestEntry[] = [];
+
   for (const req of allHttpRequests) {
     if (req.responseLineNumber) {
       const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
@@ -388,12 +397,28 @@ export function computeSummaryStats(
       if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
         totalUploadBytes += req.requestSize;
         totalDownloadBytes += req.responseSize;
+        if (req.requestSize > 0 || req.responseSize > 0) {
+          httpRequestsWithBandwidth.push({
+            timestampUs: ts,
+            uploadBytes: req.requestSize,
+            downloadBytes: req.responseSize,
+            uri: req.uri,
+          });
+        }
       }
     } else if (!req.status && req.sendLineNumber) {
       const ts = lineNumberIndex.get(req.sendLineNumber)?.timestampUs;
       if (!ts || ts === 0) continue;
       if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
         totalUploadBytes += req.requestSize;
+        if (req.requestSize > 0) {
+          httpRequestsWithBandwidth.push({
+            timestampUs: ts,
+            uploadBytes: req.requestSize,
+            downloadBytes: 0,
+            uri: req.uri,
+          });
+        }
       }
     }
   }
@@ -422,6 +447,7 @@ export function computeSummaryStats(
     incompleteRequestCount: incompleteRequestsWithTimestamps.length,
     totalUploadBytes,
     totalDownloadBytes,
+    httpRequestsWithBandwidth,
     chartTimeRange: { minTime: chartMinTime, maxTime: chartMaxTime },
   };
 }

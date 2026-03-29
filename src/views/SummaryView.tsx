@@ -6,14 +6,82 @@ import { BurgerMenu } from '../components/BurgerMenu';
 import { TimeRangeSelector } from '../components/TimeRangeSelector';
 import { LogActivityChart } from '../components/LogActivityChart';
 import { HttpActivityChart } from '../components/HttpActivityChart';
+import { BandwidthChart } from '../components/BandwidthChart';
 import { calculateTimeRangeMicros, formatTimestamp, formatDuration, getMinMaxTimestamps, snapSelectionToLogLine, SNAP_TOLERANCE_US } from '../utils/timeUtils';
 import { formatBytes } from '../utils/sizeUtils';
 import { getHttpStatusBadgeClass } from '../utils/httpStatusColors';
 import { stripMatrixClientPath } from '../utils/uriUtils';
 import { computeSummaryStats } from '../utils/summaryStats';
+import type { BandwidthRequestEntry } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import styles from './SummaryView.module.css';
 import tableStyles from '../components/Table.module.css';
+
+/** Pattern matching media upload/download paths. */
+const MEDIA_PATH_RE = /\/media\//i;
+
+interface BandwidthSectionProps {
+  requests: readonly BandwidthRequestEntry[];
+  timeRange: { readonly minTime: TimestampMicros; readonly maxTime: TimestampMicros };
+  onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
+  onResetZoom?: () => void;
+}
+
+/**
+ * Renders the "Bandwidth Over Time" section with an inline toggle to hide
+ * media requests (paths containing `/media/`). Hidden by default because media
+ * transfers are typically multi-MB outliers that compress the scale and make
+ * smaller API traffic invisible.
+ */
+function BandwidthSection({
+  requests,
+  timeRange,
+  onTimeRangeSelected,
+  onResetZoom,
+}: BandwidthSectionProps) {
+  const [hideMedia, setHideMedia] = useState(true);
+
+  const filteredRequests = useMemo(
+    () => (hideMedia ? requests.filter((r) => !MEDIA_PATH_RE.test(r.uri)) : requests),
+    [requests, hideMedia],
+  );
+
+  return (
+    <section className={styles.summarySection}>
+      <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        Bandwidth Over Time
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: 'var(--font-size-xs)',
+            fontWeight: 'normal',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={hideMedia}
+            onChange={(e) => setHideMedia(e.target.checked)}
+            style={{ cursor: 'pointer' }}
+          />
+          Hide media
+        </label>
+      </h2>
+      <div className={styles.activityChartContainer}>
+        <BandwidthChart
+          requests={filteredRequests}
+          timeRange={timeRange}
+          onTimeRangeSelected={onTimeRangeSelected}
+          onResetZoom={onResetZoom}
+        />
+      </div>
+    </section>
+  );
+}
 
 export function SummaryView() {
   const navigate = useNavigate();
@@ -376,6 +444,16 @@ export function SummaryView() {
               />
             </div>
           </section>
+        )}
+
+        {/* Bandwidth Over Time Chart */}
+        {stats.httpRequestsWithBandwidth.length > 0 && (
+          <BandwidthSection
+            requests={stats.httpRequestsWithBandwidth}
+            timeRange={stats.chartTimeRange}
+            onTimeRangeSelected={handleTimeRangeSelected}
+            onResetZoom={handleResetZoom}
+          />
         )}
 
         {/* HTTP Errors Grid */}
