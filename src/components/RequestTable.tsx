@@ -678,10 +678,12 @@ export function RequestTable({
                           key={seg.startMs}
                           className={styles.gapOverlay}
                           style={{ left: `${seg.startPx}px`, width: `${seg.widthPx}px` }}
-                          title={`No HTTP activity for ${formatGapDuration(seg.durationMs)}`}
-                          aria-label={`Idle gap: no HTTP activity for ${formatGapDuration(seg.durationMs)}`}
+                          aria-hidden="true"
                         >
-                          <span className={styles.gapLabel} aria-hidden="true">
+                          <span
+                            className={styles.gapLabel}
+                            title={`No HTTP activity for ${formatGapDuration(seg.durationMs)}`}
+                          >
                             {formatGapDuration(seg.durationMs)}
                           </span>
                         </div>

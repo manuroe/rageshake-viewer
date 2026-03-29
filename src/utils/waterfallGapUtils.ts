@@ -10,7 +10,7 @@
  * ------------
  * `buildCompressedTimeline` partitions the timeline into `WaterfallSegment`s.
  * Each segment is either:
- * - `'active'` – contains at least one request bar; width = `durationMs / msPerPixel`
+ * - `'active'` – contains at least one request bar; width = `max(1 px, durationMs / msPerPixel)`
  * - `'gap'`    – an idle period > threshold; width = `COLLAPSED_GAP_PX` (fixed)
  *
  * `buildLinearTimeline` wraps the existing proportional logic in the same

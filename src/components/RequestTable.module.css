@@ -368,6 +368,5 @@
     border: 1px solid var(--gap-border);
     line-height: 1.3;
     user-select: none;
-    pointer-events: none;
     z-index: 3;
 }
