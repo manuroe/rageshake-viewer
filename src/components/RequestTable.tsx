@@ -14,7 +14,7 @@ import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import { metaKey, optionKey } from '../utils/shortcuts';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateTimelineWidth } from '../utils/timelineUtils';
-import { buildCompressedTimeline, buildLinearTimeline, formatGapDuration } from '../utils/waterfallGapUtils';
+import { buildCompressedTimeline, buildLinearTimeline, formatGapDuration, LABEL_PADDING_PX } from '../utils/waterfallGapUtils';
 import { LogDisplayView } from '../views/LogDisplayView';
 import { useScrollSync } from '../hooks/useScrollSync';
 import { useUrlRequestAutoScroll } from '../hooks/useUrlRequestAutoScroll';
@@ -209,13 +209,13 @@ export function RequestTable({
     .filter((t) => t.startTime > 0), [displayedRequests, lineNumberIndex]);
 
   const minTime = timeData.length > 0 ? Math.min(...timeData.map(t => t.startTime)) : 0;
+  // Compute the latest request end time without label padding, used for gap compression.
+  const maxEndTime = timeData.length > 0 ? Math.max(...timeData.map(t => t.endTime)) : 0;
   // Use maxExtent to ensure the timeline is wide enough for all bars including their widths
   // Add extra time (in ms) to account for the duration label displayed after the last bar (e.g., "12888ms")
   // 80px worth of label space at the current scale
-  const labelPaddingMs = 80 * msPerPixel;
-  const maxExtent = timeData.length > 0
-    ? Math.max(...timeData.map(t => t.endTime)) + labelPaddingMs
-    : 0;
+  const labelPaddingMs = LABEL_PADDING_PX * msPerPixel;
+  const maxExtent = maxEndTime + labelPaddingMs;
   // totalDuration uses maxExtent so bar positions are correctly proportioned to timeline width
   const totalDuration = Math.max(1, maxExtent - minTime);
 
@@ -244,10 +244,14 @@ export function RequestTable({
    */
   const timeline = useMemo(() => {
     if (collapseIdlePeriods && timeData.length > 1) {
-      return buildCompressedTimeline(timeData, minTime, maxExtent, msPerPixel);
+      const t = buildCompressedTimeline(timeData, minTime, maxEndTime, msPerPixel);
+      // Append a fixed LABEL_PADDING_PX region so the duration label after the
+      // last bar always has room.  This avoids the tail being treated as a gap
+      // when labelPaddingMs > IDLE_GAP_THRESHOLD_MS (i.e. at very low zoom).
+      return { ...t, totalWidthPx: t.totalWidthPx + LABEL_PADDING_PX };
     }
     return buildLinearTimeline(minTime, totalDuration, timelineWidth, msPerPixel);
-  }, [collapseIdlePeriods, timeData, minTime, maxExtent, msPerPixel, totalDuration, timelineWidth]);
+  }, [collapseIdlePeriods, timeData, minTime, maxEndTime, msPerPixel, totalDuration, timelineWidth]);
 
   // Handle resize for layout measurements
   useEffect(() => {

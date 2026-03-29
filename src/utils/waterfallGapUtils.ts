@@ -32,6 +32,13 @@ export const IDLE_GAP_THRESHOLD_MS = 5_000;
  */
 export const COLLAPSED_GAP_PX = 28;
 
+/**
+ * Fixed pixel padding appended after the last request bar to leave room for
+ * duration labels.  Kept constant (not tied to `msPerPixel`) in the
+ * compressed-timeline path so it is never mistaken for an idle gap.
+ */
+export const LABEL_PADDING_PX = 80;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -118,7 +125,9 @@ function mergeWindows(windows: TimeWindow[]): TimeWindow[] {
  *
  * @param timeData     - Array of `{ startTime, endTime }` for all displayed requests (ms).
  * @param minTime      - Earliest timestamp across all requests (ms absolute).
- * @param maxTime      - Latest point in the timeline, typically `maxEndTime + labelPaddingMs` (ms absolute).
+ * @param maxTime      - Latest request end time (ms absolute), **without** any label-padding
+ *                       offset.  The caller appends a fixed `LABEL_PADDING_PX` region in
+ *                       pixel space after the timeline so it is never collapsed as a gap.
  * @param msPerPixel   - Current timeline scale (ms per pixel).
  * @param thresholdMs  - Minimum gap duration to collapse (default: `IDLE_GAP_THRESHOLD_MS`).
  *
@@ -191,18 +200,42 @@ export function buildCompressedTimeline(
 
   /**
    * Find the segment containing `relativeMs` (ms relative to minTime).
-   * Uses an exclusive right boundary so a timestamp exactly at the junction
-   * between two segments (e.g. gap end = active start) resolves to the later
-   * (active) segment rather than the earlier (gap) one.
+   * Binary-searches over segment boundaries (O(log n)) since segments are
+   * constructed in chronological order.  Uses an exclusive right boundary so
+   * a timestamp exactly at a junction resolves to the later (active) segment
+   * rather than the earlier (gap) one.
    */
   function findSegment(relativeMs: number): { seg: WaterfallSegment; offsetMs: number } | null {
-    for (const seg of segments) {
-      const segStartMs = seg.startMs - minTime;
-      const segEndMs = seg.endMs - minTime;
-      if (relativeMs >= segStartMs && relativeMs < segEndMs) {
-        return { seg, offsetMs: relativeMs - segStartMs };
+    let lo = 0;
+    let hi = segments.length - 1;
+    let foundIndex = -1;
+
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const midSeg = segments[mid];
+      const segStartMs = midSeg.startMs - minTime;
+      // Use the next segment's start as this segment's exclusive right bound.
+      const segEndMs =
+        mid + 1 < segments.length
+          ? segments[mid + 1].startMs - minTime
+          : totalMs;
+
+      if (relativeMs < segStartMs) {
+        hi = mid - 1;
+      } else if (relativeMs >= segEndMs) {
+        lo = mid + 1;
+      } else {
+        foundIndex = mid;
+        break;
       }
     }
+
+    if (foundIndex !== -1) {
+      const seg = segments[foundIndex];
+      const segStartMs = seg.startMs - minTime;
+      return { seg, offsetMs: relativeMs - segStartMs };
+    }
+
     // Fallback: clamp to the last segment's right edge (guards against
     // floating-point rounding when relativeMs ≈ totalMs).
     const last = segments[segments.length - 1];

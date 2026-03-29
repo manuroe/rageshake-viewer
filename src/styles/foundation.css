@@ -163,7 +163,7 @@
   --gap-stripe-a: rgba(0, 0, 0, 0.025);
   --gap-stripe-b: rgba(0, 0, 0, 0.055);
   --gap-border: rgba(0, 0, 0, 0.12);
-  --gap-label-color: #aaa;
+  --gap-label-color: #666;
 
   /* -------------------------------------------------------------------------
      Sync Request Colors
