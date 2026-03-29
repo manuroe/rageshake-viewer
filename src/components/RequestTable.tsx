@@ -89,8 +89,7 @@ export interface RequestTableProps {
     req: HttpRequest,
     barWidthPx: number,
     msPerPixel: number,
-    totalDuration: number,
-    timelineWidth: number
+    durationToPixels: (durationMs: number) => number,
   ) => ReactNode;
 }
 
@@ -652,7 +651,7 @@ export function RequestTable({
                                   }
                                   return [segment];
                                 })}
-                                {!resolvedIsIncomplete && renderBarOverlay && renderBarOverlay(req, barWidth, msPerPixel, totalDuration, timeline.totalWidthPx)}
+                                {!resolvedIsIncomplete && renderBarOverlay && renderBarOverlay(req, barWidth, msPerPixel, (dMs) => timeline.durationToPixels(0, dMs))}
                               </div>
                               <span className={styles.waterfallDuration} title={resolvedIsIncomplete ? INCOMPLETE_STATUS_KEY : (retryTooltip ?? resolvedStatus)}>
                                 {resolvedIsIncomplete

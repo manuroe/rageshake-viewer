@@ -28,8 +28,7 @@ describe('renderTimeoutExceededOverlay', () => {
       req,
       350,
       100,
-      100_000,
-      1000,
+      (d) => Math.max(1, d / 100),
       () => undefined,
     );
 
@@ -43,8 +42,7 @@ describe('renderTimeoutExceededOverlay', () => {
       req,
       300,
       100,
-      100_000,
-      1000,
+      (d) => Math.max(1, d / 100),
       () => 30_000,
     );
 
@@ -58,8 +56,7 @@ describe('renderTimeoutExceededOverlay', () => {
       req,
       500,
       100,
-      100_000,
-      1000,
+      (d) => Math.max(1, d / 100),
       () => 30_000,
     );
 
@@ -80,8 +77,7 @@ describe('renderTimeoutExceededOverlay', () => {
       req,
       150,
       100,
-      100_000,
-      1000,
+      (d) => Math.max(1, d / 100),
       () => 0,
     );
 

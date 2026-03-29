@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import type { HttpRequest } from '../types/log.types';
-import { getWaterfallBarWidth } from './timelineUtils';
 
 type TimeoutResolver = (req: HttpRequest) => number | undefined;
 
@@ -20,9 +19,11 @@ type TimeoutResolver = (req: HttpRequest) => number | undefined;
  * @param req - The HTTP request whose duration is being visualised.
  * @param barWidthPx - Total rendered width of the waterfall bar in pixels.
  * @param msPerPixel - Timeline scale factor: how many milliseconds one pixel represents.
- * @param totalDuration - Total duration of the visible timeline window in milliseconds,
- *   used by `getWaterfallBarWidth` to compute the timeout boundary position.
- * @param timelineWidth - Pixel width of the full timeline container.
+ * @param durationToPixels - Converts a duration (ms) to pixels using the current
+ *   timeline mapping.  In compressed mode this returns `max(1, durationMs / msPerPixel)`;
+ *   in linear mode it uses the proportional formula.  Passing this instead of raw
+ *   `totalDuration`/`timelineWidth` ensures the overlay aligns with the bar's scaling
+ *   regardless of whether idle gaps are collapsed.
  * @param resolveTimeout - Callback that returns the effective timeout (ms) for the
  *   given request, or `undefined` when no timeout applies.
  * @returns A positioned `<div>` overlay element, or `null` if no overflow exists.
@@ -30,9 +31,8 @@ type TimeoutResolver = (req: HttpRequest) => number | undefined;
 export function renderTimeoutExceededOverlay(
   req: HttpRequest,
   barWidthPx: number,
-  msPerPixel: number,
-  totalDuration: number,
-  timelineWidth: number,
+  _msPerPixel: number,
+  durationToPixels: (durationMs: number) => number,
   resolveTimeout: TimeoutResolver,
 ): ReactNode {
   const timeoutMs = resolveTimeout(req);
@@ -43,7 +43,7 @@ export function renderTimeoutExceededOverlay(
 
   const timeoutBoundaryPx = timeoutMs <= 0
     ? 0
-    : getWaterfallBarWidth(timeoutMs, totalDuration, timelineWidth, msPerPixel);
+    : durationToPixels(timeoutMs);
 
   const splitLeftPx = Math.max(0, Math.min(timeoutBoundaryPx, barWidthPx));
   const exceededWidthPx = barWidthPx - splitLeftPx;

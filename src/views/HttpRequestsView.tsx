@@ -109,15 +109,13 @@ export function HttpRequestsView() {
     (
       req: HttpRequest,
       barWidthPx: number,
-      msPerPixel: number,
-      totalDuration: number,
-      timelineWidth: number
+      _msPerPixel: number,
+      durationToPixels: (durationMs: number) => number,
     ) => renderTimeoutExceededOverlay(
       req,
       barWidthPx,
-      msPerPixel,
-      totalDuration,
-      timelineWidth,
+      _msPerPixel,
+      durationToPixels,
       (request) => timeoutByRequestId.get(request.requestId),
     ),
     [timeoutByRequestId]

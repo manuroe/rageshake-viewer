@@ -307,7 +307,7 @@ export function buildLinearTimeline(
       const offsetMs = timeMs - minTime;
       const calculatedPosition = (offsetMs / totalDuration) * timelineWidth;
       const dynamicMinPosition = Math.max(0, offsetMs / msPerPixel);
-      return Math.max(calculatedPosition, dynamicMinPosition);
+      return Math.min(timelineWidth, Math.max(calculatedPosition, dynamicMinPosition));
     },
 
     durationToPixels(startMs: number, endMs: number): number {

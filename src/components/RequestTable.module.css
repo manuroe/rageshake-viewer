@@ -369,4 +369,7 @@
     line-height: 1.3;
     user-select: none;
     z-index: 3;
+    /* override the inherited pointer-events: none from .gapOverlay so
+       hovering the pill triggers the browser title tooltip */
+    pointer-events: auto;
 }
