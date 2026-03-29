@@ -23,7 +23,7 @@ describe('App routing fallback', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Drop Matrix SDK Log File Here/i)).toBeInTheDocument();
+      expect(screen.getByText(/Drop Rageshake Here/i)).toBeInTheDocument();
     });
 
     expect(useLogStore.getState().lastRoute).toBe('/logs');
