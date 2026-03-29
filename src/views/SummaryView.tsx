@@ -14,6 +14,7 @@ import { stripMatrixClientPath } from '../utils/uriUtils';
 import { computeSummaryStats } from '../utils/summaryStats';
 import type { BandwidthRequestEntry } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
+import type { SelectionRange } from '../hooks/useChartInteraction';
 import styles from './SummaryView.module.css';
 import tableStyles from '../components/Table.module.css';
 
@@ -25,6 +26,10 @@ interface BandwidthSectionProps {
   timeRange: { readonly minTime: TimestampMicros; readonly maxTime: TimestampMicros };
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   onResetZoom?: () => void;
+  externalCursorTime?: number | null;
+  externalSelection?: SelectionRange | null;
+  onCursorMove?: (timeUs: number | null) => void;
+  onSelectionChange?: (selection: SelectionRange | null) => void;
 }
 
 /**
@@ -38,6 +43,10 @@ function BandwidthSection({
   timeRange,
   onTimeRangeSelected,
   onResetZoom,
+  externalCursorTime,
+  externalSelection,
+  onCursorMove,
+  onSelectionChange,
 }: BandwidthSectionProps) {
   const [hideMedia, setHideMedia] = useState(true);
 
@@ -79,6 +88,10 @@ function BandwidthSection({
           timeRange={timeRange}
           onTimeRangeSelected={onTimeRangeSelected}
           onResetZoom={onResetZoom}
+          externalCursorTime={externalCursorTime}
+          externalSelection={externalSelection}
+          onCursorMove={onCursorMove}
+          onSelectionChange={onSelectionChange}
         />
       </div>
     </section>
@@ -105,6 +118,11 @@ export function SummaryView() {
   // Local zoom state (in microseconds)
   const [localStartTime, setLocalStartTime] = useState<TimestampMicros | null>(null);
   const [localEndTime, setLocalEndTime] = useState<TimestampMicros | null>(null);
+
+  // Shared cursor/selection state — lifted here so all three activity charts
+  // can mirror each other's crosshair and drag-selection in real time.
+  const [sharedCursorTime, setSharedCursorTime] = useState<number | null>(null);
+  const [sharedSelection, setSharedSelection] = useState<SelectionRange | null>(null);
 
   // Precompute min/max across ALL raw log lines (keyword anchor)
   const fullDataRange = useMemo(() => {
@@ -271,6 +289,10 @@ export function SummaryView() {
               sentryEvents={stats.sentryEvents}
               onTimeRangeSelected={handleTimeRangeSelected}
               onResetZoom={handleResetZoom}
+              externalCursorTime={sharedCursorTime}
+              externalSelection={sharedSelection}
+              onCursorMove={setSharedCursorTime}
+              onSelectionChange={setSharedSelection}
             />
           </div>
         </section>
@@ -443,6 +465,10 @@ export function SummaryView() {
                 timeRange={stats.chartTimeRange}
                 onTimeRangeSelected={handleTimeRangeSelected}
                 onResetZoom={handleResetZoom}
+                externalCursorTime={sharedCursorTime}
+                externalSelection={sharedSelection}
+                onCursorMove={setSharedCursorTime}
+                onSelectionChange={setSharedSelection}
               />
             </div>
           </section>
@@ -455,6 +481,10 @@ export function SummaryView() {
             timeRange={stats.chartTimeRange}
             onTimeRangeSelected={handleTimeRangeSelected}
             onResetZoom={handleResetZoom}
+            externalCursorTime={sharedCursorTime}
+            externalSelection={sharedSelection}
+            onCursorMove={setSharedCursorTime}
+            onSelectionChange={setSharedSelection}
           />
         )}
 
