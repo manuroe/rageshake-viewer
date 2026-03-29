@@ -68,7 +68,9 @@ function BandwidthSection({
             onChange={(e) => setHideMedia(e.target.checked)}
             style={{ cursor: 'pointer' }}
           />
-          Hide media
+          <span title="Hides all requests whose URL contains /media/ (e.g. media uploads and downloads). These are typically large and compress the y-axis scale.">
+            Hide media
+          </span>
         </label>
       </h2>
       <div className={styles.activityChartContainer}>
