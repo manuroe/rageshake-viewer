@@ -518,3 +518,133 @@ describe('useChartInteraction — null/undefined minTime/maxTime defensive fallb
     expect(onTimeRangeSelected).not.toHaveBeenCalled();
   });
 });
+
+describe('useChartInteraction — onCursorMove callback', () => {
+  beforeEach(() => {
+    mockLocalPoint.mockReset();
+  });
+
+  it('fires onCursorMove with the cursor time when the mouse moves in normal mode', () => {
+    const onCursorMove = vi.fn();
+    const fakeBucket = { timestamp: 100_000, timeLabel: '00:00:00', total: 5 };
+    const options = {
+      ...makeOptions(),
+      getBucketAtIndex: vi.fn().mockReturnValue(fakeBucket),
+      onCursorMove,
+    };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    mockLocalPoint.mockReturnValueOnce({ x: 400, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseMove({} as React.MouseEvent<SVGRectElement>, vi.fn());
+    });
+
+    expect(onCursorMove).toHaveBeenCalledWith(xToTime(400));
+  });
+
+  it('fires onCursorMove(null) when the mouse leaves the chart', () => {
+    const onCursorMove = vi.fn();
+    const options = { ...makeOptions(), onCursorMove };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    act(() => {
+      result.current.handlers.handleMouseLeave();
+    });
+
+    expect(onCursorMove).toHaveBeenCalledWith(null);
+  });
+
+  it('does NOT fire onCursorMove during a drag selection', () => {
+    const onCursorMove = vi.fn();
+    const options = { ...makeOptions(), onCursorMove };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    // Start selection
+    mockLocalPoint.mockReturnValueOnce({ x: 300, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseDown({} as React.MouseEvent<SVGRectElement>);
+    });
+    onCursorMove.mockClear();
+
+    // Move during selection — onCursorMove must stay silent
+    mockLocalPoint.mockReturnValueOnce({ x: 600, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseMove({} as React.MouseEvent<SVGRectElement>, vi.fn());
+    });
+
+    expect(onCursorMove).not.toHaveBeenCalled();
+  });
+
+  it('fires onCursorMove(null) when a drag selection starts', () => {
+    const onCursorMove = vi.fn();
+    const options = { ...makeOptions(), onCursorMove };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    mockLocalPoint.mockReturnValueOnce({ x: 300, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseDown({} as React.MouseEvent<SVGRectElement>);
+    });
+
+    expect(onCursorMove).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('useChartInteraction — onSelectionChange callback', () => {
+  beforeEach(() => {
+    mockLocalPoint.mockReset();
+  });
+
+  it('fires onSelectionChange with ordered start/end during a drag', () => {
+    const onSelectionChange = vi.fn();
+    const options = { ...makeOptions(), onSelectionChange };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    // Start selection at x=600
+    mockLocalPoint.mockReturnValueOnce({ x: 600, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseDown({} as React.MouseEvent<SVGRectElement>);
+    });
+
+    // Drag left to x=200 — the reported range must still be startUs < endUs
+    mockLocalPoint.mockReturnValueOnce({ x: 200, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseMove({} as React.MouseEvent<SVGRectElement>, vi.fn());
+    });
+
+    expect(onSelectionChange).toHaveBeenCalledWith({
+      startUs: xToTime(200),
+      endUs: xToTime(600),
+    });
+  });
+
+  it('fires onSelectionChange(null) when the selection is committed on mouseUp', () => {
+    const onSelectionChange = vi.fn();
+    const options = { ...makeOptions(), onSelectionChange };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    simulateDrag(result, 100, 900);
+
+    // The last call must be null (selection cleared after commit)
+    const lastCall = onSelectionChange.mock.calls[onSelectionChange.mock.calls.length - 1];
+    expect(lastCall[0]).toBeNull();
+  });
+
+  it('fires onSelectionChange immediately on mouseDown with a zero-width range', () => {
+    const onSelectionChange = vi.fn();
+    const options = { ...makeOptions(), onSelectionChange };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    mockLocalPoint.mockReturnValueOnce({ x: 400, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseDown({} as React.MouseEvent<SVGRectElement>);
+    });
+
+    // First call should be a zero-width range at the click position
+    expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    const firstCall = onSelectionChange.mock.calls[0][0];
+    expect(firstCall).toEqual({
+      startUs: xToTime(400),
+      endUs: xToTime(400),
+    });
+  });
+});

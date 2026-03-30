@@ -1,4 +1,4 @@
-import { useMemo, useCallback, type ReactNode } from 'react';
+import { useMemo, useCallback, useRef, useEffect, type ReactNode } from 'react';
 import { AxisBottom, AxisLeft } from '@visx/axis';
 import { Group } from '@visx/group';
 import { scaleBand, scaleLinear } from '@visx/scale';
@@ -7,6 +7,7 @@ import { useTooltip, TooltipWithBounds } from '@visx/tooltip';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../types/time.types';
 import { useChartInteraction } from '../hooks/useChartInteraction';
+import type { SelectionRange } from '../hooks/useChartInteraction';
 
 /** Generic bucket structure for activity charts */
 export interface ActivityBucket {
@@ -45,6 +46,22 @@ interface BaseActivityChartProps<TBucket extends ActivityBucket, TCategory exten
   yAxisTickFormat?: (value: { valueOf(): number }) => string;
   /** Left margin in pixels. Increase when y-axis labels are wider than default (e.g. byte labels). Defaults to 50. */
   marginLeft?: number;
+  /**
+   * When provided, renders a mirrored crosshair at this time position so the
+   * user can see where the cursor is on a sibling chart. Only shown when this
+   * chart is not locally active (no local cursor and not selecting).
+   */
+  externalCursorTime?: number | null;
+  /**
+   * When provided, renders a mirrored selection band so the user can see the
+   * drag selection happening on a sibling chart. Only shown when this chart is
+   * not currently being used for a local selection.
+   */
+  externalSelection?: SelectionRange | null;
+  /** Fired as the cursor moves across this chart (see `useChartInteraction`). */
+  onCursorMove?: (timeUs: number | null) => void;
+  /** Fired as a drag selection changes on this chart (see `useChartInteraction`). */
+  onSelectionChange?: (selection: SelectionRange | null) => void;
 }
 
 /**
@@ -66,8 +83,14 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
   height = 120,
   yAxisTickFormat,
   marginLeft = 50,
+  externalCursorTime,
+  externalSelection,
+  onCursorMove,
+  onSelectionChange,
 }: BaseActivityChartProps<TBucket, TCategory>) {
   const { tooltipData, tooltipLeft, tooltipTop, showTooltip, hideTooltip } = useTooltip<TBucket>();
+  const tooltipOffsetLeft = 12;
+  const tooltipOffsetTop = 12;
 
   // Helper to format timestamp as HH:MM:SS in UTC (converts from microseconds)
   const formatTime = useCallback((timestampUs: number): string => {
@@ -118,9 +141,114 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
     getBucketAtIndex,
     xScaleStep: xScale.step(),
     bucketCount: buckets.length,
+    onCursorMove,
+    onSelectionChange,
   });
 
+  /** Convert a microsecond timestamp to an SVG x-coordinate within the chart area.
+   * Clamps the input to [minTime, maxTime] so external times outside the chart's
+   * domain never produce negative or overflow x values.
+   */
+  const timeToX = useCallback(
+    (timeUs: number): number => {
+      if (maxTime === minTime) return 0;
+      const clampedTimeUs = Math.max(minTime, Math.min(maxTime, timeUs));
+      return ((clampedTimeUs - minTime) / (maxTime - minTime)) * xMax;
+    },
+    [minTime, maxTime, xMax],
+  );
+
+  const svgRef = useRef<SVGSVGElement>(null);
+
   const { cursorX, cursorTimeLabel, isSelecting, selectionStart, selectionEnd } = state;
+  const hasExternalSelection = externalSelection !== null && externalSelection !== undefined;
+  const isExternalTooltipActive =
+    !isSelecting &&
+    cursorX === undefined &&
+    !hasExternalSelection &&
+    externalCursorTime !== null &&
+    externalCursorTime !== undefined;
+
+  /**
+   * Returns the bucket whose time slot contains the given timestamp.
+   * Used to look up data for the externally-provided cursor position so that
+   * this chart can show its own tooltip while a sibling chart is being hovered.
+   */
+  const getBucketAtExternalTime = useCallback(
+    (timeUs: number): TBucket | undefined => {
+      if (buckets.length === 0) return undefined;
+      // Return undefined when the external time is outside this chart's range to
+      // avoid showing a misleading tooltip clamped to the first or last bucket.
+      if (timeUs < minTime || timeUs > maxTime) return undefined;
+      const x = timeToX(timeUs);
+      if (x < 0 || x > xMax) return undefined;
+      const index = Math.max(0, Math.min(buckets.length - 1, Math.floor(x / xScale.step())));
+      return buckets[index];
+    },
+    [buckets, minTime, maxTime, timeToX, xScale, xMax],
+  );
+
+  // When a sibling chart drives the cursor, show this chart's own tooltip at
+  // the same time position so the user can compare data across all charts.
+  useEffect(() => {
+    if (
+      externalCursorTime === null ||
+      externalCursorTime === undefined ||
+      hasExternalSelection ||
+      isSelecting ||
+      cursorX !== undefined
+    ) {
+      // Clear any external-cursor tooltip only when no local interaction is
+      // keeping the tooltip open (local hover or selection).
+      if (cursorX === undefined && !isSelecting) {
+        hideTooltip();
+      }
+      return;
+    }
+
+    const svg = svgRef.current;
+    if (!svg) {
+      hideTooltip();
+      return;
+    }
+
+    const bucket = getBucketAtExternalTime(externalCursorTime);
+    if (!bucket) {
+      hideTooltip();
+      return;
+    }
+
+    // Convert the chart-space coordinate to viewport coordinates using the
+    // SVG's actual screen transform. This matches the browser's rendering even
+    // when the viewBox is letterboxed or otherwise not scaled by svgRect.width.
+    const viewBoxX = timeToX(externalCursorTime) + margin.left;
+    const ctm = typeof svg.getScreenCTM === 'function' ? svg.getScreenCTM() : null;
+    let tooltipScreenX: number | null = null;
+    let tooltipScreenY: number | null = null;
+
+    if (ctm && typeof svg.createSVGPoint === 'function') {
+      const svgPoint = svg.createSVGPoint();
+      svgPoint.x = viewBoxX;
+      svgPoint.y = 0;
+      const transformedPoint = svgPoint.matrixTransform(ctm);
+      tooltipScreenX = transformedPoint.x;
+      tooltipScreenY = transformedPoint.y;
+    }
+
+    // Fallback for environments where getScreenCTM is unavailable.
+    if (tooltipScreenX === null || tooltipScreenY === null) {
+      const svgRect = svg.getBoundingClientRect();
+      const scale = svgRect.width / width;
+      tooltipScreenX = svgRect.left + viewBoxX * scale;
+      tooltipScreenY = svgRect.top;
+    }
+
+    showTooltip({
+      tooltipData: bucket,
+      tooltipLeft: tooltipScreenX,
+      tooltipTop: tooltipScreenY,
+    });
+  }, [externalCursorTime, hasExternalSelection, isSelecting, cursorX, getBucketAtExternalTime, timeToX, margin, width, showTooltip, hideTooltip]);
 
   if (buckets.length === 0) {
     return (
@@ -133,7 +261,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
+        <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
           <Group left={margin.left} top={margin.top}>
             {/* Render stacked bars */}
             {buckets.map((bucket) => {
@@ -318,16 +446,97 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 </text>
               </>
             )}
+
+            {/* External cursor: mirrored crosshair from a sibling chart */}
+            {!isSelecting && !hasExternalSelection && cursorX === undefined && externalCursorTime !== null && externalCursorTime !== undefined && (
+              <>
+                <Line
+                  from={{ x: timeToX(externalCursorTime), y: 0 }}
+                  to={{ x: timeToX(externalCursorTime), y: yMax }}
+                  stroke="#666"
+                  strokeWidth={1}
+                  pointerEvents="none"
+                  strokeDasharray="4,2"
+                />
+                <text
+                  x={timeToX(externalCursorTime)}
+                  y={yMax + 20}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fill="#333"
+                  fontWeight="bold"
+                  pointerEvents="none"
+                >
+                  {formatTime(externalCursorTime)}
+                </text>
+              </>
+            )}
+
+            {/* External selection: mirrored selection band from a sibling chart.
+                 Normalize start/end so the rect has a non-negative width even if the
+                 sibling passed an inverted range. */}
+            {!isSelecting && externalSelection !== null && externalSelection !== undefined && (() => {
+              const selStartX = timeToX(Math.min(externalSelection.startUs, externalSelection.endUs));
+              const selEndX = timeToX(Math.max(externalSelection.startUs, externalSelection.endUs));
+              return (
+              <>
+                <rect
+                  x={selStartX}
+                  y={0}
+                  width={selEndX - selStartX}
+                  height={yMax}
+                  fill="rgba(33, 150, 243, 0.2)"
+                  pointerEvents="none"
+                />
+                <Line
+                  from={{ x: selStartX, y: 0 }}
+                  to={{ x: selStartX, y: yMax }}
+                  stroke="#2196f3"
+                  strokeWidth={2}
+                  pointerEvents="none"
+                />
+                <Line
+                  from={{ x: selEndX, y: 0 }}
+                  to={{ x: selEndX, y: yMax }}
+                  stroke="#2196f3"
+                  strokeWidth={2}
+                  pointerEvents="none"
+                />
+                <text
+                  x={selStartX}
+                  y={yMax + 20}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fill="#2196f3"
+                  fontWeight="bold"
+                  pointerEvents="none"
+                >
+                  {formatTime(Math.min(externalSelection.startUs, externalSelection.endUs))}
+                </text>
+                <text
+                  x={selEndX}
+                  y={yMax + 20}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fill="#2196f3"
+                  fontWeight="bold"
+                  pointerEvents="none"
+                >
+                  {formatTime(Math.max(externalSelection.startUs, externalSelection.endUs))}
+                </text>
+              </>
+              );
+            })()}
           </Group>
         </svg>
 
-        {/* Tooltip - only show in normal mode */}
-        {!isSelecting && tooltipData && tooltipLeft !== undefined && tooltipTop !== undefined && (
+        {/* Tooltip - local hover uses bounds-aware positioning, mirrored tooltip is pinned to chart top */}
+        {!isSelecting && tooltipData && tooltipLeft !== undefined && tooltipTop !== undefined && !isExternalTooltipActive && (
           <TooltipWithBounds
             left={tooltipLeft}
             top={tooltipTop}
-            offsetLeft={12}
-            offsetTop={12}
+            offsetLeft={tooltipOffsetLeft}
+            offsetTop={tooltipOffsetTop}
             style={{
               position: 'absolute',
               backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -341,6 +550,25 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
           >
             {renderTooltipContent(tooltipData, categories)}
           </TooltipWithBounds>
+        )}
+        {!isSelecting && tooltipData && tooltipLeft !== undefined && tooltipTop !== undefined && isExternalTooltipActive && (
+          <div
+            style={{
+              position: 'fixed',
+              left: tooltipLeft + tooltipOffsetLeft,
+              top: tooltipTop,
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              color: 'white',
+              padding: '4px 6px',
+              borderRadius: '3px',
+              fontSize: '10px',
+              pointerEvents: 'none',
+              lineHeight: '1.3',
+              zIndex: 1000,
+            }}
+          >
+            {renderTooltipContent(tooltipData, categories)}
+          </div>
         )}
       </div>
     </div>

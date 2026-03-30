@@ -3,6 +3,7 @@ import type { ParsedLogLine, LogLevel, SentryEvent } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_SECOND, MICROS_PER_MILLISECOND } from '../types/time.types';
 import { BaseActivityChart, type ActivityBucket } from './BaseActivityChart';
+import type { SelectionRange } from '../hooks/useChartInteraction';
 
 interface LogActivityChartProps {
   logLines: ParsedLogLine[];
@@ -10,6 +11,14 @@ interface LogActivityChartProps {
   /** Callback when user selects a time range. Values are in microseconds. */
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   onResetZoom?: () => void;
+  /** Mirrored cursor time from a sibling chart (microseconds). */
+  externalCursorTime?: number | null;
+  /** Mirrored selection from a sibling chart. */
+  externalSelection?: SelectionRange | null;
+  /** Fired as the cursor moves across this chart. */
+  onCursorMove?: (timeUs: number | null) => void;
+  /** Fired as a drag selection changes on this chart. */
+  onSelectionChange?: (selection: SelectionRange | null) => void;
 }
 
 type ChartCategory = LogLevel | 'SENTRY';
@@ -30,7 +39,7 @@ const LOG_LEVEL_COLORS: Record<ChartCategory, string> = {
 
 const LOG_LEVEL_ORDER: ChartCategory[] = ['SENTRY', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE', 'UNKNOWN'];
 
-export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, onResetZoom }: LogActivityChartProps) {
+export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, onResetZoom, externalCursorTime, externalSelection, onCursorMove, onSelectionChange }: LogActivityChartProps) {
   // Helper to format timestamp as HH:MM:SS in UTC (converts from microseconds)
   const formatTime = useCallback((timestampUs: number): string => {
     const date = new Date(timestampUs / MICROS_PER_MILLISECOND);
@@ -148,6 +157,10 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
       onTimeRangeSelected={onTimeRangeSelected}
       onResetZoom={onResetZoom}
       emptyMessage="No log data to display"
+      externalCursorTime={externalCursorTime}
+      externalSelection={externalSelection}
+      onCursorMove={onCursorMove}
+      onSelectionChange={onSelectionChange}
     />
   );
 }

@@ -19,6 +19,7 @@ import type { TimestampMicros } from '../../types/time.types';
 // ─── Captured callback registry (refreshed each render) ────────────────────
 let capturedOnTimeRangeSelected: ((startUs: TimestampMicros, endUs: TimestampMicros) => void) | undefined;
 let capturedOnResetZoom: (() => void) | undefined;
+let capturedOnCursorMove: ((timeUs: number | null) => void) | undefined;
 
 // ─── useURLParams mock ──────────────────────────────────────────────────────
 const mockSetTimeFilter = vi.fn();
@@ -31,19 +32,22 @@ vi.mock('../../components/BurgerMenu', () => ({
   BurgerMenu: () => <div data-testid="burger-menu" />,
 }));
 
-// Mock LogActivityChart – exposes onTimeRangeSelected and onResetZoom so tests can simulate interactions
+// Mock LogActivityChart – exposes onTimeRangeSelected, onResetZoom, and onCursorMove so tests can simulate interactions
 vi.mock('../../components/LogActivityChart', () => ({
   LogActivityChart: ({
     logLines,
     onTimeRangeSelected,
     onResetZoom,
+    onCursorMove,
   }: {
     logLines: ParsedLogLine[];
     onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
     onResetZoom?: () => void;
+    onCursorMove?: (timeUs: number | null) => void;
   }) => {
     capturedOnTimeRangeSelected = onTimeRangeSelected;
     capturedOnResetZoom = onResetZoom;
+    capturedOnCursorMove = onCursorMove;
     return <div data-testid="log-activity-chart">Lines: {logLines.length}</div>;
   },
 }));
@@ -68,6 +72,7 @@ describe('SummaryView', () => {
     mockSetTimeFilter.mockClear();
     capturedOnTimeRangeSelected = undefined;
     capturedOnResetZoom = undefined;
+    capturedOnCursorMove = undefined;
   });
 
   describe('empty state', () => {
@@ -1299,4 +1304,54 @@ describe('SummaryView', () => {
       expect(screen.getByRole('cell', { name: /send-to-device/i })).toBeInTheDocument();
     });
   });
+
+  describe('chart sync toggle', () => {
+    const BASE_CS = 1_720_000_000_000_000 as TimestampMicros;
+    const linesForSync = [
+      createParsedLogLine({ lineNumber: 0, timestampUs: BASE_CS }),
+      createParsedLogLine({ lineNumber: 1, timestampUs: (BASE_CS + 1_000_000) as TimestampMicros }),
+    ];
+
+    beforeEach(() => {
+      useLogStore.getState().setHttpRequests([], linesForSync);
+    });
+
+    it('renders the "Sync charts" checkbox unchecked by default', () => {
+      renderSummaryView();
+
+      const checkbox = screen.getByRole('checkbox', { name: /sync charts/i });
+      expect(checkbox).toBeInTheDocument();
+      expect(checkbox).not.toBeChecked();
+    });
+
+    it('does not pass onCursorMove to LogActivityChart when sync is disabled', () => {
+      renderSummaryView();
+
+      // sync is off by default — charts receive no cursor-sync callbacks
+      expect(capturedOnCursorMove).toBeUndefined();
+    });
+
+    it('passes onCursorMove to LogActivityChart after enabling the checkbox', () => {
+      renderSummaryView();
+
+      const checkbox = screen.getByRole('checkbox', { name: /sync charts/i });
+      act(() => { fireEvent.click(checkbox); });
+
+      expect(checkbox).toBeChecked();
+      // Chart now receives a cursor-move callback
+      expect(capturedOnCursorMove).toBeDefined();
+    });
+
+    it('removes onCursorMove when the checkbox is unchecked again', () => {
+      renderSummaryView();
+
+      const checkbox = screen.getByRole('checkbox', { name: /sync charts/i });
+      act(() => { fireEvent.click(checkbox); }); // enable
+      act(() => { fireEvent.click(checkbox); }); // disable
+
+      expect(checkbox).not.toBeChecked();
+      expect(capturedOnCursorMove).toBeUndefined();
+    });
+  });
 });
+

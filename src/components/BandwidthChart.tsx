@@ -5,6 +5,7 @@ import { BaseActivityChart } from './BaseActivityChart';
 import { formatBytes } from '../utils/sizeUtils';
 import type { BandwidthRequestEntry } from '../types/log.types';
 import { renderBandwidthTooltip, type BandwidthBucket } from './BandwidthChartTooltip';
+import type { SelectionRange } from '../hooks/useChartInteraction';
 
 /**
  * Upload category key for the bandwidth stacked bar chart.
@@ -46,6 +47,14 @@ interface BandwidthChartProps {
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   /** Callback when user double-clicks to reset zoom. */
   onResetZoom?: () => void;
+  /** Mirrored cursor time from a sibling chart (microseconds). */
+  externalCursorTime?: number | null;
+  /** Mirrored selection from a sibling chart. */
+  externalSelection?: SelectionRange | null;
+  /** Fired as the cursor moves across this chart. */
+  onCursorMove?: (timeUs: number | null) => void;
+  /** Fired as a drag selection changes on this chart. */
+  onSelectionChange?: (selection: SelectionRange | null) => void;
 }
 
 /**
@@ -72,6 +81,10 @@ export function BandwidthChart({
   timeRange,
   onTimeRangeSelected,
   onResetZoom,
+  externalCursorTime,
+  externalSelection,
+  onCursorMove,
+  onSelectionChange,
 }: BandwidthChartProps) {
   const formatTime = useCallback((timestampUs: number): string => {
     const date = new Date(timestampUs / MICROS_PER_MILLISECOND);
@@ -175,6 +188,10 @@ export function BandwidthChart({
       emptyMessage="No bandwidth data to display"
       yAxisTickFormat={yAxisTickFormat}
       marginLeft={60}
+      externalCursorTime={externalCursorTime}
+      externalSelection={externalSelection}
+      onCursorMove={onCursorMove}
+      onSelectionChange={onSelectionChange}
     />
   );
 }

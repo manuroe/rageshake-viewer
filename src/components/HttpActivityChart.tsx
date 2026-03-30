@@ -8,6 +8,8 @@ import type { HttpRequestWithTimestamp } from '../types/log.types';
 // Re-exported so that existing consumers importing from this module are unaffected.
 export type { HttpRequestWithTimestamp } from '../types/log.types';
 
+import type { SelectionRange } from '../hooks/useChartInteraction';
+
 interface HttpActivityChartProps {
   httpRequests: HttpRequestWithTimestamp[];
   /** Time range to use for the chart - must match LogActivityChart for alignment */
@@ -15,6 +17,14 @@ interface HttpActivityChartProps {
   /** Callback when user selects a time range. Values are in microseconds. */
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   onResetZoom?: () => void;
+  /** Mirrored cursor time from a sibling chart (microseconds). */
+  externalCursorTime?: number | null;
+  /** Mirrored selection from a sibling chart. */
+  externalSelection?: SelectionRange | null;
+  /** Fired as the cursor moves across this chart. */
+  onCursorMove?: (timeUs: number | null) => void;
+  /** Fired as a drag selection changes on this chart. */
+  onSelectionChange?: (selection: SelectionRange | null) => void;
 }
 
 interface HttpBucket extends ActivityBucket {
@@ -82,6 +92,10 @@ export function HttpActivityChart({
   timeRange,
   onTimeRangeSelected,
   onResetZoom,
+  externalCursorTime,
+  externalSelection,
+  onCursorMove,
+  onSelectionChange,
 }: HttpActivityChartProps) {
   // Helper to format timestamp as HH:MM:SS in UTC (converts from microseconds)
   const formatTime = useCallback((timestampUs: number): string => {
@@ -213,6 +227,10 @@ export function HttpActivityChart({
       onTimeRangeSelected={onTimeRangeSelected}
       onResetZoom={onResetZoom}
       emptyMessage="No HTTP request data to display"
+      externalCursorTime={externalCursorTime}
+      externalSelection={externalSelection}
+      onCursorMove={onCursorMove}
+      onSelectionChange={onSelectionChange}
     />
   );
 }

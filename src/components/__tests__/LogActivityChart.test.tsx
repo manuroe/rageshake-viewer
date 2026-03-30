@@ -474,4 +474,100 @@ describe('LogActivityChart', () => {
     // The tooltip renders "Sentry:" (not "SENTRY:") for the SENTRY category
     expect(screen.getByText(/^Sentry:/)).toBeInTheDocument();
   });
+
+  it('shows tooltip content for the bucket at externalCursorTime', () => {
+    const logs = createParsedLogLines(50);
+    const midTime = logs[Math.floor(logs.length / 2)].timestampUs;
+    render(<LogActivityChart logLines={logs} externalCursorTime={midTime} />);
+
+    // The useEffect fires after render and calls showTooltip with the bucket data;
+    // act() (wrapping render) flushes the effect synchronously in the test env.
+    expect(screen.getByText(/^Total:/)).toBeInTheDocument();
+  });
+
+  it('uses the SVG screen transform path for external tooltip positioning when available', () => {
+    const logs = createParsedLogLines(50);
+    const midTime = logs[Math.floor(logs.length / 2)].timestampUs;
+    const originalGetScreenCTM = SVGSVGElement.prototype.getScreenCTM;
+    const originalCreateSVGPoint = SVGSVGElement.prototype.createSVGPoint;
+    const matrixTransform = vi.fn().mockReturnValue({ x: 321, y: 123 });
+
+    Object.defineProperty(SVGSVGElement.prototype, 'getScreenCTM', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({ a: 1, d: 1, e: 0, f: 0 }),
+    });
+    Object.defineProperty(SVGSVGElement.prototype, 'createSVGPoint', {
+      configurable: true,
+      value: vi.fn().mockImplementation(() => ({
+        x: 0,
+        y: 0,
+        matrixTransform,
+      })),
+    });
+
+    try {
+      render(<LogActivityChart logLines={logs} externalCursorTime={midTime} />);
+
+      expect(SVGSVGElement.prototype.getScreenCTM).toHaveBeenCalled();
+      expect(SVGSVGElement.prototype.createSVGPoint).toHaveBeenCalled();
+      expect(matrixTransform).toHaveBeenCalled();
+      expect(screen.getByText(/^Total:/)).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(SVGSVGElement.prototype, 'getScreenCTM', {
+        configurable: true,
+        value: originalGetScreenCTM,
+      });
+      Object.defineProperty(SVGSVGElement.prototype, 'createSVGPoint', {
+        configurable: true,
+        value: originalCreateSVGPoint,
+      });
+    }
+  });
+
+  it('renders external cursor line when externalCursorTime prop is set and chart is idle', () => {
+    const logs = createParsedLogLines(50);
+    // Use a timestamp in the middle of the data range so timeToX maps it inside the chart
+    const midTime = logs[Math.floor(logs.length / 2)].timestampUs;
+    const { container } = render(
+      <LogActivityChart logLines={logs} externalCursorTime={midTime} />
+    );
+
+    // A dashed gray cursor line should appear even without hovering this chart
+    const cursorLine = container.querySelector('line[stroke-dasharray="4,2"]');
+    expect(cursorLine).toBeInTheDocument();
+  });
+
+  it('renders external selection band when externalSelection prop is set and chart is idle', () => {
+    const logs = createParsedLogLines(50);
+    const startUs = logs[10].timestampUs;
+    const endUs = logs[40].timestampUs;
+    const { container } = render(
+      <LogActivityChart logLines={logs} externalSelection={{ startUs, endUs }} />
+    );
+
+    // A blue selection band (rect with blue fill) should appear
+    const selectionBand = container.querySelector('rect[fill="rgba(33, 150, 243, 0.2)"]');
+    expect(selectionBand).toBeInTheDocument();
+
+    // Two blue cursor lines should also appear
+    const blueLines = container.querySelectorAll('line[stroke="#2196f3"]');
+    expect(blueLines.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not show mirrored tooltip content while a mirrored selection is active', () => {
+    const logs = createParsedLogLines(50);
+    const midTime = logs[Math.floor(logs.length / 2)].timestampUs;
+    const startUs = logs[10].timestampUs;
+    const endUs = logs[40].timestampUs;
+
+    render(
+      <LogActivityChart
+        logLines={logs}
+        externalCursorTime={midTime}
+        externalSelection={{ startUs, endUs }}
+      />
+    );
+
+    expect(screen.queryByText(/^Total:/)).not.toBeInTheDocument();
+  });
 });

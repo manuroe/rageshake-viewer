@@ -9,6 +9,16 @@ interface SelectionPoint {
   time: number;
 }
 
+/**
+ * A committed or in-progress time selection range, in microseconds.
+ * Emitted via `onSelectionChange` as the user drags across a chart so sibling
+ * charts can mirror the selection overlay in real time.
+ */
+export interface SelectionRange {
+  readonly startUs: number;
+  readonly endUs: number;
+}
+
 interface ChartInteractionState {
   cursorX: number | undefined;
   cursorTimeLabel: string | undefined;
@@ -37,6 +47,17 @@ interface UseChartInteractionOptions<TBucket> {
   getBucketAtIndex: (index: number) => TBucket | undefined;
   xScaleStep: number;
   bucketCount: number;
+  /**
+   * Fired whenever the cursor moves to a new time position, or `null` when
+   * the cursor leaves the chart. Used to sync a crosshair across sibling charts.
+   */
+  onCursorMove?: (timeUs: number | null) => void;
+  /**
+   * Fired on every drag-move with the current in-progress selection range, or
+   * `null` when the selection is cleared. Used to mirror the selection band on
+   * sibling charts in real time.
+   */
+  onSelectionChange?: (selection: SelectionRange | null) => void;
 }
 
 export interface ChartInteractionResult<TBucket> {
@@ -60,6 +81,8 @@ export function useChartInteraction<TBucket>({
   getBucketAtIndex,
   xScaleStep,
   bucketCount,
+  onCursorMove,
+  onSelectionChange,
 }: UseChartInteractionOptions<TBucket>): ChartInteractionResult<TBucket> {
   const [cursorX, setCursorX] = useState<number | undefined>();
   const [cursorTimeLabel, setCursorTimeLabel] = useState<string | undefined>();
@@ -83,11 +106,15 @@ export function useChartInteraction<TBucket>({
       setSelectionStart({ x: point.x, time: clickTime });
       setSelectionEnd({ x: point.x, time: clickTime });
 
-      // Hide tooltip during selection
+      // Hide tooltip during selection, clear cursor on siblings, and emit an
+      // initial zero-width selection so sibling charts can start mirroring immediately.
       hideTooltip();
       setCursorX(undefined);
+      setCursorTimeLabel(undefined);
+      onCursorMove?.(null);
+      onSelectionChange?.({ startUs: clickTime as TimestampMicros, endUs: clickTime as TimestampMicros });
     },
-    [marginLeft, xMax, minTime, maxTime, hideTooltip]
+    [marginLeft, xMax, minTime, maxTime, hideTooltip, onCursorMove, onSelectionChange]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -121,7 +148,8 @@ export function useChartInteraction<TBucket>({
     setIsSelecting(false);
     setSelectionStart(undefined);
     setSelectionEnd(undefined);
-  }, [isSelecting, selectionStart, selectionEnd, onTimeRangeSelected, minTime, maxTime, xScaleStep, xMax]);
+    onSelectionChange?.(null);
+  }, [isSelecting, selectionStart, selectionEnd, onTimeRangeSelected, minTime, maxTime, xScaleStep, xMax, onSelectionChange]);
 
   // Commit the selection even when the mouse is released outside the chart
   useEffect(() => {
@@ -168,8 +196,13 @@ export function useChartInteraction<TBucket>({
       const cursorTime = xToTime(x, xMax, (minTime ?? 0) as TimestampMicros, (maxTime ?? 0) as TimestampMicros);
 
       if (isSelecting) {
-        // Selection mode: update end cursor position
+        // Selection mode: update end cursor position and notify siblings
         setSelectionEnd({ x: point.x, time: cursorTime });
+        const startTime = selectionStart?.time ?? cursorTime;
+        onSelectionChange?.({
+          startUs: Math.min(startTime, cursorTime),
+          endUs: Math.max(startTime, cursorTime),
+        });
       } else {
         // Normal mode: show tooltip
         const index = Math.floor(x / xScaleStep);
@@ -180,6 +213,7 @@ export function useChartInteraction<TBucket>({
           if (bucket) {
             setCursorX(point.x);
             setCursorTimeLabel(formatTime(cursorTime));
+            onCursorMove?.(cursorTime);
             showTooltipFn({
               tooltipData: bucket,
               tooltipLeft: event.clientX,
@@ -189,13 +223,14 @@ export function useChartInteraction<TBucket>({
         }
       }
     },
-    [xScaleStep, bucketCount, xMax, marginLeft, minTime, maxTime, formatTime, hideTooltip, isSelecting, getBucketAtIndex]
+    [xScaleStep, bucketCount, xMax, marginLeft, minTime, maxTime, formatTime, hideTooltip, isSelecting, getBucketAtIndex, selectionStart, onCursorMove, onSelectionChange]
   );
 
   const handleMouseLeave = useCallback(() => {
     hideTooltip();
     setCursorX(undefined);
-  }, [hideTooltip]);
+    onCursorMove?.(null);
+  }, [hideTooltip, onCursorMove]);
 
   return {
     state: {
