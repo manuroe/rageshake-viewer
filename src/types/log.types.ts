@@ -43,9 +43,9 @@ export interface SyncRequest extends HttpRequest {
 }
 
 /**
- * An HTTP request enriched with its resolved timestamp in microseconds.
+ * An HTTP request attempt enriched with its chart timestamp in microseconds.
  * Stored in {@link SummaryStats.httpRequestsWithTimestamps} and consumed by
- * `HttpActivityChart` to plot request density over time.
+ * `HttpActivityChart` to plot request starts over time.
  */
 export interface HttpRequestWithTimestamp {
 

@@ -22,6 +22,8 @@ import { getMinMaxTimestamps } from './timeUtils';
 import { extractCoreMessage } from './logMessageUtils';
 import type { TimeFilterValue } from '../types/time.types';
 
+const CLIENT_ERROR_CHART_STATUS = 'client-error';
+
 /** Time range expressed in microseconds, or `null` meaning "no filter". */
 export interface TimeRangeUs {
   readonly startUs: TimestampMicros;
@@ -92,7 +94,7 @@ export interface SummaryStats {
   readonly slowestHttpRequests: readonly SlowHttpRequest[];
   /** Sync request counts per connection, sorted descending. */
   readonly syncRequestsByConnection: readonly SyncByConnection[];
-  /** HTTP requests with resolved timestamps (used by `HttpActivityChart`). */
+  /** HTTP request attempts with start timestamps (used by `HttpActivityChart`). */
   readonly httpRequestsWithTimestamps: HttpRequestWithTimestamp[];
   /** HTTP requests with upload/download byte counts (used by `BandwidthChart`). */
   readonly httpRequestsWithBandwidth: readonly BandwidthRequestEntry[];
@@ -166,6 +168,22 @@ export function computeSummaryStats(
 ): SummaryStats {
   if (rawLogLines.length === 0) return EMPTY_STATS;
 
+  const isTimestampInRange = (timestampUs: TimestampMicros): boolean => {
+    if (!timeRangeUs) return true;
+    return timestampUs >= timeRangeUs.startUs && timestampUs <= timeRangeUs.endUs;
+  };
+
+  const getLineTimestampUs = (lineNumber: number): TimestampMicros | null => {
+    const timestampUs = lineNumberIndex.get(lineNumber)?.timestampUs;
+    return typeof timestampUs === 'number' && timestampUs > 0 ? timestampUs : null;
+  };
+
+  const mapAttemptOutcomeToChartStatus = (outcome: string | undefined): string => {
+    if (!outcome || outcome === INCOMPLETE_STATUS_KEY) return '';
+    if (/^\d+$/.test(outcome)) return outcome;
+    return CLIENT_ERROR_CHART_STATUS;
+  };
+
   // Resolve time range: local zoom wins over global store filter.
   let timeRangeUs = getTimeRangeUs(rawLogLines, startTime, endTime);
   if (localTimeRangeUs !== null) {
@@ -180,25 +198,23 @@ export function computeSummaryStats(
 
   const filteredSentryEvents = sentryEvents.filter((event) => {
     if (!timeRangeUs) return true;
-    const ts = lineNumberIndex.get(event.lineNumber)?.timestampUs;
+    const ts = getLineTimestampUs(event.lineNumber);
     if (!ts) return false;
-    return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
+    return isTimestampInRange(ts);
   });
 
   const filteredHttpRequests = allHttpRequests.filter((req) => {
     if (!timeRangeUs) return true;
-    if (!req.responseLineNumber) return false;
-    const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
+    const ts = getLineTimestampUs(req.responseLineNumber);
     if (!ts) return false;
-    return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
+    return isTimestampInRange(ts);
   });
 
   const filteredSyncRequests = allRequests.filter((req) => {
     if (!timeRangeUs) return true;
-    if (!req.responseLineNumber) return false;
-    const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
+    const ts = getLineTimestampUs(req.responseLineNumber);
     if (!ts) return false;
-    return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
+    return isTimestampInRange(ts);
   });
 
   // ── Error / warning breakdown ─────────────────────────────────────────────
@@ -317,86 +333,89 @@ export function computeSummaryStats(
     if (req.timeout !== undefined) timeoutByRequestId.set(req.requestId, req.timeout);
   }
 
-  // Track the number of unique completed HTTP requests (each RequestTable row)
-  // separately from chart entries, because retried requests emit multiple entries
-  // to the chart (one per intermediate attempt) which would inflate the count.
-  let completedHttpRequestCount = 0;
+  const buildChartEntries = (req: HttpRequest): HttpRequestWithTimestamp[] => {
+    const timeout = timeoutByRequestId.get(req.requestId);
+    const sendTimestampUs = getLineTimestampUs(req.sendLineNumber);
+    const attemptStartTimestampsUs = req.attemptTimestampsUs ?? [];
+    const finalStatus = req.clientError ? CLIENT_ERROR_CHART_STATUS : (req.status ?? '');
 
-  const completedRequestsWithTimestamps: HttpRequestWithTimestamp[] = filteredHttpRequests
-    .filter((req) => req.responseLineNumber)
-    .flatMap((req) => {
-      const finalTs = lineNumberIndex.get(req.responseLineNumber)?.timestampUs ?? (0 as TimestampMicros);
-      // Skip requests whose response line has no valid timestamp; they can't appear
-      // on the chart and should not contribute to the displayed request count.
-      if (finalTs === 0) return [];
-      completedHttpRequestCount++;
-      const timeout = timeoutByRequestId.get(req.requestId);
-      const finalEntry: HttpRequestWithTimestamp = {
+    if ((req.numAttempts ?? 1) > 1 && attemptStartTimestampsUs.length > 1) {
+      // Preserve alignment between attempt timestamps and outcomes by operating on
+      // original indices and skipping invalid timestamps without reindexing.
+      const validAttemptIndices = attemptStartTimestampsUs
+        .map((timestampUs, index) => (timestampUs > 0 ? index : -1))
+        .filter((index) => index >= 0);
+
+      if (validAttemptIndices.length > 1) {
+        const lastValidIndex = validAttemptIndices[validAttemptIndices.length - 1];
+        return validAttemptIndices
+          .map((attemptIndex) => {
+            const timestampUs = attemptStartTimestampsUs[attemptIndex] as TimestampMicros;
+            return {
+              requestId: req.requestId,
+              status: mapAttemptOutcomeToChartStatus(
+                req.attemptOutcomes?.[attemptIndex] ??
+                  (attemptIndex === lastValidIndex ? finalStatus : undefined),
+              ),
+              timestampUs,
+              ...(timeout !== undefined && { timeout }),
+            };
+          })
+          .filter((entry) => isTimestampInRange(entry.timestampUs));
+      }
+    }
+
+    if (!sendTimestampUs || !isTimestampInRange(sendTimestampUs)) {
+      return [];
+    }
+
+    return [
+      {
         requestId: req.requestId,
-        status: req.clientError ? 'client-error' : (req.status ?? ''),
-        timestampUs: finalTs,
+        status: finalStatus,
+        timestampUs: sendTimestampUs,
         ...(timeout !== undefined && { timeout }),
-      };
-      // For retried requests, also emit one entry per intermediate failed attempt
-      // so that e.g. a 503 → 200 request contributes both statuses to the chart.
-      // Slice stops before the last element to avoid double-counting the final outcome.
-      const intermediateOutcomes = req.attemptOutcomes?.slice(0, (req.numAttempts ?? 1) - 1) ?? [];
-      const intermediateEntries: HttpRequestWithTimestamp[] = intermediateOutcomes
-        .map((outcome, i) => {
-          // Use the next attempt's send timestamp as a proxy for when this attempt's
-          // response was received (best approximation without a stored response ts).
-          const ts = (req.attemptTimestampsUs?.[i + 1] ?? req.attemptTimestampsUs?.[i] ?? 0) as TimestampMicros;
-          return {
-            requestId: req.requestId,
-            status: /^\d+$/.test(outcome) ? outcome : outcome === INCOMPLETE_STATUS_KEY ? '' : 'client-error',
-            timestampUs: ts,
-          };
-        })
-        .filter((e) => e.timestampUs > 0);
-      return [...intermediateEntries, finalEntry];
-    })
-    .filter((req) => req.timestampUs > 0);
+      },
+    ];
+  };
 
-  const incompleteRequestsWithTimestamps: HttpRequestWithTimestamp[] = allHttpRequests
-    .filter((req) => !req.status && !req.clientError)
-    .filter((req) => {
-      if (!timeRangeUs) return true;
-      if (!req.sendLineNumber) return false;
-      const ts = lineNumberIndex.get(req.sendLineNumber)?.timestampUs;
-      if (!ts) return false;
-      return ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs;
-    })
-    .map((req) => ({
-      requestId: req.requestId,
-      status: '',
-      timestampUs: lineNumberIndex.get(req.sendLineNumber)?.timestampUs ?? (0 as TimestampMicros),
-    }))
-    .filter((req) => req.timestampUs > 0);
+  const httpRequestsWithTimestamps: HttpRequestWithTimestamp[] = [];
+  let httpRequestCount = 0;
+  let incompleteRequestCount = 0;
 
-  const httpRequestsWithTimestamps = [
-    ...completedRequestsWithTimestamps,
-    ...incompleteRequestsWithTimestamps,
-  ];
-
-  // ── Upload / download byte totals ─────────────────────────────────────────
-  // Iterate allHttpRequests to mirror the set represented by the chart and the
-  // request count headline.  Using the same in-range predicate as the chart
-  // sets ensures the numbers are always consistent.
+  // The chart headline mirrors the request set represented in the start-based
+  // chart: each logical request contributes its bytes and request count once,
+  // while retries contribute one chart bar per attempt start.
   let totalUploadBytes = 0;
   let totalDownloadBytes = 0;
 
+  for (const req of allHttpRequests) {
+    const chartEntries = buildChartEntries(req);
+    if (chartEntries.length === 0) continue;
+
+    httpRequestsWithTimestamps.push(...chartEntries);
+    httpRequestCount += 1;
+    totalUploadBytes += req.requestSize;
+    totalDownloadBytes += req.responseSize;
+
+    if (!req.status && !req.clientError) {
+      incompleteRequestCount += 1;
+    }
+  }
+
   // ── HTTP requests with bandwidth data (for BandwidthChart) ───────────────
-  // Mirrors the same timestamp logic used for httpRequestsWithTimestamps but
-  // captures requestSize / responseSize instead of status.
+  // Uses completion-based timestamps (responseLineNumber) for finished
+  // requests, falling back to sendLineNumber for in‑flight ones, and captures
+  // requestSize / responseSize instead of status. Note this differs from the
+  // start‑based HTTP activity chart, so cross‑chart alignment uses different
+  // reference points (start vs. end of the transfer).
   const httpRequestsWithBandwidth: BandwidthRequestEntry[] = [];
 
   for (const req of allHttpRequests) {
     if (req.responseLineNumber) {
-      const ts = lineNumberIndex.get(req.responseLineNumber)?.timestampUs;
+      const ts = getLineTimestampUs(req.responseLineNumber);
       if (!ts || ts === 0) continue;
-      if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
-        totalUploadBytes += req.requestSize;
-        totalDownloadBytes += req.responseSize;
+      if (isTimestampInRange(ts)) {
         if (req.requestSize > 0 || req.responseSize > 0) {
           httpRequestsWithBandwidth.push({
             timestampUs: ts,
@@ -406,11 +425,10 @@ export function computeSummaryStats(
           });
         }
       }
-    } else if (!req.status && req.sendLineNumber) {
-      const ts = lineNumberIndex.get(req.sendLineNumber)?.timestampUs;
+    } else if (!req.status) {
+      const ts = getLineTimestampUs(req.sendLineNumber);
       if (!ts || ts === 0) continue;
-      if (!timeRangeUs || (ts >= timeRangeUs.startUs && ts <= timeRangeUs.endUs)) {
-        totalUploadBytes += req.requestSize;
+      if (isTimestampInRange(ts)) {
         if (req.requestSize > 0) {
           httpRequestsWithBandwidth.push({
             timestampUs: ts,
@@ -443,8 +461,8 @@ export function computeSummaryStats(
     slowestHttpRequests,
     syncRequestsByConnection,
     httpRequestsWithTimestamps,
-    httpRequestCount: completedHttpRequestCount + incompleteRequestsWithTimestamps.length,
-    incompleteRequestCount: incompleteRequestsWithTimestamps.length,
+    httpRequestCount,
+    incompleteRequestCount,
     totalUploadBytes,
     totalDownloadBytes,
     httpRequestsWithBandwidth,

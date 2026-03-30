@@ -958,10 +958,10 @@ describe('SummaryView', () => {
 
       renderSummaryView();
 
-      // Included: completedA + completedB + incomplete => upload 450B, download 600B.
-      // Excluded: requests whose mapped send/response timestamp line does not exist.
+      // Phase 1 is start-based, so requests with a valid send timestamp still count
+      // even when their response timestamp is missing.
       expect(
-        screen.getByText(/HTTP Requests Over Time: 3 requests \(1 incomplete\) — ↑ 450 B \/ ↓ 600 B/)
+        screen.getByText(/HTTP Requests Over Time: 4 requests \(1 incomplete\) — ↑ 1.4 KB \/ ↓ 1.6 KB/)
       ).toBeInTheDocument();
     });
   });

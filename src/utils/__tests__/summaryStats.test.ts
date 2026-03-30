@@ -353,22 +353,121 @@ describe('computeSummaryStats — byte totals', () => {
 });
 
 // ---------------------------------------------------------------------------
+// httpRequestsWithTimestamps — start-based chart semantics
+// ---------------------------------------------------------------------------
+
+describe('computeSummaryStats — httpRequestsWithTimestamps', () => {
+  it('filters completed requests by send timestamp for the summary chart', () => {
+    const rawLines = makeLines(6);
+    const index = buildIndex(rawLines);
+
+    const startedInsideRange = createHttpRequest({
+      requestId: 'STARTS-IN',
+      status: '200',
+      requestSize: 100,
+      responseSize: 300,
+      sendLineNumber: 1,
+      responseLineNumber: 4,
+    });
+    const respondedInsideRange = createHttpRequest({
+      requestId: 'RESPONDS-IN',
+      status: '500',
+      requestSize: 200,
+      responseSize: 400,
+      sendLineNumber: 0,
+      responseLineNumber: 2,
+    });
+
+    const localRange = {
+      startUs: rawLines[1].timestampUs,
+      endUs: rawLines[2].timestampUs,
+    };
+
+    const result = computeSummaryStats(
+      rawLines,
+      [startedInsideRange, respondedInsideRange],
+      [],
+      [],
+      [],
+      null,
+      null,
+      localRange,
+      index,
+    );
+
+    expect(result.httpRequestsWithTimestamps).toEqual([
+      {
+        requestId: 'STARTS-IN',
+        status: '200',
+        timestampUs: rawLines[1].timestampUs,
+      },
+    ]);
+    expect(result.httpRequestCount).toBe(1);
+    expect(result.totalUploadBytes).toBe(100);
+    expect(result.totalDownloadBytes).toBe(300);
+  });
+
+  it('plots retried requests at attempt start timestamps', () => {
+    const rawLines = makeLines(5);
+    const index = buildIndex(rawLines);
+
+    const retriedRequest = createHttpRequest({
+      requestId: 'RETRY-STARTS',
+      status: '200',
+      sendLineNumber: 0,
+      responseLineNumber: 4,
+      numAttempts: 2,
+      attemptOutcomes: ['503', '200'],
+      attemptTimestampsUs: [rawLines[0].timestampUs, rawLines[2].timestampUs],
+    });
+
+    const result = computeSummaryStats(rawLines, [retriedRequest], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestsWithTimestamps).toEqual([
+      {
+        requestId: 'RETRY-STARTS',
+        status: '503',
+        timestampUs: rawLines[0].timestampUs,
+      },
+      {
+        requestId: 'RETRY-STARTS',
+        status: '200',
+        timestampUs: rawLines[2].timestampUs,
+      },
+    ]);
+    expect(result.httpRequestCount).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // httpRequestCount — unique request headline count
 // ---------------------------------------------------------------------------
 
 describe('computeSummaryStats — httpRequestCount', () => {
-  it('equals completed requests with valid timestamps plus incomplete requests', () => {
+  it('counts requests with valid start timestamps plus incomplete requests', () => {
     const rawLines = makeLines(4);
     const index = buildIndex(rawLines);
 
     const completed = createHttpRequest({ requestId: 'R1', status: '200', responseLineNumber: 1 });
-    // responseLineNumber 999 → no line → finalTs = 0 → skipped
-    const missingTimestamp = createHttpRequest({ requestId: 'R2', status: '200', responseLineNumber: 999 });
+    // responseLineNumber 999 no longer matters for the chart headline because
+    // phase 1 counts requests by send/start timestamp.
+    const missingResponseTimestamp = createHttpRequest({ requestId: 'R2', status: '200', responseLineNumber: 999 });
     const incomplete = createHttpRequest({ requestId: 'R3', status: '', sendLineNumber: 2, responseLineNumber: 0 });
+    const missingStartTimestamp = createHttpRequest({ requestId: 'R4', status: '200', sendLineNumber: 999, responseLineNumber: 1 });
 
-    const result = computeSummaryStats(rawLines, [completed, missingTimestamp, incomplete], [], [], [], null, null, null, index);
-    // Only 'completed' contributes to the completed count; 'missingTimestamp' is excluded.
-    expect(result.httpRequestCount).toBe(2); // 1 completed + 1 incomplete
+    const result = computeSummaryStats(
+      rawLines,
+      [completed, missingResponseTimestamp, incomplete, missingStartTimestamp],
+      [],
+      [],
+      [],
+      null,
+      null,
+      null,
+      index,
+    );
+
+    expect(result.httpRequestCount).toBe(3); // 2 started requests + 1 incomplete
   });
 
   it('counts client-error requests towards httpRequestCount', () => {
@@ -461,11 +560,11 @@ describe('computeSummaryStats — topFailedUrls with client errors', () => {
     });
 
     const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
-    // The intermediate entry uses the *next* attempt timestamp as its ts proxy.
     const intermediateEntry = result.httpRequestsWithTimestamps.find(
       (e) => e.requestId === 'RETRY_INC_CHART' && e.status === ''
     );
     expect(intermediateEntry).toBeDefined();
+    expect(intermediateEntry?.timestampUs).toBe(rawLines[0].timestampUs);
     const clientErrorEntry = result.httpRequestsWithTimestamps.find(
       (e) => e.requestId === 'RETRY_INC_CHART' && e.status === 'client-error'
     );
