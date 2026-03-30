@@ -628,4 +628,23 @@ describe('useChartInteraction — onSelectionChange callback', () => {
     const lastCall = onSelectionChange.mock.calls[onSelectionChange.mock.calls.length - 1];
     expect(lastCall[0]).toBeNull();
   });
+
+  it('fires onSelectionChange immediately on mouseDown with a zero-width range', () => {
+    const onSelectionChange = vi.fn();
+    const options = { ...makeOptions(), onSelectionChange };
+    const { result } = renderHook(() => useChartInteraction(options));
+
+    mockLocalPoint.mockReturnValueOnce({ x: 400, y: 50 });
+    act(() => {
+      result.current.handlers.handleMouseDown({} as React.MouseEvent<SVGRectElement>);
+    });
+
+    // First call should be a zero-width range at the click position
+    expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    const firstCall = onSelectionChange.mock.calls[0][0];
+    expect(firstCall).toEqual({
+      startUs: xToTime(400),
+      endUs: xToTime(400),
+    });
+  });
 });

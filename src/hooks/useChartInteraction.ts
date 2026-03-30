@@ -106,13 +106,15 @@ export function useChartInteraction<TBucket>({
       setSelectionStart({ x: point.x, time: clickTime });
       setSelectionEnd({ x: point.x, time: clickTime });
 
-      // Hide tooltip during selection
+      // Hide tooltip during selection, clear cursor on siblings, and emit an
+      // initial zero-width selection so sibling charts can start mirroring immediately.
       hideTooltip();
       setCursorX(undefined);
       setCursorTimeLabel(undefined);
       onCursorMove?.(null);
+      onSelectionChange?.({ startUs: clickTime as TimestampMicros, endUs: clickTime as TimestampMicros });
     },
-    [marginLeft, xMax, minTime, maxTime, hideTooltip, onCursorMove]
+    [marginLeft, xMax, minTime, maxTime, hideTooltip, onCursorMove, onSelectionChange]
   );
 
   const handleMouseUp = useCallback(() => {

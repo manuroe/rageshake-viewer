@@ -145,11 +145,15 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
     onSelectionChange,
   });
 
-  /** Convert a microsecond timestamp to an SVG x-coordinate within the chart area. */
+  /** Convert a microsecond timestamp to an SVG x-coordinate within the chart area.
+   * Clamps the input to [minTime, maxTime] so external times outside the chart's
+   * domain never produce negative or overflow x values.
+   */
   const timeToX = useCallback(
     (timeUs: number): number => {
       if (maxTime === minTime) return 0;
-      return ((timeUs - minTime) / (maxTime - minTime)) * xMax;
+      const clampedTimeUs = Math.max(minTime, Math.min(maxTime, timeUs));
+      return ((clampedTimeUs - minTime) / (maxTime - minTime)) * xMax;
     },
     [minTime, maxTime, xMax],
   );
@@ -173,11 +177,15 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
   const getBucketAtExternalTime = useCallback(
     (timeUs: number): TBucket | undefined => {
       if (buckets.length === 0) return undefined;
+      // Return undefined when the external time is outside this chart's range to
+      // avoid showing a misleading tooltip clamped to the first or last bucket.
+      if (timeUs < minTime || timeUs > maxTime) return undefined;
       const x = timeToX(timeUs);
+      if (x < 0 || x > xMax) return undefined;
       const index = Math.max(0, Math.min(buckets.length - 1, Math.floor(x / xScale.step())));
       return buckets[index];
     },
-    [buckets, timeToX, xScale],
+    [buckets, minTime, maxTime, timeToX, xScale, xMax],
   );
 
   // When a sibling chart drives the cursor, show this chart's own tooltip at
@@ -434,7 +442,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
             )}
 
             {/* External cursor: mirrored crosshair from a sibling chart */}
-            {!isSelecting && cursorX === undefined && externalCursorTime !== null && externalCursorTime !== undefined && (
+            {!isSelecting && !hasExternalSelection && cursorX === undefined && externalCursorTime !== null && externalCursorTime !== undefined && (
               <>
                 <Line
                   from={{ x: timeToX(externalCursorTime), y: 0 }}
@@ -458,33 +466,38 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
               </>
             )}
 
-            {/* External selection: mirrored selection band from a sibling chart */}
-            {!isSelecting && externalSelection !== null && externalSelection !== undefined && (
+            {/* External selection: mirrored selection band from a sibling chart.
+                 Normalize start/end so the rect has a non-negative width even if the
+                 sibling passed an inverted range. */}
+            {!isSelecting && externalSelection !== null && externalSelection !== undefined && (() => {
+              const selStartX = timeToX(Math.min(externalSelection.startUs, externalSelection.endUs));
+              const selEndX = timeToX(Math.max(externalSelection.startUs, externalSelection.endUs));
+              return (
               <>
                 <rect
-                  x={timeToX(externalSelection.startUs)}
+                  x={selStartX}
                   y={0}
-                  width={timeToX(externalSelection.endUs) - timeToX(externalSelection.startUs)}
+                  width={selEndX - selStartX}
                   height={yMax}
                   fill="rgba(33, 150, 243, 0.2)"
                   pointerEvents="none"
                 />
                 <Line
-                  from={{ x: timeToX(externalSelection.startUs), y: 0 }}
-                  to={{ x: timeToX(externalSelection.startUs), y: yMax }}
+                  from={{ x: selStartX, y: 0 }}
+                  to={{ x: selStartX, y: yMax }}
                   stroke="#2196f3"
                   strokeWidth={2}
                   pointerEvents="none"
                 />
                 <Line
-                  from={{ x: timeToX(externalSelection.endUs), y: 0 }}
-                  to={{ x: timeToX(externalSelection.endUs), y: yMax }}
+                  from={{ x: selEndX, y: 0 }}
+                  to={{ x: selEndX, y: yMax }}
                   stroke="#2196f3"
                   strokeWidth={2}
                   pointerEvents="none"
                 />
                 <text
-                  x={timeToX(externalSelection.startUs)}
+                  x={selStartX}
                   y={yMax + 20}
                   textAnchor="middle"
                   fontSize={10}
@@ -492,10 +505,10 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                   fontWeight="bold"
                   pointerEvents="none"
                 >
-                  {formatTime(externalSelection.startUs)}
+                  {formatTime(Math.min(externalSelection.startUs, externalSelection.endUs))}
                 </text>
                 <text
-                  x={timeToX(externalSelection.endUs)}
+                  x={selEndX}
                   y={yMax + 20}
                   textAnchor="middle"
                   fontSize={10}
@@ -503,10 +516,11 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                   fontWeight="bold"
                   pointerEvents="none"
                 >
-                  {formatTime(externalSelection.endUs)}
+                  {formatTime(Math.max(externalSelection.startUs, externalSelection.endUs))}
                 </text>
               </>
-            )}
+              );
+            })()}
           </Group>
         </svg>
 
