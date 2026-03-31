@@ -58,7 +58,19 @@ A git-ignored sandbox for all transient AI-generated files. **Never use `/tmp/` 
 
 Do **not** commit on the first iteration. Write the code, show the user what changed, and wait for feedback. Only commit once the user confirms the direction is correct — or explicitly asks you to commit.
 
+## First-Pass Handoff (for Agents)
+
+After implementing a requested change, stop and hand the result to the user before doing the full code-quality pass.
+
+- Default workflow: implement the change, do only the narrowest sanity check needed to avoid an obviously broken handoff, then ask whether the user is happy with the result.
+- Do **not** automatically run the full build, lint, coverage, benchmark, or broad test suite immediately after implementation.
+- Do **not** add follow-up work like wider refactors, extra tests, demo-log updates, screenshot considerations, or documentation polish until the user confirms the implementation direction or explicitly asks for the quality pass.
+- If a validation step is needed before user feedback, keep it targeted to the touched code and state why that check is necessary.
+- Once the user confirms the direction, complete the remaining quality work needed for the requested end state.
+
 ## Pre-Commit Checklist (for Agents)
+
+This checklist is for commit/PR readiness, not for the initial implementation handoff.
 
 Before committing **any** code change (new feature, bug fix, PR comment fix, refactor, etc.), always run the following commands and resolve all errors before proceeding:
 
