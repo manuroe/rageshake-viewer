@@ -60,8 +60,10 @@ export interface HttpRequestWithTimestamp {
  * An HTTP request entry annotated with the bytes transferred, used by
  * `BandwidthChart` to plot upload and download volumes over time.
  *
- * Each entry corresponds to a single HTTP request. Incomplete requests
- * (no response received yet) contribute upload bytes only.
+ * Each entry corresponds to a single HTTP request, timestamped at the
+ * moment the request was sent (start-based), so that both bandwidth and
+ * HTTP-activity charts share the same time reference. Incomplete requests
+ * (no response received yet) carry upload bytes only.
  */
 export interface BandwidthRequestEntry {
   readonly timestampUs: TimestampMicros;

@@ -404,40 +404,22 @@ export function computeSummaryStats(
   }
 
   // ── HTTP requests with bandwidth data (for BandwidthChart) ───────────────
-  // Uses completion-based timestamps (responseLineNumber) for finished
-  // requests, falling back to sendLineNumber for in‑flight ones, and captures
-  // requestSize / responseSize instead of status. Note this differs from the
-  // start‑based HTTP activity chart, so cross‑chart alignment uses different
-  // reference points (start vs. end of the transfer).
+  // Uses the request-send timestamp (sendLineNumber) for all entries —
+  // consistent with the start‑based HTTP activity chart so both charts share
+  // the same time reference.
   const httpRequestsWithBandwidth: BandwidthRequestEntry[] = [];
 
   for (const req of allHttpRequests) {
-    if (req.responseLineNumber) {
-      const ts = getLineTimestampUs(req.responseLineNumber);
-      if (!ts || ts === 0) continue;
-      if (isTimestampInRange(ts)) {
-        if (req.requestSize > 0 || req.responseSize > 0) {
-          httpRequestsWithBandwidth.push({
-            timestampUs: ts,
-            uploadBytes: req.requestSize,
-            downloadBytes: req.responseSize,
-            uri: req.uri,
-          });
-        }
-      }
-    } else if (!req.status) {
-      const ts = getLineTimestampUs(req.sendLineNumber);
-      if (!ts || ts === 0) continue;
-      if (isTimestampInRange(ts)) {
-        if (req.requestSize > 0) {
-          httpRequestsWithBandwidth.push({
-            timestampUs: ts,
-            uploadBytes: req.requestSize,
-            downloadBytes: 0,
-            uri: req.uri,
-          });
-        }
-      }
+    const ts = getLineTimestampUs(req.sendLineNumber);
+    if (!ts || ts === 0) continue;
+    if (!isTimestampInRange(ts)) continue;
+    if (req.requestSize > 0 || req.responseSize > 0) {
+      httpRequestsWithBandwidth.push({
+        timestampUs: ts,
+        uploadBytes: req.requestSize,
+        downloadBytes: req.responseSize,
+        uri: req.uri,
+      });
     }
   }
 

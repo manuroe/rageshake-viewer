@@ -594,7 +594,7 @@ describe('computeSummaryStats — httpRequestsWithBandwidth', () => {
     expect(result.httpRequestsWithBandwidth).toHaveLength(1);
     expect(result.httpRequestsWithBandwidth[0].uploadBytes).toBe(200);
     expect(result.httpRequestsWithBandwidth[0].downloadBytes).toBe(1000);
-    expect(result.httpRequestsWithBandwidth[0].timestampUs).toBe(rawLines[1].timestampUs);
+    expect(result.httpRequestsWithBandwidth[0].timestampUs).toBe(rawLines[0].timestampUs);
   });
 
   it('preserves the URI on each entry', () => {
