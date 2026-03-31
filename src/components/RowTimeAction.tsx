@@ -9,6 +9,12 @@ import styles from './RowTimeAction.module.css';
 export interface RowTimeActionProps {
   /** Microsecond timestamp of the request's send time (used as the boundary value). */
   timestampUs: TimestampMicros;
+  /**
+   * Called whenever the action menu opens or closes.
+   * Parents use this to elevate their row's z-index so the menu is never
+   * painted over by subsequent sibling rows in the same stacking context.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -26,13 +32,19 @@ export interface RowTimeActionProps {
  * When the new boundary would cross the existing opposite boundary the opposite
  * boundary is cleared (set to null) so the resulting range is always valid.
  */
-export function RowTimeAction({ timestampUs }: RowTimeActionProps) {
+export function RowTimeAction({ timestampUs, onOpenChange }: RowTimeActionProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  /** Wrapper that keeps isOpen and the parent callback in sync. */
+  const setMenuOpen = (open: boolean) => {
+    setIsOpen(open);
+    onOpenChange?.(open);
+  };
   const containerRef = useRef<HTMLDivElement>(null);
   const { setTimeFilter } = useURLParams();
   const { startTime, endTime } = useLogStore();
 
-  useClickOutside(containerRef, () => setIsOpen(false), isOpen);
+  useClickOutside(containerRef, () => setMenuOpen(false), isOpen);
 
   const iso = microsToISO(timestampUs);
 
@@ -43,20 +55,20 @@ export function RowTimeAction({ timestampUs }: RowTimeActionProps) {
     // works because both are full UTC ISO-8601 values.
     const newEnd = endTime && endTime > iso ? endTime : null;
     setTimeFilter(iso, newEnd);
-    setIsOpen(false);
+    setMenuOpen(false);
   };
 
   /** Set the window end to this row's timestamp, clearing start if it would follow it. */
   const handleSetEnd = () => {
     const newStart = startTime && startTime < iso ? startTime : null;
     setTimeFilter(newStart, iso);
-    setIsOpen(false);
+    setMenuOpen(false);
   };
 
   const handleButtonClick = (e: React.MouseEvent) => {
     // Prevent the row-level click handlers (log viewer toggle, waterfall scroll)
     e.stopPropagation();
-    setIsOpen((prev) => !prev);
+    setMenuOpen(!isOpen);
   };
 
   return (

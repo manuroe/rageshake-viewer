@@ -190,4 +190,34 @@ describe('RowTimeAction', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /set window end here/i }));
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  // -----------------------------------------------------------------------
+  // onOpenChange callback
+  // -----------------------------------------------------------------------
+
+  it('calls onOpenChange(true) when the menu opens', () => {
+    const onOpenChange = vi.fn();
+    render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} onOpenChange={onOpenChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it('calls onOpenChange(false) when the menu closes via trigger', () => {
+    const onOpenChange = vi.fn();
+    render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} onOpenChange={onOpenChange} />);
+    const trigger = screen.getByRole('button', { name: /row actions/i });
+    fireEvent.click(trigger);
+    onOpenChange.mockReset();
+    fireEvent.click(trigger);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('calls onOpenChange(false) when a menu item is selected', () => {
+    const onOpenChange = vi.fn();
+    render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} onOpenChange={onOpenChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
+    onOpenChange.mockReset();
+    fireEvent.click(screen.getByRole('menuitem', { name: /set window start here/i }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });

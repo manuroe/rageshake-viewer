@@ -13,6 +13,12 @@ import {
   type KeyboardShortcutContextValue,
 } from '../../components/KeyboardShortcutContext';
 
+// RowTimeAction uses useURLParams (which calls useLocation) — mock it so
+// LogDisplayView tests don't need a Router context.
+vi.mock('../../hooks/useURLParams', () => ({
+  useURLParams: () => ({ setTimeFilter: vi.fn() }),
+}));
+
 // Mock react-virtual to simplify rendering in tests
 vi.mock('@tanstack/react-virtual', () => {
   return {
@@ -1435,6 +1441,17 @@ describe('LogDisplayView export button', () => {
     expect(screen.getByRole('dialog', { name: /export logs/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /close export dialog/i }));
     expect(screen.queryByRole('dialog', { name: /export logs/i })).not.toBeInTheDocument();
+  });
+
+  it('RowTimeAction menu opens and closes within the log view', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView />);
+    // trigger has pointer-events:none by default (hidden until hover); use fireEvent to bypass
+    const trigger = screen.getByRole('button', { name: /row actions/i });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });
 

@@ -17,6 +17,7 @@ import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
 import type { ExportContext } from '../utils/logExportUtils';
+import { RowTimeAction } from '../components/RowTimeAction';
 import styles from './LogDisplayView.module.css';
 
 const HTTP_ERROR_RE = /\bstatus=(\d{3})\b/;
@@ -167,6 +168,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [stripPrefix, setStripPrefix] = useState(true);
   const [forcedRanges, setForcedRanges] = useState<ForcedRange[]>([]);
   const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
+  /** Index of the row whose RowTimeAction menu is currently open, or null. */
+  const [menuOpenForIndex, setMenuOpenForIndex] = useState<number | null>(null);
   const [collapseEnabled, setCollapseEnabled] = useState(true);
   const [showExport, setShowExport] = useState(false);
 
@@ -717,7 +720,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 ref={(el) => {
                   if (el) rowVirtualizer.measureElement(el);
                 }}
-                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${lineWrap ? styles.wrap : styles.nowrap}`}
+                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${lineWrap ? styles.wrap : styles.nowrap} ${hoveredLineIndex === index ? 'log-row-hovered' : ''}`}
                 onMouseEnter={() => setHoveredLineIndex(index)}
                 onMouseLeave={() => setHoveredLineIndex(null)}
                 onFocus={() => setHoveredLineIndex(index)}
@@ -734,8 +737,15 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                   width: lineWrap ? '100%' : 'fit-content',
                   minWidth: '100%',
                   transform: `translateY(${virtualRow.start}px)`,
+                  // Elevate the row above subsequent siblings when its menu is open so
+                  // DOM-order paint (later rows cover earlier rows) cannot clip the menu.
+                  zIndex: menuOpenForIndex === index ? 10 : undefined,
                 }}
               >
+                <RowTimeAction
+                  timestampUs={line.timestampUs}
+                  onOpenChange={(open) => setMenuOpenForIndex(open ? index : null)}
+                />
                 {(gapAbove || (gapBelow && !collapseInfo)) && (
                   <div className={styles.logGapControls}>
                     {gapAbove && (

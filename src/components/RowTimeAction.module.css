@@ -33,8 +33,10 @@
     justify-content: center;
 }
 
-/* show when the parent row is hovered (set via JS classList) */
+/* show when a request table row is hovered (set via JS classList) */
 :global(.row-hovered) .trigger,
+/* show when a log view row is hovered (set via hoveredLineIndex state) */
+:global(.log-row-hovered) .trigger,
 /* show when focused (keyboard navigation) */
 .trigger:focus-visible,
 /* show when the menu is already open */

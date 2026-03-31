@@ -146,6 +146,8 @@ export function RequestTable({
   const [showSyncRequests, setShowSyncRequests] = useState(true);
   /** When true (default), idle gaps longer than the threshold are collapsed to narrow stripe bands. */
   const [collapseIdlePeriods, setCollapseIdlePeriods] = useState(true);
+  /** Row key of the request whose RowTimeAction menu is open, or null. */
+  const [menuOpenForRowKey, setMenuOpenForRowKey] = useState<number | null>(null);
 
   const isSyncRequest = (req: HttpRequest): boolean => /\/sync(?:[/?]|$)/i.test(req.uri);
   const displayedRequests = showSyncRequests
@@ -516,7 +518,7 @@ export function RequestTable({
                       key={`sticky-${rowKey}`}
                       data-row-id={`sticky-${rowKey}`}
                       className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${(!req.status && !req.clientError) ? styles.incomplete : ''}`}
-                      style={{ minHeight: '28px', cursor: 'pointer' }}
+                      style={{ minHeight: '28px', cursor: 'pointer', zIndex: menuOpenForRowKey === rowKey ? 10 : undefined }}
                       onMouseEnter={() => handleRowMouseEnter(rowKey)}
                       onMouseLeave={() => handleRowMouseLeave(rowKey)}
                       onClick={() => handleWaterfallRowClick(req)}
@@ -525,6 +527,7 @@ export function RequestTable({
                         {/* Leading actions column */}
                         <RowTimeAction
                           timestampUs={lineNumberIndex.get(req.sendLineNumber)?.timestampUs ?? 0}
+                          onOpenChange={(open) => setMenuOpenForRowKey(open ? rowKey : null)}
                         />
                         {columns.map((col, i) => {
                           // First column is clickable request ID
