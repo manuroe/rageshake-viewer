@@ -744,7 +744,9 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
               >
                 <RowTimeAction
                   timestampUs={line.timestampUs}
-                  onOpenChange={(open) => setMenuOpenForIndex(open ? index : null)}
+                  onOpenChange={(open) =>
+                    setMenuOpenForIndex((prev) => (open ? index : prev === index ? null : prev))
+                  }
                 />
                 {(gapAbove || (gapBelow && !collapseInfo)) && (
                   <div className={styles.logGapControls}>

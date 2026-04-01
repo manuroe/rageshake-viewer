@@ -527,7 +527,9 @@ export function RequestTable({
                         {/* Leading actions column */}
                         <RowTimeAction
                           timestampUs={lineNumberIndex.get(req.sendLineNumber)?.timestampUs}
-                          onOpenChange={(open) => setMenuOpenForRowKey(open ? rowKey : null)}
+                          onOpenChange={(open) =>
+                            setMenuOpenForRowKey((prev) => (open ? rowKey : prev === rowKey ? null : prev))
+                          }
                         />
                         {columns.map((col, i) => {
                           // First column is clickable request ID

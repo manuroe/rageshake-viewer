@@ -53,30 +53,20 @@ export function RowTimeAction({ timestampUs, onOpenChange }: RowTimeActionProps)
 
   const iso = microsToISO(timestampUs);
 
-  const resolveComparableBoundary = (boundary: string | null): string | null => {
-    if (!boundary || !isFullISODatetime(boundary)) {
-      return boundary;
-    }
-
-    return boundary;
-  };
-
   /** Set the window start to this row's timestamp, clearing end if it would precede it. */
   const handleSetStart = () => {
-    const comparableEndTime = resolveComparableBoundary(endTime);
-    const newEnd = comparableEndTime && isFullISODatetime(comparableEndTime)
-      ? (comparableEndTime > iso ? comparableEndTime : null)
-      : comparableEndTime;
+    const newEnd = endTime && isFullISODatetime(endTime)
+      ? (endTime > iso ? endTime : null)
+      : endTime;
     setTimeFilter(iso, newEnd);
     setMenuOpen(false);
   };
 
   /** Set the window end to this row's timestamp, clearing start if it would follow it. */
   const handleSetEnd = () => {
-    const comparableStartTime = resolveComparableBoundary(startTime);
-    const newStart = comparableStartTime && isFullISODatetime(comparableStartTime)
-      ? (comparableStartTime < iso ? comparableStartTime : null)
-      : comparableStartTime;
+    const newStart = startTime && isFullISODatetime(startTime)
+      ? (startTime < iso ? startTime : null)
+      : startTime;
     setTimeFilter(newStart, iso);
     setMenuOpen(false);
   };
