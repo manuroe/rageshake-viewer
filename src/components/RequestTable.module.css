@@ -136,6 +136,7 @@
 .requestRowSticky {
     display: grid;
     grid-template-columns: 70px 400px 115px 45px 45px 45px;
+    position: relative;
     gap: 8px;
     padding: 4px 16px;
     background-color: var(--row-bg);

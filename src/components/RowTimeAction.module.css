@@ -1,0 +1,92 @@
+/* RowTimeAction Component Styles */
+
+.container {
+    /* Absolutely positioned over the row — takes no grid space, overlays the
+       leading edge of the Request ID cell on hover without shifting any text. */
+    position: absolute;
+    left: 4px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    z-index: 4;
+}
+
+.trigger {
+    /* visually hidden until the row is hovered or the menu is open */
+    opacity: 0;
+    pointer-events: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    line-height: 1;
+    transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+    /* Ensure it does not shrink the column when invisible */
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* show when a request table row is hovered (set via JS classList) */
+:global(.row-hovered) .trigger,
+/* show when a log view row is hovered (set via hoveredLineIndex state) */
+:global(.log-row-hovered) .trigger,
+/* show when focused (keyboard navigation) */
+.trigger:focus-visible,
+/* show when the menu is already open */
+.trigger[aria-expanded="true"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.trigger:hover {
+    background: var(--bg-hover);
+    color: var(--color-primary);
+}
+
+.trigger:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary-muted);
+}
+
+.menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    z-index: var(--z-dropdown);
+    padding: 4px 0;
+    min-width: 200px;
+    white-space: nowrap;
+}
+
+.menuItem {
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    text-align: left;
+    font-size: var(--font-size-md);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background var(--transition-default);
+    font-family: inherit;
+    display: block;
+}
+
+.menuItem:hover {
+    background: var(--bg-hover);
+}
+
+.menuItem strong {
+    color: var(--color-primary);
+}

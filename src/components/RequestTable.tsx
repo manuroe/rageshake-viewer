@@ -24,6 +24,7 @@ import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { buildAttemptSegments, buildRetryTooltip, computeHasSegments } from '../utils/requestBarUtils';
 import { INCOMPLETE_STATUS_KEY } from '../utils/statusCodeUtils';
 import type { HttpRequest } from '../types/log.types';
+import { RowTimeAction } from './RowTimeAction';
 import styles from './RequestTable.module.css';
 
 
@@ -145,6 +146,8 @@ export function RequestTable({
   const [showSyncRequests, setShowSyncRequests] = useState(true);
   /** When true (default), idle gaps longer than the threshold are collapsed to narrow stripe bands. */
   const [collapseIdlePeriods, setCollapseIdlePeriods] = useState(true);
+  /** Row key of the request whose RowTimeAction menu is open, or null. */
+  const [menuOpenForRowKey, setMenuOpenForRowKey] = useState<number | null>(null);
 
   const isSyncRequest = (req: HttpRequest): boolean => /\/sync(?:[/?]|$)/i.test(req.uri);
   const displayedRequests = showSyncRequests
@@ -515,12 +518,19 @@ export function RequestTable({
                       key={`sticky-${rowKey}`}
                       data-row-id={`sticky-${rowKey}`}
                       className={`${styles.requestRow} ${openLogViewerIds.has(rowKey) ? styles.selected : ''} ${(expandedRows.has(rowKey) && openLogViewerIds.has(rowKey)) ? styles.expanded : ''} ${(!req.status && !req.clientError) ? styles.incomplete : ''}`}
-                      style={{ minHeight: '28px', cursor: 'pointer' }}
+                      style={{ minHeight: '28px', cursor: 'pointer', zIndex: menuOpenForRowKey === rowKey ? 10 : undefined }}
                       onMouseEnter={() => handleRowMouseEnter(rowKey)}
                       onMouseLeave={() => handleRowMouseLeave(rowKey)}
                       onClick={() => handleWaterfallRowClick(req)}
                     >
                       <div className={styles.requestRowSticky}>
+                        {/* Leading actions column */}
+                        <RowTimeAction
+                          timestampUs={lineNumberIndex.get(req.sendLineNumber)?.timestampUs}
+                          onOpenChange={(open) =>
+                            setMenuOpenForRowKey((prev) => (open ? rowKey : prev === rowKey ? null : prev))
+                          }
+                        />
                         {columns.map((col, i) => {
                           // First column is clickable request ID
                           if (i === 0) {
@@ -548,6 +558,7 @@ export function RequestTable({
                             </div>
                           );
                         })}
+
                       </div>
                     </div>
                     );
