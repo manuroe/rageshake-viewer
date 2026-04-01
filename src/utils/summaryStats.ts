@@ -422,7 +422,7 @@ export function computeSummaryStats(
 
   for (const req of allHttpRequests) {
     if (req.responseLineNumber) {
-      const ts = getLineTimestampUs(req.responseLineNumber);
+      const ts = getLineTimestampUs(req.sendLineNumber);
       if (!ts || ts === 0) continue;
       if (isTimestampInRange(ts)) {
         if (req.requestSize > 0 || req.responseSize > 0) {

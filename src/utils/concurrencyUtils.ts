@@ -33,12 +33,31 @@ export function computeStepPoints(
 ): StepPoint[] {
   if (spans.length === 0) return [];
 
-  // Accumulate net delta per unique timestamp.
+  // Accumulate net delta per unique timestamp, clamped to the chart domain.
   const eventMap = new Map<number, number>();
   for (const span of spans) {
-    const end = span.endUs ?? maxTime;
-    eventMap.set(span.startUs, (eventMap.get(span.startUs) ?? 0) + 1);
-    eventMap.set(end, (eventMap.get(end) ?? 0) - 1);
+    const rawEnd = span.endUs ?? maxTime;
+
+    // Ignore spans that end at or before the chart start, or start at or after the chart end.
+    if (rawEnd <= minTime || span.startUs >= maxTime) {
+      continue;
+    }
+
+    // Clamp span bounds to the [minTime, maxTime] domain.
+    const clampedStart = Math.max(span.startUs, minTime);
+    const clampedEnd = Math.min(rawEnd, maxTime);
+
+    // Skip zero-width spans within the domain.
+    if (clampedStart >= clampedEnd) {
+      continue;
+    }
+
+    eventMap.set(clampedStart, (eventMap.get(clampedStart) ?? 0) + 1);
+    eventMap.set(clampedEnd, (eventMap.get(clampedEnd) ?? 0) - 1);
+  }
+
+  if (eventMap.size === 0) {
+    return [];
   }
 
   const sortedTimes = Array.from(eventMap.keys()).sort((a, b) => a - b);

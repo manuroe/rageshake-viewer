@@ -62,12 +62,22 @@ const UPLOAD_COLOR = 'var(--bandwidth-upload)';
 const DOWNLOAD_COLOR = 'var(--bandwidth-download)';
 
 function getValueAtTime(points: readonly StepPoint[], timeUs: number): number {
-  let value = 0;
-  for (const point of points) {
-    if (point.timeUs > timeUs) break;
-    value = point.value;
+  if (points.length === 0) return 0;
+  if (timeUs < points[0].timeUs) return 0;
+
+  const lastIndex = points.length - 1;
+  if (timeUs >= points[lastIndex].timeUs) return points[lastIndex].value;
+
+  // Binary search for the last point with timeUs <= target.
+  let lo = 0;
+  let hi = lastIndex;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid].timeUs === timeUs) return points[mid].value;
+    if (points[mid].timeUs < timeUs) lo = mid + 1;
+    else hi = mid - 1;
   }
-  return value;
+  return hi >= 0 ? points[hi].value : 0;
 }
 
 function computeStepSeries(

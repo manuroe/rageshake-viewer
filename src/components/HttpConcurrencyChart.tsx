@@ -125,19 +125,34 @@ export function HttpConcurrencyChart({
     }
     const sortedTimes = Array.from(allTimes).sort((a, b) => a - b);
 
-    return orderedKeys.map((key, i) => {
+    // Precompute per-key counts at each time in `sortedTimes` once (O(keys × times)).
+    const countsByKey = new Map<string, number[]>();
+    for (const key of orderedKeys) {
+      const pts = stepPointsByKey.get(key) ?? [];
+      const counts: number[] = [];
+      for (const timeUs of sortedTimes) {
+        counts.push(getCountAtTime(pts, timeUs));
+      }
+      countsByKey.set(key, counts);
+    }
+
+    // Build stacked layers using cumulative prefix sums so each key's y0/y1
+    // is derived in O(keys × times) instead of O(keys² × times).
+    const cumulativeAtTime = new Array<number>(sortedTimes.length).fill(0);
+
+    return orderedKeys.map((key) => {
+      const counts = countsByKey.get(key) ?? [];
+      const points = sortedTimes.map((timeUs, idx) => {
+        const y0 = cumulativeAtTime[idx];
+        const countHere = counts[idx] ?? 0;
+        const y1 = y0 + countHere;
+        cumulativeAtTime[idx] = y1;
+        return { timeUs, y0, y1 };
+      });
       return {
         key,
         color: getBucketColor(key),
-        points: sortedTimes.map((timeUs) => {
-          // Cumulative count of all layers below this one.
-          let y0 = 0;
-          for (let j = 0; j < i; j++) {
-            y0 += getCountAtTime(stepPointsByKey.get(orderedKeys[j]) ?? [], timeUs);
-          }
-          const countHere = getCountAtTime(stepPointsByKey.get(key) ?? [], timeUs);
-          return { timeUs, y0, y1: y0 + countHere };
-        }),
+        points,
       };
     });
   }, [orderedKeys, stepPointsByKey, minTime, maxTime]);
