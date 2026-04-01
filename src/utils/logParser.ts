@@ -75,32 +75,28 @@ function extractSourceLocation(line: string): { filePath?: string; sourceLineNum
 }
 
 /**
- * Returns true when the line begins with an ISO 8601 timestamp
- * (`YYYY-MM-DDTHH:MM:SS`), meaning it is the start of a new log entry.
- * Lines that lack this prefix are continuation lines that belong to the
- * previous log entry (e.g. multi-line Rust error values).
+ * Extract ISO timestamp from the start of a log line.
+ *
+ * Anchored at position 0 so that a match also implies the line is the start of
+ * a new log entry — removing the need for a separate `lineStartsWithISOTimestamp`
+ * check and keeping the hot parser loop to a single regex call per line.
+ *
+ * Returns the full ISO timestamp string when the line starts a new entry, or
+ * an empty string when the line is a continuation (no leading timestamp).
  *
  * @example
- * lineStartsWithISOTimestamp('2026-04-01T09:18:52.057456Z ERROR foo: bar'); // true
- * lineStartsWithISOTimestamp('    SomeError { status: 404 }');               // false
- */
-function lineStartsWithISOTimestamp(line: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(line);
-}
-
-/**
- * Extract ISO timestamp from a log line.
- * Returns the full ISO 8601 datetime string.
+ * extractISOTimestamp('2026-04-01T09:18:52.057456Z ERROR foo'); // '2026-04-01T09:18:52.057456Z'
+ * extractISOTimestamp('    SomeError { status: 404 }');          // ''
  */
 function extractISOTimestamp(line: string): ISODateTimeString {
-  // Match full ISO timestamp: YYYY-MM-DDTHH:MM:SS[.fraction]Z?
-  const isoMatch = line.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/);
+  // Anchored at ^ so this doubles as a new-entry vs continuation discriminator.
+  const isoMatch = line.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/);
   if (isoMatch) {
     // Ensure it ends with Z for consistency
     const timestamp = isoMatch[0];
     return timestamp.endsWith('Z') ? timestamp : `${timestamp}Z`;
   }
-  return '';
+  return '' as ISODateTimeString;
 }
 
 /**
@@ -162,9 +158,13 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
 
     totalNonEmptyLines++;
 
+    // A single anchored regex call doubles as the new-entry vs continuation
+    // discriminator (empty string → continuation; non-empty → new entry).
+    const isoTimestamp = extractISOTimestamp(line);
+
     // Continuation line: non-empty but no leading ISO timestamp → belongs to
     // the previous log entry (e.g. the indented body of a multi-line Rust error).
-    if (!lineStartsWithISOTimestamp(line)) {
+    if (!isoTimestamp) {
       if (lastEntry !== null) {
         lastEntry.continuationLines.push(line);
         // Extend rawText so search queries can match content in continuation lines.
@@ -192,7 +192,6 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     }
 
     // === New log entry (line has a leading ISO timestamp) ===
-    const isoTimestamp = extractISOTimestamp(line);
     const level = extractLogLevel(line);
     const timestampUs = parseTimestampMicros(isoTimestamp);
     const displayTime = formatDisplayTime(isoTimestamp);
