@@ -12,7 +12,6 @@ import { formatBytes } from '../utils/sizeUtils';
 import { getHttpStatusBadgeClass } from '../utils/httpStatusColors';
 import { stripMatrixClientPath } from '../utils/uriUtils';
 import { computeSummaryStats } from '../utils/summaryStats';
-import type { BandwidthRequestEntry } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import type { SelectionRange } from '../hooks/useChartInteraction';
 import styles from './SummaryView.module.css';
@@ -20,83 +19,6 @@ import tableStyles from '../components/Table.module.css';
 
 /** Pattern matching media upload/download paths. */
 const MEDIA_PATH_RE = /\/media\//i;
-
-interface BandwidthSectionProps {
-  requests: readonly BandwidthRequestEntry[];
-  timeRange: { readonly minTime: TimestampMicros; readonly maxTime: TimestampMicros };
-  onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
-  onResetZoom?: () => void;
-  externalCursorTime?: number | null;
-  externalSelection?: SelectionRange | null;
-  onCursorMove?: ((timeUs: number | null) => void) | undefined;
-  onSelectionChange?: ((selection: SelectionRange | null) => void) | undefined;
-}
-
-/**
- * Renders the "Bandwidth Over Time" section with an inline toggle to hide
- * media requests (paths containing `/media/`). Hidden by default because media
- * transfers are typically multi-MB outliers that compress the scale and make
- * smaller API traffic invisible.
- */
-function BandwidthSection({
-  requests,
-  timeRange,
-  onTimeRangeSelected,
-  onResetZoom,
-  externalCursorTime,
-  externalSelection,
-  onCursorMove,
-  onSelectionChange,
-}: BandwidthSectionProps) {
-  const [hideMedia, setHideMedia] = useState(true);
-
-  const filteredRequests = useMemo(
-    () => (hideMedia ? requests.filter((r) => !MEDIA_PATH_RE.test(r.uri)) : requests),
-    [requests, hideMedia],
-  );
-
-  return (
-    <section className={styles.summarySection}>
-      <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        Bandwidth Over Time
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: 'var(--font-size-xs)',
-            fontWeight: 'normal',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={hideMedia}
-            onChange={(e) => setHideMedia(e.target.checked)}
-            style={{ cursor: 'pointer' }}
-          />
-          <span title="Hides all requests whose URL contains /media/ (e.g. media uploads and downloads). These are typically large and compress the y-axis scale.">
-            Hide media
-          </span>
-        </label>
-      </h2>
-      <div className={styles.activityChartContainer}>
-        <BandwidthChart
-          requests={filteredRequests}
-          timeRange={timeRange}
-          onTimeRangeSelected={onTimeRangeSelected}
-          onResetZoom={onResetZoom}
-          externalCursorTime={externalCursorTime}
-          externalSelection={externalSelection}
-          onCursorMove={onCursorMove}
-          onSelectionChange={onSelectionChange}
-        />
-      </div>
-    </section>
-  );
-}
 
 export function SummaryView() {
   const navigate = useNavigate();
@@ -126,6 +48,15 @@ export function SummaryView() {
 
   // Toggle for chart sync overlay feature (disabled by default)
   const [enableChartSync, setEnableChartSync] = useState(false);
+
+  // Chart display mode: 'completed' = histogram of request starts, 'concurrent' = in-flight step chart
+  const [displayMode, setDisplayMode] = useState<'completed' | 'concurrent'>('completed');
+  // Toggle to show/hide incomplete (in-flight, no response yet) requests in the HTTP chart
+  const [showIncomplete, setShowIncomplete] = useState(true);
+  // Toggle to show/hide /sync requests (identified by a defined timeout field) in the HTTP chart
+  const [showSync, setShowSync] = useState(true);
+  // Toggle to show/hide media requests (paths containing /media/) in the bandwidth chart
+  const [showMedia, setShowMedia] = useState(true);
 
   // Precompute min/max across ALL raw log lines (keyword anchor)
   const fullDataRange = useMemo(() => {
@@ -231,6 +162,45 @@ export function SummaryView() {
       lineNumberIndex
     );
   }, [rawLogLines, allHttpRequests, allRequests, connectionIds, sentryEvents, startTime, endTime, localStartTime, localEndTime, lineNumberIndex]);
+
+  /**
+   * Derived chart data with incomplete requests optionally excluded.
+   * Incomplete entries have `status: ''` in the timestamps array and `endUs: null` in spans.
+   */
+  const httpRequestsForChart = useMemo(() => {
+    let reqs = stats.httpRequestsWithTimestamps;
+    if (!showIncomplete) reqs = reqs.filter((r) => r.status !== '');
+    if (!showSync) reqs = reqs.filter((r) => r.timeout === undefined);
+    return reqs;
+  }, [stats.httpRequestsWithTimestamps, showIncomplete, showSync]);
+
+  const httpRequestSpansForChart = useMemo(() => {
+    let spans = stats.httpRequestSpans;
+    if (!showIncomplete) spans = spans.filter((s) => s.endUs !== null);
+    if (!showSync) spans = spans.filter((s) => s.timeout === undefined);
+    return spans;
+  }, [stats.httpRequestSpans, showIncomplete, showSync]);
+
+  /** Bandwidth chart requests, filtered by media and sync toggles. */
+  const bandwidthRequestsForChart = useMemo(() => {
+    let reqs = stats.httpRequestsWithBandwidth;
+    if (!showMedia) reqs = reqs.filter((r) => !MEDIA_PATH_RE.test(r.uri));
+    if (!showSync) reqs = reqs.filter((r) => r.timeout === undefined);
+    return reqs;
+  }, [stats.httpRequestsWithBandwidth, showMedia, showSync]);
+
+  /** Bandwidth chart request spans, filtered by media and sync toggles. */
+  const bandwidthSpansForChart = useMemo(() => {
+
+    let spans = stats.bandwidthRequestSpans;
+    if (!showMedia) spans = spans.filter((r) => !MEDIA_PATH_RE.test(r.uri));
+    if (!showSync) spans = spans.filter((r) => r.timeout === undefined);
+    return spans;
+  }, [stats.bandwidthRequestSpans, showMedia, showSync]);
+
+  /** True when at least one chart-worthy HTTP request exists (requests or bandwidth). */
+  const hasHttpActivityData =
+    stats.httpRequestsWithTimestamps.length > 0 || stats.httpRequestsWithBandwidth.length > 0;
 
   if (rawLogLines.length === 0) {
     return (
@@ -479,37 +449,96 @@ export function SummaryView() {
           )}
         </div>
 
-        {/* HTTP Requests Activity Chart */}
-        {stats.httpRequestsWithTimestamps.length > 0 && (
+        {/* HTTP Activity — unified section for requests + bandwidth charts */}
+        {hasHttpActivityData && (
           <section className={styles.summarySection}>
-            <h2>HTTP Requests Over Time: {stats.httpRequestCount} requests{stats.incompleteRequestCount > 0 ? ` (${stats.incompleteRequestCount} incomplete)` : ''}{(stats.totalUploadBytes > 0 || stats.totalDownloadBytes > 0) ? ` — ↑ ${formatBytes(stats.totalUploadBytes)} / ↓ ${formatBytes(stats.totalDownloadBytes)}` : ''}</h2>
-            <div className={styles.activityChartContainer}>
-              <HttpActivityChart
-                httpRequests={stats.httpRequestsWithTimestamps}
-                timeRange={stats.chartTimeRange}
-                onTimeRangeSelected={handleTimeRangeSelected}
-                onResetZoom={handleResetZoom}
-                externalCursorTime={enableChartSync ? sharedCursorTime : undefined}
-                externalSelection={enableChartSync ? sharedSelection : undefined}
-                onCursorMove={enableChartSync ? setSharedCursorTime : undefined}
-                onSelectionChange={enableChartSync ? setSharedSelection : undefined}
-              />
+            <div className={styles.httpActivityHeader}>
+              <h2>HTTP Activity</h2>
+              <select
+                className={styles.chartModeSelect}
+                aria-label="Chart display mode"
+                value={displayMode}
+                onChange={(e) => setDisplayMode(e.target.value as 'completed' | 'concurrent')}
+                title="Starts: histogram of request initiations per time bucket. In-flight: step-function showing how many requests are simultaneously active at each moment."
+              >
+                <option value="completed">Starts</option>
+                <option value="concurrent">In-flight</option>
+              </select>
+              <label className={styles.chartOption}>
+                <input
+                  type="checkbox"
+                  checked={showIncomplete}
+                  onChange={(e) => setShowIncomplete(e.target.checked)}
+                />
+                <span title="Show or hide requests that have not yet received a response (no status code).">
+                  Incomplete
+                </span>
+              </label>
+              <label className={styles.chartOption}>
+                <input
+                  type="checkbox"
+                  checked={showSync}
+                  onChange={(e) => setShowSync(e.target.checked)}
+                />
+                <span title="Show or hide Matrix /sync requests (catch-up and long-poll).">
+                  Sync
+                </span>
+              </label>
+              <label className={styles.chartOption}>
+                <input
+                  type="checkbox"
+                  checked={showMedia}
+                  onChange={(e) => setShowMedia(e.target.checked)}
+                />
+                <span title="Show or hide media upload/download requests (paths containing /media/). These are typically large and can compress the bandwidth scale.">
+                  Media
+                </span>
+              </label>
             </div>
+            {stats.httpRequestsWithTimestamps.length > 0 && (
+              <>
+                <h3>
+                  Requests: {stats.httpRequestCount}
+                  {stats.incompleteRequestCount > 0 ? ` (Incomplete: ${stats.incompleteRequestCount})` : ''}
+                </h3>
+                <div className={styles.activityChartContainer}>
+                  <HttpActivityChart
+                    httpRequests={httpRequestsForChart}
+                    httpRequestSpans={httpRequestSpansForChart}
+                    displayMode={displayMode}
+                    timeRange={stats.chartTimeRange}
+                    onTimeRangeSelected={handleTimeRangeSelected}
+                    onResetZoom={handleResetZoom}
+                    externalCursorTime={enableChartSync ? sharedCursorTime : undefined}
+                    externalSelection={enableChartSync ? sharedSelection : undefined}
+                    onCursorMove={enableChartSync ? setSharedCursorTime : undefined}
+                    onSelectionChange={enableChartSync ? setSharedSelection : undefined}
+                  />
+                </div>
+              </>
+            )}
+            {stats.httpRequestsWithBandwidth.length > 0 && (
+              <>
+                <h3>
+                  Bandwidth: ↑ {formatBytes(stats.totalUploadBytes)} / ↓ {formatBytes(stats.totalDownloadBytes)}
+                </h3>
+                <div className={styles.activityChartContainer}>
+                  <BandwidthChart
+                    requests={bandwidthRequestsForChart}
+                    bandwidthRequestSpans={bandwidthSpansForChart}
+                    displayMode={displayMode}
+                    timeRange={stats.chartTimeRange}
+                    onTimeRangeSelected={handleTimeRangeSelected}
+                    onResetZoom={handleResetZoom}
+                    externalCursorTime={enableChartSync ? sharedCursorTime : undefined}
+                    externalSelection={enableChartSync ? sharedSelection : undefined}
+                    onCursorMove={enableChartSync ? setSharedCursorTime : undefined}
+                    onSelectionChange={enableChartSync ? setSharedSelection : undefined}
+                  />
+                </div>
+              </>
+            )}
           </section>
-        )}
-
-        {/* Bandwidth Over Time Chart */}
-        {stats.httpRequestsWithBandwidth.length > 0 && (
-          <BandwidthSection
-            requests={stats.httpRequestsWithBandwidth}
-            timeRange={stats.chartTimeRange}
-            onTimeRangeSelected={handleTimeRangeSelected}
-            onResetZoom={handleResetZoom}
-            externalCursorTime={enableChartSync ? sharedCursorTime : undefined}
-            externalSelection={enableChartSync ? sharedSelection : undefined}
-            onCursorMove={enableChartSync ? setSharedCursorTime : undefined}
-            onSelectionChange={enableChartSync ? setSharedSelection : undefined}
-          />
         )}
 
         {/* HTTP Errors Grid */}

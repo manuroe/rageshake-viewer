@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { HttpActivityChart } from '../HttpActivityChart';
-import type { HttpRequestWithTimestamp } from '../HttpActivityChart';
+import type { HttpRequestWithTimestamp, HttpRequestSpan } from '../HttpActivityChart';
 import type { TimestampMicros } from '../../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../../types/time.types';
 
@@ -281,6 +281,77 @@ describe('HttpActivityChart', () => {
       const overlay = container.querySelector('rect[fill="transparent"]') as SVGElement;
       fireEvent.dblClick(overlay);
       expect(onResetZoom).toHaveBeenCalled();
+    });
+  });
+});
+
+// ─── Concurrent mode ────────────────────────────────────────────────────────
+
+/** Create a span with sensible defaults (times in milliseconds, converted internally). */
+function makeSpan(overrides: Partial<HttpRequestSpan> = {}): HttpRequestSpan {
+  return {
+    startUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
+    endUs: (3_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
+    status: '200',
+    ...overrides,
+  };
+}
+
+describe('HttpActivityChart — concurrent mode', () => {
+  describe('empty state', () => {
+    it('shows empty message when no spans provided and displayMode is concurrent', () => {
+      render(
+        <HttpActivityChart
+          httpRequests={[makeReq()]}
+          httpRequestSpans={[]}
+          displayMode="concurrent"
+          timeRange={makeRange()}
+        />,
+      );
+      expect(screen.getByText('No in-flight request data to display')).toBeInTheDocument();
+    });
+
+    it('still renders completed chart when displayMode is omitted (default)', () => {
+      const { container } = render(
+        <HttpActivityChart httpRequests={[makeReq()]} timeRange={makeRange(0, 10_000)} />,
+      );
+      // Default mode: uses completed buckets → SVG bars present
+      expect(container.querySelector('svg')).toBeInTheDocument();
+    });
+  });
+
+  describe('area chart rendering', () => {
+    it('renders an SVG area path for overlapping spans in concurrent mode', () => {
+      const spans: HttpRequestSpan[] = [
+        makeSpan({ startUs: (1_500 * MICROS_PER_MILLISECOND) as TimestampMicros, endUs: (4_000 * MICROS_PER_MILLISECOND) as TimestampMicros, status: '200' }),
+        makeSpan({ startUs: (2_000 * MICROS_PER_MILLISECOND) as TimestampMicros, endUs: (5_000 * MICROS_PER_MILLISECOND) as TimestampMicros, status: '200' }),
+      ];
+      const { container } = render(
+        <HttpActivityChart
+          httpRequests={[makeReq()]}
+          httpRequestSpans={spans}
+          displayMode="concurrent"
+          timeRange={makeRange(0, 10_000)}
+        />,
+      );
+      expect(container.querySelector('svg')).toBeInTheDocument();
+      // Area chart renders path elements (AreaClosed + LinePath), not bars
+      expect(container.querySelector('path')).toBeInTheDocument();
+    });
+
+    it('renders area path for incomplete spans (endUs=null)', () => {
+      const spans: HttpRequestSpan[] = [
+        { startUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros, endUs: null, status: '200' },
+      ];
+      const { container } = render(
+        <HttpActivityChart
+          httpRequests={[makeReq()]}
+          httpRequestSpans={spans}
+          displayMode="concurrent"
+          timeRange={makeRange(0, 10_000)}
+        />,
+      );
+      expect(container.querySelector('path')).toBeInTheDocument();
     });
   });
 });

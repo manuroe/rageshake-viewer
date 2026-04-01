@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BandwidthChart } from '../BandwidthChart';
 import { renderBandwidthTooltip, type BandwidthBucket } from '../BandwidthChartTooltip';
-import type { BandwidthRequestEntry } from '../../types/log.types';
+import type { BandwidthRequestEntry, BandwidthRequestSpan } from '../../types/log.types';
 import type { TimestampMicros } from '../../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../../types/time.types';
 
@@ -27,6 +27,19 @@ function makeRange(
   return {
     minTime: (minMs * MICROS_PER_MILLISECOND) as TimestampMicros,
     maxTime: (maxMs * MICROS_PER_MILLISECOND) as TimestampMicros,
+  };
+}
+
+function makeSpan(
+  overrides: Partial<BandwidthRequestSpan> = {},
+): BandwidthRequestSpan {
+  return {
+    startUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
+    endUs: (4_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
+    uploadBytes: 512,
+    downloadBytes: 4096,
+    uri: 'https://matrix.example.org/_matrix/client/v3/sync',
+    ...overrides,
   };
 }
 
@@ -147,6 +160,36 @@ describe('BandwidthChart', () => {
       // The invisible overlay rect receives mouse events; just verify it exists
       // (full drag-selection behaviour is tested in BaseActivityChart/useChartInteraction)
       expect(container.querySelector('rect[fill="transparent"]')).toBeInTheDocument();
+    });
+  });
+
+  describe('in-flight mode', () => {
+    it('renders stacked areas for upload and download in concurrent mode', () => {
+      const spans = [makeSpan()];
+      const { container } = render(
+        <BandwidthChart
+          requests={[]}
+          bandwidthRequestSpans={spans}
+          displayMode="concurrent"
+          timeRange={makeRange(0, 10_000)}
+        />,
+      );
+
+      const areas = container.querySelectorAll('path[fill="var(--bandwidth-download)"], path[fill="var(--bandwidth-upload)"]');
+      expect(areas.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('shows empty message in concurrent mode when spans are empty', () => {
+      render(
+        <BandwidthChart
+          requests={[]}
+          bandwidthRequestSpans={[]}
+          displayMode="concurrent"
+          timeRange={makeRange(0, 10_000)}
+        />,
+      );
+
+      expect(screen.getByText('No in-flight bandwidth data to display')).toBeInTheDocument();
     });
   });
 });

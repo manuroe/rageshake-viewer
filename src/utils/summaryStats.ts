@@ -14,7 +14,7 @@
  *   once in `logStore` on parse — O(1) lookups instead of repeated `.find()`.
  */
 
-import type { HttpRequest, HttpRequestWithTimestamp, SyncRequest, ParsedLogLine, SentryEvent, BandwidthRequestEntry } from '../types/log.types';
+import type { HttpRequest, HttpRequestSpan, HttpRequestWithTimestamp, SyncRequest, ParsedLogLine, SentryEvent, BandwidthRequestEntry, BandwidthRequestSpan } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { getTimeRangeUs } from './requestFilters';
 import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
@@ -98,6 +98,8 @@ export interface SummaryStats {
   readonly httpRequestsWithTimestamps: HttpRequestWithTimestamp[];
   /** HTTP requests with upload/download byte counts (used by `BandwidthChart`). */
   readonly httpRequestsWithBandwidth: readonly BandwidthRequestEntry[];
+  /** Request spans with byte payloads for in-flight bandwidth area mode. */
+  readonly bandwidthRequestSpans: readonly BandwidthRequestSpan[];
   /**
    * Total number of unique HTTP requests (completed + incomplete), used for the
    * "N requests" headline. Distinct from `httpRequestsWithTimestamps.length`,
@@ -110,6 +112,13 @@ export interface SummaryStats {
   readonly totalDownloadBytes: number;
   /** Time range for aligning `HttpActivityChart` with `LogActivityChart`. */
   readonly chartTimeRange: { readonly minTime: TimestampMicros; readonly maxTime: TimestampMicros };
+  /**
+   * Per-request time spans (start → end) used by `HttpActivityChart` in
+   * concurrent mode to compute how many requests are simultaneously in-flight.
+   * Each entry maps directly to one logical HTTP request (retried requests are
+   * not expanded). `endUs` is `null` for incomplete requests.
+   */
+  readonly httpRequestSpans: readonly HttpRequestSpan[];
 }
 
 /**
@@ -132,11 +141,13 @@ const EMPTY_STATS: SummaryStats = Object.freeze({
   syncRequestsByConnection: [] as readonly SyncByConnection[],
   httpRequestsWithTimestamps: [] as HttpRequestWithTimestamp[],
   httpRequestsWithBandwidth: [] as readonly BandwidthRequestEntry[],
+  bandwidthRequestSpans: [] as readonly BandwidthRequestSpan[],
   httpRequestCount: 0,
   incompleteRequestCount: 0,
   totalUploadBytes: 0,
   totalDownloadBytes: 0,
   chartTimeRange: Object.freeze({ minTime: 0 as TimestampMicros, maxTime: 0 as TimestampMicros }),
+  httpRequestSpans: [] as readonly HttpRequestSpan[],
 });
 
 /**
@@ -410,17 +421,88 @@ export function computeSummaryStats(
   const httpRequestsWithBandwidth: BandwidthRequestEntry[] = [];
 
   for (const req of allHttpRequests) {
-    const ts = getLineTimestampUs(req.sendLineNumber);
-    if (!ts || ts === 0) continue;
-    if (!isTimestampInRange(ts)) continue;
-    if (req.requestSize > 0 || req.responseSize > 0) {
-      httpRequestsWithBandwidth.push({
-        timestampUs: ts,
-        uploadBytes: req.requestSize,
-        downloadBytes: req.responseSize,
-        uri: req.uri,
-      });
+    if (req.responseLineNumber) {
+      const ts = getLineTimestampUs(req.responseLineNumber);
+      if (!ts || ts === 0) continue;
+      if (isTimestampInRange(ts)) {
+        if (req.requestSize > 0 || req.responseSize > 0) {
+          httpRequestsWithBandwidth.push({
+            timestampUs: ts,
+            uploadBytes: req.requestSize,
+            downloadBytes: req.responseSize,
+            uri: req.uri,
+            ...(timeoutByRequestId.has(req.requestId) && { timeout: timeoutByRequestId.get(req.requestId) }),
+          });
+        }
+      }
+    } else if (!req.status) {
+      const ts = getLineTimestampUs(req.sendLineNumber);
+      if (!ts || ts === 0) continue;
+      if (isTimestampInRange(ts)) {
+        if (req.requestSize > 0) {
+          httpRequestsWithBandwidth.push({
+            timestampUs: ts,
+            uploadBytes: req.requestSize,
+            downloadBytes: 0,
+            uri: req.uri,
+            ...(timeoutByRequestId.has(req.requestId) && { timeout: timeoutByRequestId.get(req.requestId) }),
+          });
+        }
+      }
+
     }
+  }
+
+  // ── Request-level bandwidth spans (start → end, for in-flight area mode) ─────
+  const bandwidthRequestSpans: BandwidthRequestSpan[] = [];
+  for (const req of filteredHttpRequests) {
+    if (req.requestSize <= 0 && req.responseSize <= 0) continue;
+
+    const startUs =
+      (req.attemptTimestampsUs?.[0] ?? 0) > 0
+        ? (req.attemptTimestampsUs![0] as TimestampMicros)
+        : getLineTimestampUs(req.sendLineNumber);
+
+    if (!startUs) continue;
+
+    const endUs = req.responseLineNumber ? getLineTimestampUs(req.responseLineNumber) : null;
+    const timeout = timeoutByRequestId.get(req.requestId);
+
+    bandwidthRequestSpans.push({
+      startUs,
+      endUs: endUs ?? null,
+      uploadBytes: req.requestSize,
+      downloadBytes: req.responseSize,
+      uri: req.uri,
+      ...(timeout !== undefined && { timeout }),
+    });
+  }
+
+  // ── HTTP request spans (start → end, for concurrent in-flight chart) ────────
+  // One span per logical request — retries are NOT expanded (the whole request
+  // is considered in-flight from the first send to the final response).
+  const httpRequestSpans: HttpRequestSpan[] = [];
+  for (const req of filteredHttpRequests) {
+    // Prefer the first attempt timestamp when available; fall back to sendLineNumber.
+    const startUs =
+      (req.attemptTimestampsUs?.[0] ?? 0) > 0
+        ? (req.attemptTimestampsUs![0] as TimestampMicros)
+        : getLineTimestampUs(req.sendLineNumber);
+
+    if (!startUs) continue; // skip — cannot determine start time
+
+    const endUs =
+      req.responseLineNumber ? getLineTimestampUs(req.responseLineNumber) : null;
+
+    const timeout = timeoutByRequestId.get(req.requestId);
+    const status = req.clientError ? CLIENT_ERROR_CHART_STATUS : (req.status ?? '');
+
+    httpRequestSpans.push({
+      startUs,
+      endUs: endUs ?? null,
+      status,
+      ...(timeout !== undefined && { timeout }),
+    });
   }
 
   // ── Chart time range ───────────────────────────────────────────────────────
@@ -448,6 +530,8 @@ export function computeSummaryStats(
     totalUploadBytes,
     totalDownloadBytes,
     httpRequestsWithBandwidth,
+    bandwidthRequestSpans,
     chartTimeRange: { minTime: chartMinTime, maxTime: chartMaxTime },
+    httpRequestSpans,
   };
 }

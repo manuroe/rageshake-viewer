@@ -10,6 +10,40 @@
     color: var(--text-secondary);
 }
 
+.httpActivityHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.httpActivityHeader h2 {
+    margin-bottom: 0;
+}
+
+.chartOption {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs);
+    font-weight: normal;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.chartOption input {
+    cursor: pointer;
+}
+
+.chartModeSelect {
+    composes: chartOption;
+    background: transparent;
+    border: 1px solid var(--border-muted, var(--border));
+    border-radius: 4px;
+    padding: 1px 4px;
+}
+
 .summarySection h3 {
     font-size: var(--font-size-sm);
     margin-bottom: 6px;

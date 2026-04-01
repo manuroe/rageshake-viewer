@@ -57,6 +57,28 @@ export interface HttpRequestWithTimestamp {
 }
 
 /**
+ * A single HTTP request span with resolved start and end timestamps in
+ * microseconds.  Stored in {@link SummaryStats.httpRequestSpans} and consumed
+ * by `HttpActivityChart` in concurrent mode to compute how many requests are
+ * simultaneously in-flight at any given time.
+ *
+ * `endUs` is `null` when the response has not yet been received (incomplete
+ * request).  Such spans are treated as still in-flight until the end of the
+ * chart's time range.
+ *
+ * `status` and `timeout` mirror the same fields on {@link HttpRequestWithTimestamp}
+ * so the same bucket-key and color helpers can be reused without changes.
+ */
+export interface HttpRequestSpan {
+  readonly startUs: TimestampMicros;
+  /** Response (or error) timestamp; `null` when the request is still in-flight. */
+  readonly endUs: TimestampMicros | null;
+  readonly status: string;
+  /** Timeout in ms when this is a /sync request; 0 = catch-up, ≥30000 = long-poll. */
+  readonly timeout?: number;
+}
+
+/**
  * An HTTP request entry annotated with the bytes transferred, used by
  * `BandwidthChart` to plot upload and download volumes over time.
  *
@@ -71,6 +93,29 @@ export interface BandwidthRequestEntry {
   readonly downloadBytes: number;
   /** Full request URI — used by consumers to filter by path (e.g. hide /media/ uploads). */
   readonly uri: string;
+  /**
+   * Timeout in ms when this is a /sync request (0 = catch-up, ≥30000 = long-poll);
+   * `undefined` for non-sync requests.  Mirrors the same field on
+   * {@link HttpRequestWithTimestamp} so callers can identify and filter sync traffic.
+   */
+  readonly timeout?: number;
+}
+
+/**
+ * A single request-level bandwidth span with resolved start and end timestamps
+ * in microseconds. Used by the in-flight bandwidth chart mode to compute
+ * stacked upload/download areas over time.
+ */
+export interface BandwidthRequestSpan {
+  readonly startUs: TimestampMicros;
+  /** Response timestamp; `null` when request is still in-flight. */
+  readonly endUs: TimestampMicros | null;
+  readonly uploadBytes: number;
+  readonly downloadBytes: number;
+  /** Full request URI — used by consumers to apply path filters. */
+  readonly uri: string;
+  /** Timeout in ms when this is a /sync request; `undefined` for non-sync requests. */
+  readonly timeout?: number;
 }
 
 export interface SentryEvent {

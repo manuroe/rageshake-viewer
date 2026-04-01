@@ -1,12 +1,19 @@
 import { useMemo, useCallback } from 'react';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_SECOND, MICROS_PER_MILLISECOND } from '../types/time.types';
-import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { BaseActivityChart, type ActivityBucket } from './BaseActivityChart';
+import {
+  getBucketKey,
+  getBucketColor,
+  getBucketLabel,
+  sortStatusCodes,
+} from '../utils/httpStatusBuckets';
+import { HttpConcurrencyChart } from './HttpConcurrencyChart';
 
-import type { HttpRequestWithTimestamp } from '../types/log.types';
+import type { HttpRequestWithTimestamp, HttpRequestSpan } from '../types/log.types';
 // Re-exported so that existing consumers importing from this module are unaffected.
 export type { HttpRequestWithTimestamp } from '../types/log.types';
+export type { HttpRequestSpan } from '../types/log.types';
 
 import type { SelectionRange } from '../hooks/useChartInteraction';
 
@@ -14,6 +21,18 @@ interface HttpActivityChartProps {
   httpRequests: HttpRequestWithTimestamp[];
   /** Time range to use for the chart - must match LogActivityChart for alignment */
   timeRange: { minTime: TimestampMicros; maxTime: TimestampMicros };
+  /**
+   * Per-request time spans required by concurrent display mode.  Each entry
+   * carries the start and end timestamp for one logical request so the chart
+   * can compute how many requests overlap at each time bucket.
+   */
+  httpRequestSpans?: readonly HttpRequestSpan[];
+  /**
+   * `'completed'` (default) — histogram of request starts; one bar segment
+   * per attempt.  `'concurrent'` — precise step-function area chart showing the
+   * exact number of simultaneously in-flight requests at every moment.
+   */
+  displayMode?: 'completed' | 'concurrent';
   /** Callback when user selects a time range. Values are in microseconds. */
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   onResetZoom?: () => void;
@@ -32,64 +51,12 @@ interface HttpBucket extends ActivityBucket {
   counts: Record<string, number>;
 }
 
-/** Synthetic status keys for sync request sub-types and client-side errors */
-const SYNC_CATCHUP_KEY = 'sync-catchup';
-const SYNC_LONGPOLL_KEY = 'sync-longpoll';
-const CLIENT_ERROR_KEY = 'client-error';
-
-/** Resolve the chart bucket key for an HTTP request (handles sync subtypes) */
-function getBucketKey(req: HttpRequestWithTimestamp): string {
-  if (req.status === CLIENT_ERROR_KEY) return CLIENT_ERROR_KEY;
-  const statusCode = req.status ? req.status.split(' ')[0] : 'incomplete';
-  const is2xx = statusCode.startsWith('2');
-  if (is2xx && req.timeout !== undefined) {
-    if (req.timeout === 0) return SYNC_CATCHUP_KEY;
-    if (req.timeout >= 30000) return SYNC_LONGPOLL_KEY;
-  }
-  return statusCode;
-}
-
-/** Color for a chart status key (handles synthetic sync keys) */
-function getBucketColor(code: string): string {
-  if (code === CLIENT_ERROR_KEY) return 'var(--http-client-error)';
-  if (code === SYNC_CATCHUP_KEY) return 'var(--sync-catchup-success)';
-  if (code === SYNC_LONGPOLL_KEY) return 'var(--sync-longpoll-success)';
-  return getHttpStatusColor(code);
-}
-
-/** Human-readable label for a chart status key */
-function getBucketLabel(code: string): string {
-  if (code === CLIENT_ERROR_KEY) return 'Client Error';
-  if (code === SYNC_CATCHUP_KEY) return 'sync catchup';
-  if (code === SYNC_LONGPOLL_KEY) return 'sync long-poll';
-  return code;
-}
-
-/** Sort status codes for stacking order (first = bottom of bar, last = top):
- *  1. sync-catchup (bottom - baseline background activity)
- *  2. sync-longpoll (above catchup)
- *  3. all other codes: 5xx → client-error → 4xx → 3xx → 2xx → incomplete (top)
- */
-function sortStatusCodes(codes: string[]): string[] {
-  // Assign a sort key: lower = bottom of stack (ascending sort → first item is bottom)
-  const sortKey = (c: string): number => {
-    if (c === SYNC_CATCHUP_KEY) return 0;
-    if (c === SYNC_LONGPOLL_KEY) return 1;
-    if (c === CLIENT_ERROR_KEY) return 3; // between 5xx (2.x) and 4xx (4.x)
-    const n = parseInt(c, 10);
-    if (isNaN(n)) return 9999; // incomplete/unknown at top
-    if (n >= 500) return 2 + n / 10000; // 5xx: above sync, below client-error
-    if (n >= 400) return 4 + n / 10000; // 4xx: above client-error
-    if (n >= 300) return 5 + n / 10000; // 3xx
-    if (n >= 200) return 6 + n / 10000; // 2xx
-    return 7 + n / 10000;               // other
-  };
-  return [...codes].sort((a, b) => sortKey(a) - sortKey(b));
-}
 
 export function HttpActivityChart({
   httpRequests,
   timeRange,
+  httpRequestSpans,
+  displayMode = 'completed',
   onTimeRangeSelected,
   onResetZoom,
   externalCursorTime,
@@ -205,6 +172,22 @@ export function HttpActivityChart({
     ),
     [chartData.statusCodes]
   );
+
+  // Concurrent mode: delegate to the precise step-function area chart.
+  if (displayMode === 'concurrent') {
+    return (
+      <HttpConcurrencyChart
+        httpRequestSpans={httpRequestSpans ?? []}
+        timeRange={timeRange}
+        onTimeRangeSelected={onTimeRangeSelected}
+        onResetZoom={onResetZoom}
+        externalCursorTime={externalCursorTime}
+        externalSelection={externalSelection}
+        onCursorMove={onCursorMove}
+        onSelectionChange={onSelectionChange}
+      />
+    );
+  }
 
   if (httpRequests.length === 0) {
     return (

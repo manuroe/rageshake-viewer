@@ -898,8 +898,8 @@ describe('SummaryView', () => {
       useLogStore.getState().setHttpRequests([incompleteReq], lines);
       renderSummaryView();
 
-      // The HTTP Requests Over Time heading should show "1 incomplete"
-      expect(screen.getByText(/1 incomplete/)).toBeInTheDocument();
+      // The Requests sub-header should show "Incomplete: 1"
+      expect(screen.getByText(/Incomplete: 1/)).toBeInTheDocument();
     });
 
     it('aggregates upload/download bytes across duplicate request IDs and skips requests with missing timestamps', () => {
@@ -960,9 +960,8 @@ describe('SummaryView', () => {
 
       // Phase 1 is start-based, so requests with a valid send timestamp still count
       // even when their response timestamp is missing.
-      expect(
-        screen.getByText(/HTTP Requests Over Time: 4 requests \(1 incomplete\) — ↑ 1.4 KB \/ ↓ 1.6 KB/)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Requests: 4.*Incomplete: 1/)).toBeInTheDocument();
+      expect(screen.getByText(/Bandwidth: ↑ 1.4 KB \/ ↓ 1.6 KB/)).toBeInTheDocument();
     });
   });
 
@@ -1351,6 +1350,120 @@ describe('SummaryView', () => {
 
       expect(checkbox).not.toBeChecked();
       expect(capturedOnCursorMove).toBeUndefined();
+    });
+  });
+
+  describe('Show in-flight toggle', () => {
+    const BASE_IF = 1_720_000_000_000_000 as TimestampMicros;
+
+    beforeEach(() => {
+      const lines = [
+        createParsedLogLine({ lineNumber: 0, timestampUs: BASE_IF }),
+        createParsedLogLine({ lineNumber: 1, timestampUs: (BASE_IF + 1_000_000) as TimestampMicros }),
+        createParsedLogLine({ lineNumber: 2, timestampUs: (BASE_IF + 2_000_000) as TimestampMicros }),
+      ];
+      const req = createHttpRequest({
+        requestId: 'IF-1',
+        status: '200',
+        sendLineNumber: 0,
+        responseLineNumber: 2,
+        attemptTimestampsUs: [BASE_IF],
+      });
+      useLogStore.getState().setHttpRequests([req], lines);
+    });
+
+    it('renders the chart-mode select in "completed" mode (displayed as "Starts") by default', () => {
+      renderSummaryView();
+      const select = screen.getByRole('combobox', { name: /chart display mode/i });
+      expect(select).toBeInTheDocument();
+      expect(select).toHaveValue('completed');
+    });
+
+    it('switches chart-mode select to "In-flight" and back', () => {
+      renderSummaryView();
+      const select = screen.getByRole('combobox', { name: /chart display mode/i });
+      act(() => { fireEvent.change(select, { target: { value: 'concurrent' } }); });
+      expect(select).toHaveValue('concurrent');
+      act(() => { fireEvent.change(select, { target: { value: 'completed' } }); });
+      expect(select).toHaveValue('completed');
+    });
+
+    it('renders exactly one shared chart-mode select for both charts', () => {
+      renderSummaryView();
+      // A single select drives both the HTTP and bandwidth charts
+      expect(screen.getAllByRole('combobox', { name: /chart display mode/i })).toHaveLength(1);
+    });
+  });
+
+  describe('Incomplete toggle', () => {
+    const BASE_INCOMPLETE = 1_721_000_000_000_000 as TimestampMicros;
+
+    beforeEach(() => {
+      const lines = [
+        createParsedLogLine({ lineNumber: 0, timestampUs: BASE_INCOMPLETE }),
+        createParsedLogLine({ lineNumber: 1, timestampUs: (BASE_INCOMPLETE + 1_000_000) as TimestampMicros }),
+        createParsedLogLine({ lineNumber: 2, timestampUs: (BASE_INCOMPLETE + 2_000_000) as TimestampMicros }),
+      ];
+      const req = createHttpRequest({
+        requestId: 'HI-1',
+        status: '200',
+        sendLineNumber: 0,
+        responseLineNumber: 2,
+        attemptTimestampsUs: [BASE_INCOMPLETE],
+      });
+      useLogStore.getState().setHttpRequests([req], lines);
+    });
+
+    it('renders the "Incomplete" checkbox checked by default', () => {
+      renderSummaryView();
+      const checkbox = screen.getByRole('checkbox', { name: /incomplete/i });
+      expect(checkbox).toBeInTheDocument();
+      expect(checkbox).toBeChecked();
+    });
+
+    it('toggles "Incomplete" checkbox on and off', () => {
+      renderSummaryView();
+      const checkbox = screen.getByRole('checkbox', { name: /incomplete/i });
+      act(() => { fireEvent.click(checkbox); });
+      expect(checkbox).not.toBeChecked();
+      act(() => { fireEvent.click(checkbox); });
+      expect(checkbox).toBeChecked();
+    });
+  });
+
+  describe('Sync toggle', () => {
+    const BASE_SYNC = 1_721_000_000_000_000 as TimestampMicros;
+
+    beforeEach(() => {
+      const lines = [
+        createParsedLogLine({ lineNumber: 0, timestampUs: BASE_SYNC }),
+        createParsedLogLine({ lineNumber: 1, timestampUs: (BASE_SYNC + 1_000_000) as TimestampMicros }),
+        createParsedLogLine({ lineNumber: 2, timestampUs: (BASE_SYNC + 2_000_000) as TimestampMicros }),
+      ];
+      const req = createSyncRequest({
+        requestId: 'SY-1',
+        connId: 'conn-1',
+        timeout: 0,
+        sendLineNumber: 0,
+        responseLineNumber: 2,
+        attemptTimestampsUs: [BASE_SYNC],
+      });
+      useLogStore.getState().setHttpRequests([req], lines);
+    });
+
+    it('renders the "Sync" checkbox checked by default', () => {
+      renderSummaryView();
+      const checkbox = screen.getByRole('checkbox', { name: /^sync$/i });
+      expect(checkbox).toBeChecked();
+    });
+
+    it('toggles "Sync" checkbox on and off', () => {
+      renderSummaryView();
+      const checkbox = screen.getByRole('checkbox', { name: /^sync$/i });
+      act(() => { fireEvent.click(checkbox); });
+      expect(checkbox).not.toBeChecked();
+      act(() => { fireEvent.click(checkbox); });
+      expect(checkbox).toBeChecked();
     });
   });
 });

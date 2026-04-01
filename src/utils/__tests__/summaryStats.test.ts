@@ -594,7 +594,7 @@ describe('computeSummaryStats — httpRequestsWithBandwidth', () => {
     expect(result.httpRequestsWithBandwidth).toHaveLength(1);
     expect(result.httpRequestsWithBandwidth[0].uploadBytes).toBe(200);
     expect(result.httpRequestsWithBandwidth[0].downloadBytes).toBe(1000);
-    expect(result.httpRequestsWithBandwidth[0].timestampUs).toBe(rawLines[0].timestampUs);
+    expect(result.httpRequestsWithBandwidth[0].timestampUs).toBe(rawLines[1].timestampUs);
   });
 
   it('preserves the URI on each entry', () => {
@@ -695,5 +695,142 @@ describe('computeSummaryStats — httpRequestsWithBandwidth', () => {
 
     expect(result.httpRequestsWithBandwidth).toHaveLength(1);
     expect(result.httpRequestsWithBandwidth[0].uploadBytes).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// httpRequestSpans — concurrent in-flight chart data
+// ---------------------------------------------------------------------------
+
+describe('computeSummaryStats — httpRequestSpans', () => {
+  it('returns empty array when there are no HTTP requests', () => {
+    const rawLines = makeLines(3);
+    const index = buildIndex(rawLines);
+    const result = computeSummaryStats(rawLines, [], [], [], [], null, null, null, index);
+    expect(result.httpRequestSpans).toHaveLength(0);
+  });
+
+  it('resolves startUs and endUs for a completed request', () => {
+    const rawLines = makeLines(4);
+    const index = buildIndex(rawLines);
+
+    const req = createHttpRequest({
+      requestId: 'R-1',
+      status: '200',
+      sendLineNumber: 0,
+      responseLineNumber: 2,
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestSpans).toHaveLength(1);
+    expect(result.httpRequestSpans[0].startUs).toBe(rawLines[0].timestampUs);
+    expect(result.httpRequestSpans[0].endUs).toBe(rawLines[2].timestampUs);
+    expect(result.httpRequestSpans[0].status).toBe('200');
+    expect(result.httpRequestSpans[0].timeout).toBeUndefined();
+  });
+
+  it('prefers attemptTimestampsUs[0] over sendLineNumber for startUs', () => {
+    const rawLines = makeLines(4);
+    const index = buildIndex(rawLines);
+
+    // attemptTimestampsUs[0] points to line 1, sendLineNumber to line 0
+    const req = createHttpRequest({
+      requestId: 'R-2',
+      status: '200',
+      sendLineNumber: 0,
+      responseLineNumber: 3,
+      attemptTimestampsUs: [rawLines[1].timestampUs, rawLines[2].timestampUs],
+      numAttempts: 2,
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestSpans[0].startUs).toBe(rawLines[1].timestampUs);
+    expect(result.httpRequestSpans[0].endUs).toBe(rawLines[3].timestampUs);
+  });
+
+  it('sets endUs to null for an incomplete request (no responseLineNumber)', () => {
+    const rawLines = makeLines(3);
+    const index = buildIndex(rawLines);
+
+    const req = createHttpRequest({
+      requestId: 'R-incomplete',
+      status: '',
+      sendLineNumber: 0,
+      responseLineNumber: 0, // 0 = no response yet
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestSpans).toHaveLength(1);
+    expect(result.httpRequestSpans[0].endUs).toBeNull();
+    expect(result.httpRequestSpans[0].status).toBe('');
+  });
+
+  it('maps clientError to "client-error" status', () => {
+    const rawLines = makeLines(3);
+    const index = buildIndex(rawLines);
+
+    const req = createHttpRequest({
+      requestId: 'R-err',
+      status: '',
+      clientError: 'TimedOut',
+      sendLineNumber: 0,
+      responseLineNumber: 2,
+    });
+
+    const result = computeSummaryStats(rawLines, [req], [], [], [], null, null, null, index);
+
+    expect(result.httpRequestSpans[0].status).toBe('client-error');
+  });
+
+  it('carries timeout from matching sync request', () => {
+    const rawLines = makeLines(4);
+    const index = buildIndex(rawLines);
+
+    const syncReq = createSyncRequest({
+      requestId: 'S-1',
+      status: '200',
+      sendLineNumber: 0,
+      responseLineNumber: 3,
+      timeout: 30_000,
+    });
+
+    const result = computeSummaryStats(
+      rawLines,
+      [syncReq],
+      [syncReq],
+      ['conn-1'],
+      [],
+      null,
+      null,
+      null,
+      index,
+    );
+
+    expect(result.httpRequestSpans[0].timeout).toBe(30_000);
+  });
+
+  it('produces one span per logical request (retried request is not expanded)', () => {
+    const rawLines = makeLines(6);
+    const index = buildIndex(rawLines);
+
+    const retriedReq = createHttpRequest({
+      requestId: 'R-retry',
+      status: '200',
+      sendLineNumber: 0,
+      responseLineNumber: 5,
+      numAttempts: 3,
+      attemptTimestampsUs: [rawLines[0].timestampUs, rawLines[2].timestampUs, rawLines[4].timestampUs],
+      attemptOutcomes: ['503', '503', '200'],
+    });
+
+    const result = computeSummaryStats(rawLines, [retriedReq], [], [], [], null, null, null, index);
+
+    // Spans are always one-per-request, unlike httpRequestsWithTimestamps which expands retries
+    expect(result.httpRequestSpans).toHaveLength(1);
+    expect(result.httpRequestSpans[0].startUs).toBe(rawLines[0].timestampUs);
+    expect(result.httpRequestSpans[0].endUs).toBe(rawLines[5].timestampUs);
   });
 });
