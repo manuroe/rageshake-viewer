@@ -1449,9 +1449,9 @@ describe('LogDisplayView export button', () => {
     // trigger has pointer-events:none by default (hidden until hover); use fireEvent to bypass
     const trigger = screen.getByRole('button', { name: /row actions/i });
     fireEvent.click(trigger);
-    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /set window start here/i })).toBeInTheDocument();
     fireEvent.click(trigger);
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.queryByText(/set window start here/i)).not.toBeInTheDocument();
   });
 });
 

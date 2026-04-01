@@ -526,7 +526,7 @@ export function RequestTable({
                       <div className={styles.requestRowSticky}>
                         {/* Leading actions column */}
                         <RowTimeAction
-                          timestampUs={lineNumberIndex.get(req.sendLineNumber)?.timestampUs ?? 0}
+                          timestampUs={lineNumberIndex.get(req.sendLineNumber)?.timestampUs}
                           onOpenChange={(open) => setMenuOpenForRowKey(open ? rowKey : null)}
                         />
                         {columns.map((col, i) => {

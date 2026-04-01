@@ -8,13 +8,13 @@ import styles from './RowTimeAction.module.css';
 
 export interface RowTimeActionProps {
   /** Microsecond timestamp of the request's send time (used as the boundary value). */
-  timestampUs: TimestampMicros;
+  readonly timestampUs: TimestampMicros | null | undefined;
   /**
    * Called whenever the action menu opens or closes.
    * Parents use this to elevate their row's z-index so the menu is never
    * painted over by subsequent sibling rows in the same stacking context.
    */
-  onOpenChange?: (open: boolean) => void;
+  readonly onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -42,9 +42,14 @@ export function RowTimeAction({ timestampUs, onOpenChange }: RowTimeActionProps)
   };
   const containerRef = useRef<HTMLDivElement>(null);
   const { setTimeFilter } = useURLParams();
-  const { startTime, endTime } = useLogStore();
+  const startTime = useLogStore((state) => state.startTime);
+  const endTime = useLogStore((state) => state.endTime);
 
   useClickOutside(containerRef, () => setMenuOpen(false), isOpen);
+
+  if (timestampUs === null || timestampUs === undefined) {
+    return null;
+  }
 
   const iso = microsToISO(timestampUs);
 
@@ -82,9 +87,8 @@ export function RowTimeAction({ timestampUs, onOpenChange }: RowTimeActionProps)
         className={styles.trigger}
         onClick={handleButtonClick}
         aria-label="Row actions"
-        aria-haspopup="menu"
         aria-expanded={isOpen}
-        tabIndex={0}
+        tabIndex={-1}
       >
         {/* ≡ conveys an expandable action list; ⏱ was time-specific */}
         ≡
@@ -93,19 +97,16 @@ export function RowTimeAction({ timestampUs, onOpenChange }: RowTimeActionProps)
       {isOpen && (
         <div
           className={styles.menu}
-          role="menu"
           onClick={(e) => e.stopPropagation()}
         >
           <button
             className={styles.menuItem}
-            role="menuitem"
             onClick={handleSetStart}
           >
             Set window <strong>start</strong> here
           </button>
           <button
             className={styles.menuItem}
-            role="menuitem"
             onClick={handleSetEnd}
           >
             Set window <strong>end</strong> here

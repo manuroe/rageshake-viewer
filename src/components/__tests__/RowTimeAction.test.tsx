@@ -49,7 +49,7 @@ describe('RowTimeAction', () => {
 
   it('does not show the menu initially', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.queryByText(/set window start here/i)).not.toBeInTheDocument();
   });
 
   it('sets aria-expanded=false on the trigger initially', () => {
@@ -64,9 +64,8 @@ describe('RowTimeAction', () => {
   it('opens the menu when trigger is clicked', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    expect(screen.getByRole('menu')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /set window start here/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /set window end here/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /set window start here/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /set window end here/i })).toBeInTheDocument();
   });
 
   it('closes the menu when trigger is clicked again', () => {
@@ -74,7 +73,7 @@ describe('RowTimeAction', () => {
     const trigger = screen.getByRole('button', { name: /row actions/i });
     fireEvent.click(trigger);
     fireEvent.click(trigger);
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.queryByText(/set window start here/i)).not.toBeInTheDocument();
   });
 
   it('sets aria-expanded=true when menu is open', () => {
@@ -91,9 +90,9 @@ describe('RowTimeAction', () => {
       </div>
     );
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /set window start here/i })).toBeInTheDocument();
     fireEvent.mouseDown(screen.getByTestId('outside'));
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.queryByText(/set window start here/i)).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -119,7 +118,7 @@ describe('RowTimeAction', () => {
       </div>
     );
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window start here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window start here/i }));
     expect(rowClickHandler).not.toHaveBeenCalled();
   });
 
@@ -130,7 +129,7 @@ describe('RowTimeAction', () => {
   it('calls setTimeFilter with the row timestamp as start', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window start here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window start here/i }));
     expect(mockSetTimeFilter).toHaveBeenCalledWith(TEST_ISO, null);
   });
 
@@ -138,7 +137,7 @@ describe('RowTimeAction', () => {
     useLogStore.setState({ endTime: LATER_ISO });
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window start here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window start here/i }));
     expect(mockSetTimeFilter).toHaveBeenCalledWith(TEST_ISO, LATER_ISO);
   });
 
@@ -146,15 +145,15 @@ describe('RowTimeAction', () => {
     useLogStore.setState({ endTime: EARLIER_ISO });
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window start here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window start here/i }));
     expect(mockSetTimeFilter).toHaveBeenCalledWith(TEST_ISO, null);
   });
 
   it('closes the menu after setting the start', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window start here/i }));
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /set window start here/i }));
+    expect(screen.queryByText(/set window start here/i)).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -164,7 +163,7 @@ describe('RowTimeAction', () => {
   it('calls setTimeFilter with the row timestamp as end', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window end here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window end here/i }));
     expect(mockSetTimeFilter).toHaveBeenCalledWith(null, TEST_ISO);
   });
 
@@ -172,7 +171,7 @@ describe('RowTimeAction', () => {
     useLogStore.setState({ startTime: EARLIER_ISO });
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window end here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window end here/i }));
     expect(mockSetTimeFilter).toHaveBeenCalledWith(EARLIER_ISO, TEST_ISO);
   });
 
@@ -180,15 +179,20 @@ describe('RowTimeAction', () => {
     useLogStore.setState({ startTime: LATER_ISO });
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window end here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window end here/i }));
     expect(mockSetTimeFilter).toHaveBeenCalledWith(null, TEST_ISO);
   });
 
   it('closes the menu after setting the end', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window end here/i }));
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /set window end here/i }));
+    expect(screen.queryByText(/set window start here/i)).not.toBeInTheDocument();
+  });
+
+  it('does not render when timestamp is missing', () => {
+    render(<RowTimeAction timestampUs={null} />);
+    expect(screen.queryByRole('button', { name: /row actions/i })).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -217,7 +221,7 @@ describe('RowTimeAction', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} onOpenChange={onOpenChange} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
     onOpenChange.mockReset();
-    fireEvent.click(screen.getByRole('menuitem', { name: /set window start here/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window start here/i }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

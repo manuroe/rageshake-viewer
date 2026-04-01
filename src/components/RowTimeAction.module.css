@@ -22,7 +22,7 @@
     padding: 2px 4px;
     border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
-    color: var(--text-secondary);
+    color: var(--text-primary);
     line-height: 1;
     transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
     /* Ensure it does not shrink the column when invisible */
