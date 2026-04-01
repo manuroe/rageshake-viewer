@@ -1443,11 +1443,21 @@ describe('LogDisplayView export button', () => {
     expect(screen.queryByRole('dialog', { name: /export logs/i })).not.toBeInTheDocument();
   });
 
-  it('RowTimeAction menu opens and closes within the log view', () => {
+  it('RowTimeAction menu opens and closes within the log view', async () => {
     useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
     render(<LogDisplayView />);
-    // trigger has pointer-events:none by default (hidden until hover); use fireEvent to bypass
+
     const trigger = screen.getByRole('button', { name: /row actions/i });
+    const row = trigger.closest(`.${styles.logLine}`);
+    expect(row).not.toBeNull();
+
+    if (!row) {
+      throw new Error('RowTimeAction trigger is not inside a log row');
+    }
+
+    fireEvent.mouseEnter(row);
+    // JSDOM does not reliably apply stylesheet-driven pointer-events updates after hover,
+    // so use fireEvent for activation after simulating the real mouseenter path.
     fireEvent.click(trigger);
     expect(screen.getByRole('button', { name: /set window start here/i })).toBeInTheDocument();
     fireEvent.click(trigger);

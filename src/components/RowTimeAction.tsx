@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useURLParams } from '../hooks/useURLParams';
 import { useLogStore } from '../stores/logStore';
-import { microsToISO } from '../utils/timeUtils';
+import { isFullISODatetime, microsToISO } from '../utils/timeUtils';
 import { useClickOutside } from '../hooks/useClickOutside';
 import type { TimestampMicros } from '../types/time.types';
 import styles from './RowTimeAction.module.css';
@@ -53,19 +53,30 @@ export function RowTimeAction({ timestampUs, onOpenChange }: RowTimeActionProps)
 
   const iso = microsToISO(timestampUs);
 
+  const resolveComparableBoundary = (boundary: string | null): string | null => {
+    if (!boundary || !isFullISODatetime(boundary)) {
+      return boundary;
+    }
+
+    return boundary;
+  };
+
   /** Set the window start to this row's timestamp, clearing end if it would precede it. */
   const handleSetStart = () => {
-    // If there is an existing end boundary, resolve it to compare against the
-    // new start.  We do a simple lexicographic comparison on ISO strings which
-    // works because both are full UTC ISO-8601 values.
-    const newEnd = endTime && endTime > iso ? endTime : null;
+    const comparableEndTime = resolveComparableBoundary(endTime);
+    const newEnd = comparableEndTime && isFullISODatetime(comparableEndTime)
+      ? (comparableEndTime > iso ? comparableEndTime : null)
+      : comparableEndTime;
     setTimeFilter(iso, newEnd);
     setMenuOpen(false);
   };
 
   /** Set the window end to this row's timestamp, clearing start if it would follow it. */
   const handleSetEnd = () => {
-    const newStart = startTime && startTime < iso ? startTime : null;
+    const comparableStartTime = resolveComparableBoundary(startTime);
+    const newStart = comparableStartTime && isFullISODatetime(comparableStartTime)
+      ? (comparableStartTime < iso ? comparableStartTime : null)
+      : comparableStartTime;
     setTimeFilter(newStart, iso);
     setMenuOpen(false);
   };

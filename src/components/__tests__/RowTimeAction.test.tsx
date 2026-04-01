@@ -149,6 +149,14 @@ describe('RowTimeAction', () => {
     expect(mockSetTimeFilter).toHaveBeenCalledWith(TEST_ISO, null);
   });
 
+  it('preserves non-ISO end boundaries when setting the start', () => {
+    useLogStore.setState({ endTime: 'end' });
+    render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
+    fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window start here/i }));
+    expect(mockSetTimeFilter).toHaveBeenCalledWith(TEST_ISO, 'end');
+  });
+
   it('closes the menu after setting the start', () => {
     render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
@@ -181,6 +189,14 @@ describe('RowTimeAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
     fireEvent.click(screen.getByRole('button', { name: /set window end here/i }));
     expect(mockSetTimeFilter).toHaveBeenCalledWith(null, TEST_ISO);
+  });
+
+  it('preserves non-ISO start boundaries when setting the end', () => {
+    useLogStore.setState({ startTime: 'last-5-min' });
+    render(<RowTimeAction timestampUs={TEST_TIMESTAMP_US} />);
+    fireEvent.click(screen.getByRole('button', { name: /row actions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set window end here/i }));
+    expect(mockSetTimeFilter).toHaveBeenCalledWith('last-5-min', TEST_ISO);
   });
 
   it('closes the menu after setting the end', () => {
