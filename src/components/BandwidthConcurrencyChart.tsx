@@ -69,15 +69,22 @@ function getValueAtTime(points: readonly StepPoint[], timeUs: number): number {
   if (timeUs >= points[lastIndex].timeUs) return points[lastIndex].value;
 
   // Binary search for the last point with timeUs <= target.
+  // Using "keep-right" pattern instead of exact-match early return so that
+  // duplicate timestamps (emitted as step pairs by computeStepSeries) always
+  // resolve to the second — post-delta — value.
   let lo = 0;
   let hi = lastIndex;
+  let resultIndex = -1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (points[mid].timeUs === timeUs) return points[mid].value;
-    if (points[mid].timeUs < timeUs) lo = mid + 1;
-    else hi = mid - 1;
+    if (points[mid].timeUs <= timeUs) {
+      resultIndex = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
-  return hi >= 0 ? points[hi].value : 0;
+  return resultIndex >= 0 ? points[resultIndex].value : 0;
 }
 
 function computeStepSeries(

@@ -71,6 +71,17 @@ export function HttpActivityChart({
   }, []);
 
   const chartData = useMemo(() => {
+    // In concurrent mode the histogram is not rendered; skip expensive bucketing.
+    if (displayMode === 'concurrent') {
+      return {
+        buckets: [] as HttpBucket[],
+        maxCount: 0,
+        minTime: timeRange.minTime,
+        maxTime: timeRange.maxTime,
+        statusCodes: [] as string[],
+      };
+    }
+
     const { minTime, maxTime } = timeRange;
 
     if (minTime === 0 && maxTime === 0) {
@@ -135,7 +146,7 @@ export function HttpActivityChart({
     const sortedStatusCodes = sortStatusCodes(Array.from(allStatusCodes));
 
     return { buckets: dataBuckets, maxCount: dataMaxCount, minTime, maxTime, statusCodes: sortedStatusCodes };
-  }, [httpRequests, timeRange, formatTime]);
+  }, [displayMode, httpRequests, timeRange, formatTime]);
 
   const getCategoryColor = useCallback((code: string) => getBucketColor(code), []);
 

@@ -99,6 +99,16 @@ export function BandwidthChart({
   }, []);
 
   const chartData = useMemo(() => {
+    // In concurrent mode the bandwidth histogram is not rendered; skip expensive bucketing.
+    if (displayMode === 'concurrent') {
+      return {
+        buckets: [] as BandwidthBucket[],
+        maxCount: 0,
+        minTime: timeRange.minTime,
+        maxTime: timeRange.maxTime,
+      };
+    }
+
     const { minTime, maxTime } = timeRange;
 
     if (minTime === 0 && maxTime === 0) {
@@ -147,7 +157,7 @@ export function BandwidthChart({
     const dataBuckets = Array.from(bucketMap.values()).sort((a, b) => a.timestamp - b.timestamp);
     const maxCount = Math.max(...dataBuckets.map((b) => b.total), 1);
     return { buckets: dataBuckets, maxCount, minTime, maxTime };
-  }, [requests, timeRange, formatTime]);
+  }, [displayMode, requests, timeRange, formatTime]);
 
   const getCategoryColor = useCallback(
     (category: BandwidthCategory): string =>
