@@ -124,9 +124,11 @@ export interface ParsedLogLine {
    * Physical lines that follow this log entry's first line and share its logical
    * record — i.e. lines that have no leading ISO timestamp and belong to the
    * same structured log message (e.g. a multi-line Rust error value).
-   * Empty for the common single-line case.
+   * Absent (undefined) for the common single-line case — intentionally omitted
+   * rather than set to [] to keep object memory footprint small and preserve
+   * cache efficiency when iterating large log arrays.
    */
-  readonly continuationLines: readonly string[];
+  readonly continuationLines?: readonly string[];
 }
 
 export type LogLevel = 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'UNKNOWN';

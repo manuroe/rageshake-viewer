@@ -792,9 +792,9 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 >
                   {highlightText(line, index)}
                 </span>
-                {line.continuationLines.length > 0 && (
+                {(line.continuationLines?.length ?? 0) > 0 && (
                   <div className={styles.logLineContinuation}>
-                    {line.continuationLines.join('\n')}
+                    {line.continuationLines!.join('\n')}
                   </div>
                 )}
                 {collapseInfo && gapBelow && (

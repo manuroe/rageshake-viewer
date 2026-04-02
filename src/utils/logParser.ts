@@ -169,6 +169,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     // the previous log entry (e.g. the indented body of a multi-line Rust error).
     if (!isoTimestamp) {
       if (lastEntry !== null) {
+        if (!lastEntry.continuationLines) lastEntry.continuationLines = [];
         lastEntry.continuationLines.push(line);
         // Extend rawText so search queries can match content in continuation lines.
         lastEntry.rawText = lastEntry.rawText + '\n' + line;
@@ -185,7 +186,6 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
           level: 'UNKNOWN',
           message: line,
           strippedMessage: line,
-          continuationLines: [],
         };
         rawLogLines.push(orphan as ParsedLogLine);
         lastEntry = orphan;
@@ -214,7 +214,6 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
       strippedMessage,
       filePath,
       sourceLineNumber,
-      continuationLines: [],
     };
     rawLogLines.push(entry as ParsedLogLine);
     lastEntry = entry;

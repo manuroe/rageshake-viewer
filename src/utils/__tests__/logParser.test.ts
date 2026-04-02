@@ -274,14 +274,14 @@ describe('logParser', () => {
         const infoEntry = result.rawLogLines[1];
 
         expect(infoEntry.level).toBe('INFO');
-        expect(infoEntry.continuationLines).toHaveLength(0);
+        expect(infoEntry.continuationLines).toBeUndefined();
         expect(infoEntry.isoTimestamp).toBe('2026-04-01T09:18:52.059145Z');
       });
 
-      it('single-line entries have an empty continuationLines array', () => {
+      it('single-line entries have no continuationLines property', () => {
         const result = parseAllHttpRequests(INFO_LINE);
 
-        expect(result.rawLogLines[0].continuationLines).toHaveLength(0);
+        expect(result.rawLogLines[0].continuationLines).toBeUndefined();
       });
 
       it('orphaned continuation lines before any timestamp become standalone UNKNOWN entries', () => {

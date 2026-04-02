@@ -44,7 +44,6 @@ function createLogLine(
     level,
     message,
     strippedMessage: `[matrix-rust-sdk] ${message}`,
-    continuationLines: [],
   };
 }
 
