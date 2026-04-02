@@ -18,8 +18,8 @@ comment patterns in [PATTERNS.md](./PATTERNS.md) to catch issues before review.
 ### 1. Get the diff
 
 ```sh
-git diff $(git merge-base HEAD origin/main) HEAD -- . ':(exclude)agent-workspace'
-git diff --stat $(git merge-base HEAD origin/main) HEAD -- . ':(exclude)agent-workspace'
+git diff $(git merge-base HEAD origin/main) HEAD -- . ':(exclude)agent-workspace' ':(exclude)*.png' ':(exclude)*.jpg' ':(exclude)*.jpeg' ':(exclude)*.gif' ':(exclude)*.webp' ':(exclude)*.svg' ':(exclude)*.ico'
+git diff --stat $(git merge-base HEAD origin/main) HEAD -- . ':(exclude)agent-workspace' ':(exclude)*.png' ':(exclude)*.jpg' ':(exclude)*.jpeg' ':(exclude)*.gif' ':(exclude)*.webp' ':(exclude)*.svg' ':(exclude)*.ico'
 ```
 
 Read the stat output to understand which file types changed.
