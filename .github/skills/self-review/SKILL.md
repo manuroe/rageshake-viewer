@@ -36,36 +36,36 @@ Read the stat output to understand which file types changed.
 - In any percentage/ratio calculation: is the denominator the concept it claims to measure?
 - After adding a new data path (e.g. continuation lines in a parser), re-read every variable whose length or count the new data can change.
 
-**P9 — Floating Promises / Missing Error Handling**
+**P8 — Floating Promises / Missing Error Handling**
 - Every `.then(...).catch(...)` chain is either returned, awaited, or prefixed with `void`.
 - `navigator.clipboard`, fetch, and storage calls have `try/catch`.
 - `navigate()` (react-router) is never `await`ed.
 - `URL.revokeObjectURL` is deferred to `setTimeout(..., 0)`, not called synchronously after `a.click()`.
 
-**P10 — ARIA Role / Keyboard Interaction Gaps**
+**P9 — ARIA Role / Keyboard Interaction Gaps**
 - No element carries `role="menu"` / `role="menuitem"` without full arrow-key + Escape keyboard handling.
 - New interactive list rows use `tabIndex={-1}` (roving tabindex), not `tabIndex={0}` on every item.
 - Every symbol-only `<button>` has `aria-label`.
 
-**P11 — Algorithm Complexity**
+**P10 — Algorithm Complexity**
 - No `.find()` / `.filter()` inside an outer loop over requests or log lines (pre-build a Map).
 - No Map or index rebuilt on every call that could be computed once.
 - Binary search used where available; linear scan only for small inputs.
 
-**P12 — State Update / Close-Handler Edge Cases**
+**P11 — State Update / Close-Handler Edge Cases**
 - Close callbacks use functional state updates (`prev => prev === thisItem ? null : prev`).
 - No `onClose` unconditionally sets state to `null` that could clobber a concurrent open.
 
-**P13 — Type Mutability**
+**P12 — Type Mutability**
 - All new domain type properties (in `src/types/`) are `readonly`.
 - Shared empty/default constants return fresh objects, not shared mutable references.
 - Read-only parameters typed as `ReadonlyArray<T>` where applicable.
 
-**P14 — Code Duplication**
-- Before writing a new helper or regex, run `grep_search` for it.
+**P13 — Code Duplication**
+- Before writing a new helper or regex, search the codebase for an existing one (for example with `git grep` or `rg`).
 - No new `formatBytes`, timestamp-strip regex, or log-line matcher that already exists in `src/utils/`.
 
-**P15 — Regex Over- or Under-Matching**
+**P14 — Regex Over- or Under-Matching**
 - HTTP status code regexes use `\d{3}` (exactly 3), not `\d{3,}`.
 - Timestamp-strip regexes accept the same variation as `extractISOTimestamp` in `logParser.ts` (with/without fractional seconds, with/without `Z`).
 - Truthy checks (`if (x.field)`) not used where `0` or `''` are valid non-missing values.
@@ -98,13 +98,14 @@ Read the stat output to understand which file types changed.
 - Zustand store state is reset between tests.
 - Interactive element tests use `userEvent.hover` before `userEvent.click` when a trigger is only visible on hover.
 
-### 5. After writing the PR description (`agent-workspace/pr-body.md`) — apply this pattern
+### 5. For each changed Markdown / docs / skill file — apply this pattern
 
-**P8 — PR Description Staleness**
-- If `agent-workspace/pr-body.md` exists, read `git diff --stat $(git merge-base HEAD origin/main) HEAD` and `agent-workspace/pr-body.md` side-by-side.
-- Every changed file/feature must be mentioned in the PR description.
-- Every paragraph in the PR description must map to a file or feature in the diff — delete any that don't.
-- Update the "Testing" section to include the exact test run commands and the test count / coverage output shown after running them locally.
+**P15 — Documentation / Skill Internal Consistency**
+- Sequential dependencies: if step N uses an artifact (e.g. `pr-body.md`, a built file), confirm that artifact exists at the point step N runs — not only in a later step.
+- Command / tool names: every shell command referenced in prose must be real and executable. Verify with `which <cmd>` or `git grep` in the repo scripts if unsure.
+- Repo-specific syntax: CSS selectors, naming conventions, or code patterns cited as examples must actually appear in the repo — use `git grep` to confirm.
+- Cross-file claims: if doc A says "doc B describes X", read doc B and verify.
+- Count / list consistency: if prose says "N patterns" or "N steps", count them.
 
 ### 6. Declare result
 

@@ -152,27 +152,7 @@ Consult this file during the self-review pass before creating any PR.
 
 ---
 
-## P8 — PR Description Staleness
-
-**What it is**: The PR description contains paragraphs copied from a previous PR or carried over from an earlier draft that no longer matches the diff.
-
-**Where it appears**: `agent-workspace/pr-body.md`.
-
-**What to look for**:
-- Does every changed file or feature mentioned in the PR description correspond to something in `git diff`?
-- Are there paragraphs about features (e.g. "RowTimeAction integration", "agent-workspace folder") that are **not** in the current diff?
-- Does the Testing section reference files or commands that exist in the current branch?
-
-**Canonical fix**: Read `agent-workspace/pr-body.md` side-by-side with `git diff --stat`. Remove or rewrite any paragraph that doesn't map to an actual change in the diff.
-
-**Past examples**:
-- PR #57: PR body contained a full second feature section about RowTimeAction carried from a previous draft.
-- PR #39: PR body included sections about log export and agent-workspace that belonged to a different PR.
-- PR #38: PR body described agent-workspace features while the diff implemented a LogExportDialog.
-
----
-
-## P9 — Floating Promises / Missing Error Handling
+## P8 — Floating Promises / Missing Error Handling
 
 **What it is**: An async call whose result is not returned, awaited, or prefixed with `void`, creating an unhandled rejection. Also: `await` without `try/catch` on operations that can fail in the browser (clipboard, network, storage).
 
@@ -193,7 +173,7 @@ Consult this file during the self-review pass before creating any PR.
 
 ---
 
-## P10 — ARIA Role / Keyboard Interaction Gaps
+## P9 — ARIA Role / Keyboard Interaction Gaps
 
 **What it is**: A component declares a complex ARIA role (`menu`, `menuitem`, `listbox`, etc.) without implementing the keyboard interaction pattern that the role implies.
 
@@ -213,7 +193,7 @@ Consult this file during the self-review pass before creating any PR.
 
 ---
 
-## P11 — Algorithm Complexity Regressions
+## P10 — Algorithm Complexity Regressions
 
 **What it is**: A new or changed function performs O(n²) or worse work in a hot path (virtualized list rendering, per-request processing, per-line parsing).
 
@@ -234,7 +214,7 @@ Consult this file during the self-review pass before creating any PR.
 
 ---
 
-## P12 — State Update / Close-Handler Edge Cases
+## P11 — State Update / Close-Handler Edge Cases
 
 **What it is**: A state setter in a close/open callback clobbers state set by a concurrent interaction (e.g. opening a new row's menu clears the z-index elevation of the previously active row).
 
@@ -252,7 +232,7 @@ Consult this file during the self-review pass before creating any PR.
 
 ---
 
-## P13 — Type Mutability Contract Violations
+## P12 — Type Mutability Contract Violations
 
 **What it is**: A function returns or exposes a mutable type for data that is logically immutable; or a shared "empty" constant has mutable fields that could be accidentally mutated by callers.
 
@@ -272,7 +252,7 @@ Consult this file during the self-review pass before creating any PR.
 
 ---
 
-## P14 — Code Duplication
+## P13 — Code Duplication
 
 **What it is**: The same logic, regex, or helper is defined in two places rather than being extracted into a shared utility.
 
@@ -290,7 +270,7 @@ Consult this file during the self-review pass before creating any PR.
 
 ---
 
-## P15 — Regex Over- or Under-Matching
+## P14 — Regex Over- or Under-Matching
 
 **What it is**: A regex matches too broadly (accepting invalid input) or too narrowly (rejecting valid input), usually due to quantifier choice or missing anchors.
 
@@ -307,3 +287,25 @@ Consult this file during the self-review pass before creating any PR.
 - PR #25: `HTTP_ERROR_RE` used `\d{3,}` — matched `status=4040` as a valid 400x status code.
 - PR #38: `LOG_PREFIX_RE` required `Z` and fractional seconds, missing valid timestamps the parser normalizes.
 - PR #24: `getLineRelation` used truthy check on `sourceLineNumber`, treating `0` as "missing".
+
+---
+
+## P15 — Documentation / Skill Internal Consistency
+
+**What it is**: Prose documentation (skills, AGENTS.MD, READMEs) that contradicts itself or references things that don't exist in the repo — wrong step ordering, phantom tool names, syntax that the repo doesn't use, or a prerequisite assumed present before it is created.
+
+**Where it appears**: `.github/skills/**/*.md`, `AGENTS.MD`, `docs/`, any Markdown file changed in the PR.
+
+**What to look for**:
+- Sequential dependencies: if step N uses an artifact (e.g. `pr-body.md`, a built file, a config), confirm that artifact exists at the point step N runs — not only in a later step.
+- Command / tool names: every shell command (`grep_search`, `npx foo`, etc.) referenced in prose must be a real, executable command. Verify with `which <cmd>` or `git grep <cmd>` in the repo scripts if unsure.
+- Repo-specific syntax: CSS selectors, naming conventions, or code patterns cited as examples must actually appear in the codebase. Use `git grep` to confirm before writing them into docs.
+- Cross-file claims: if doc A says "doc B describes X", read doc B and verify it actually does.
+- Count / list consistency: if prose says "N patterns" or "N steps", count them.
+
+**Canonical fix**: Fix the ordering, remove the phantom reference, or replace the example with one `git grep` confirms exists in the repo.
+
+**Past examples**:
+- PR #58: `create-pr/SKILL.md` Step 0 said "before any commit" but `pr-body.md` (referenced in the same step) is only written in Step 4 — ordering contradiction.
+- PR #58: `PATTERNS.md` and `SKILL.md` both referenced `grep_search` as a shell command; it is a Copilot tool, not an executable — phantom name.
+- PR #58: `PATTERNS.md` P3 canonical fix cited `.nowrap &` (CSS nesting); the repo's `.module.css` files use plain selectors only — verified false by `git grep`.
