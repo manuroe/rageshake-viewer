@@ -87,11 +87,12 @@ Do not commit if any of these steps fail. Fix the issue first, then re-run the f
 ## Creating PRs (for Agents)
 
 When asked to commit and create a PR, follow `.github/skills/create-pr/SKILL.md` (also available as `/create-pr` in Copilot). Core steps:
-1. Pass the Pre-Commit Checklist above.
-2. Analyze `git diff` and group changes into logical commits.
-3. Create a branch (`feat/`, `fix/`, etc.) and commit each group with a conventional commit message: `type(scope): description`.
-4. Write PR description to `agent-workspace/pr-body.md`.
-5. Push and run `gh pr create --body-file agent-workspace/pr-body.md`.
+1. **Self-review first** — load `.github/skills/self-review/SKILL.md` (`/self-review`) and resolve all findings.
+2. Pass the Pre-Commit Checklist above.
+3. Analyze `git diff` and group changes into logical commits.
+4. Create a branch (`feat/`, `fix/`, etc.) and commit each group with a conventional commit message: `type(scope): description`.
+5. Write PR description to `agent-workspace/pr-body.md`.
+6. Push and run `gh pr create --body-file agent-workspace/pr-body.md`.
 
 ## PR Review Workflow (for Agents)
 
@@ -126,7 +127,17 @@ Every change must uphold these pillars — apply them when writing, not just at 
 
 **No Duplication**: Search before writing. If the same block appears in two or more places, extract it immediately (utility function, shared hook, or store action).
 
-**AI-Generated Code — extra watch-outs**: all domain type properties must be `readonly`; all literals need named constants; every `setTimeout`/`addEventListener` in a `useEffect` needs a cleanup return; symbol-only buttons need `aria-label`.
+**AI-Generated Code — extra watch-outs** (run the `/self-review` skill before any PR to check all of these):
+1. All domain type properties must be `readonly`; shared empty constants return fresh objects, not mutable singletons.
+2. All literals that duplicate layout values or colors must be named constants or CSS custom properties — never hard-code pixel sums.
+3. Every `setTimeout`/`addEventListener` in a `useEffect` needs a cleanup `return`.
+4. Symbol-only buttons need `aria-label`; `role="menu"` requires full arrow-key + Escape keyboard handling.
+5. `pointer-events: none` on a container is inherited — add `pointer-events: auto` on any interactive child.
+6. Floating Promises: prefix unhandled `.then(...).catch(...)` chains with `void`; wrap clipboard/storage calls in `try/catch`.
+7. Test mocks that overwrite globals need a matching `afterEach` restore — `vi.restoreAllMocks()` does **not** restore property assignments.
+8. Test fixtures must mirror real parser output: set `isoTimestamp`, `displayTime`, and `message` to non-default values.
+9. Close/open callbacks must use functional state updates to avoid clobbering a concurrent open.
+10. Before writing a new helper or regex, search the codebase — see "No Duplication" above.
 
 ## Performance Regression Detection
 CI runs benchmark suites via CodSpeed and publishes performance tracking/results on codspeed.io and GitHub checks.
