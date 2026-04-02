@@ -470,6 +470,10 @@ export function computeSummaryStats(
 
     const endUs = req.responseLineNumber ? getLineTimestampUs(req.responseLineNumber) : null;
 
+    // Skip: responseLineNumber is set but the timestamp cannot be resolved —
+    // treat as malformed rather than as a permanently in-flight request.
+    if (req.responseLineNumber && endUs === null) continue;
+
     // Span must overlap [timeRangeUs.startUs, timeRangeUs.endUs]:
     // startUs must be before the range end, and endUs (if known) must be after the range start.
     if (timeRangeUs) {
@@ -506,6 +510,10 @@ export function computeSummaryStats(
 
     const endUs =
       req.responseLineNumber ? getLineTimestampUs(req.responseLineNumber) : null;
+
+    // Skip: responseLineNumber is set but the timestamp cannot be resolved —
+    // treat as malformed rather than as a permanently in-flight request.
+    if (req.responseLineNumber && endUs === null) continue;
 
     // Span must overlap [timeRangeUs.startUs, timeRangeUs.endUs]:
     // startUs must be before the range end, and endUs (if known) must be after the range start.

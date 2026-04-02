@@ -1,17 +1,16 @@
-import { useMemo, useCallback, useRef, useEffect, useState, type MouseEvent } from 'react';
+import { useMemo, useCallback } from 'react';
 import { Group } from '@visx/group';
 import { Area, Line } from '@visx/shape';
 import { scaleLinear } from '@visx/scale';
 import { AxisBottom, AxisLeft } from '@visx/axis';
 import { useTooltip, TooltipWithBounds } from '@visx/tooltip';
-import { localPoint } from '@visx/event';
 import { curveStepAfter } from 'd3-shape';
 import type { BandwidthRequestSpan } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../types/time.types';
 import type { SelectionRange } from '../hooks/useChartInteraction';
-import { xToTime, snapToEdge } from '../utils/chartUtils';
 import { formatBytes } from '../utils/sizeUtils';
+import { useStepChartInteraction } from '../hooks/useStepChartInteraction';
 
 interface BandwidthConcurrencyChartProps {
   /** Per-request time spans, each with precise start/end timestamps and byte counts. */
@@ -49,11 +48,6 @@ interface TooltipData {
   readonly timeUs: number;
   readonly downloadBytes: number;
   readonly uploadBytes: number;
-}
-
-interface SelectionPoint {
-  readonly x: number;
-  readonly time: number;
 }
 
 const SVG_WIDTH = 800;
@@ -207,173 +201,48 @@ export function BandwidthConcurrencyChart({
   const { tooltipData, tooltipLeft, tooltipTop, showTooltip, hideTooltip } =
     useTooltip<TooltipData>();
 
-  // ── Interaction state ────────────────────────────────────────────────────
-  const [cursorX, setCursorX] = useState<number | undefined>();
-  const [cursorTimeUs, setCursorTimeUs] = useState<number | undefined>();
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectionStart, setSelectionStart] = useState<SelectionPoint | undefined>();
-  const [selectionEnd, setSelectionEnd] = useState<SelectionPoint | undefined>();
-
-  const svgRef = useRef<SVGSVGElement>(null);
-
-  /** Convert a microsecond timestamp to SVG x-coordinate within the chart area. */
-  const timeToX = useCallback(
-    (timeUs: number): number => xScale(Math.max(minTime, Math.min(maxTime, timeUs))),
-    [xScale, minTime, maxTime],
+  // ── Interaction ─────────────────────────────────────────────────────────
+  /** Returns tooltip data at the given chart timestamp; chart-specific logic. */
+  const getTooltipData = useCallback(
+    (timeUs: number): TooltipData => ({
+      timeUs,
+      downloadBytes: getValueAtTime(downloadSeries, timeUs),
+      uploadBytes: getValueAtTime(uploadSeries, timeUs),
+    }),
+    [downloadSeries, uploadSeries],
   );
 
-  const showTooltipAtX = useCallback(
-    (chartX: number) => {
-      const timeUs = xToTime(chartX, xMax, minTime as TimestampMicros, maxTime as TimestampMicros);
-      const download = getValueAtTime(downloadSeries, timeUs);
-      const upload = getValueAtTime(uploadSeries, timeUs);
-      const svg = svgRef.current;
-      if (!svg) return;
-      const viewBoxX = chartX + MARGIN.left;
-      const ctm = typeof svg.getScreenCTM === 'function' ? svg.getScreenCTM() : null;
-      let tooltipScreenX = 0;
-      let tooltipScreenY = 0;
-      if (ctm && typeof svg.createSVGPoint === 'function') {
-        const pt = svg.createSVGPoint();
-        pt.x = viewBoxX;
-        pt.y = 0;
-        const tp = pt.matrixTransform(ctm);
-        tooltipScreenX = tp.x;
-        tooltipScreenY = tp.y;
-      } else {
-        const rect = svg.getBoundingClientRect();
-        const scale = rect.width / SVG_WIDTH;
-        tooltipScreenX = rect.left + viewBoxX * scale;
-        tooltipScreenY = rect.top;
-      }
-      showTooltip({
-        tooltipData: { timeUs, downloadBytes: download, uploadBytes: upload },
-        tooltipLeft: tooltipScreenX,
-        tooltipTop: tooltipScreenY,
-      });
-    },
-    [xMax, minTime, maxTime, downloadSeries, uploadSeries, showTooltip],
-  );
-
-  // ── Mouse handlers ────────────────────────────────────────────────────────
-  const handleMouseMove = useCallback(
-    (event: MouseEvent<SVGRectElement>) => {
-      if (isSelecting) {
-        const point = localPoint(event);
-        if (!point) return;
-        const x = point.x - MARGIN.left;
-        if (x < 0 || x > xMax) return;
-        const time = xToTime(x, xMax, minTime as TimestampMicros, maxTime as TimestampMicros);
-        setSelectionEnd({ x: point.x, time });
-        onSelectionChange?.({ startUs: selectionStart!.time as TimestampMicros, endUs: time as TimestampMicros });
-        return;
-      }
-      const point = localPoint(event);
-      if (!point) return;
-      const x = point.x - MARGIN.left;
-      if (x < 0 || x > xMax) return;
-      const timeUs = xToTime(x, xMax, minTime as TimestampMicros, maxTime as TimestampMicros);
-      setCursorX(point.x);
-      setCursorTimeUs(timeUs);
-      onCursorMove?.(timeUs);
-      showTooltipAtX(x);
-    },
-    [isSelecting, xMax, minTime, maxTime, selectionStart, onSelectionChange, onCursorMove, showTooltipAtX],
-  );
-
-  const handleMouseDown = useCallback(
-    (event: MouseEvent<SVGRectElement>) => {
-      const point = localPoint(event);
-      if (!point) return;
-      const x = point.x - MARGIN.left;
-      if (x < 0 || x > xMax) return;
-      const time = xToTime(x, xMax, minTime as TimestampMicros, maxTime as TimestampMicros);
-      setIsSelecting(true);
-      setSelectionStart({ x: point.x, time });
-      setSelectionEnd({ x: point.x, time });
-      hideTooltip();
-      setCursorX(undefined);
-      setCursorTimeUs(undefined);
-      onCursorMove?.(null);
-      onSelectionChange?.({ startUs: time as TimestampMicros, endUs: time as TimestampMicros });
-    },
-    [xMax, minTime, maxTime, hideTooltip, onCursorMove, onSelectionChange],
-  );
-
-  const commitSelection = useCallback(() => {
-    if (!isSelecting || !selectionStart || !selectionEnd) {
-      setIsSelecting(false);
-      return;
-    }
-    const rawStart = Math.min(selectionStart.time, selectionEnd.time) as TimestampMicros;
-    const rawEnd = Math.max(selectionStart.time, selectionEnd.time) as TimestampMicros;
-    const bucketTimeSpan = xMax > 0 ? ((1 / xMax) * (maxTime - minTime)) : 0;
-    const [startSnapped, endSnapped] = snapToEdge(
-      rawStart,
-      rawEnd,
-      minTime as TimestampMicros,
-      maxTime as TimestampMicros,
-      bucketTimeSpan,
-    );
-    if (endSnapped - startSnapped > 100 * MICROS_PER_MILLISECOND && onTimeRangeSelected) {
-      onTimeRangeSelected(startSnapped, endSnapped);
-    }
-    setIsSelecting(false);
-    setSelectionStart(undefined);
-    setSelectionEnd(undefined);
-    onSelectionChange?.(null);
-  }, [isSelecting, selectionStart, selectionEnd, xMax, minTime, maxTime, onTimeRangeSelected, onSelectionChange]);
-
-  const handleMouseUp = useCallback(() => {
-    commitSelection();
-  }, [commitSelection]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (isSelecting) return;
-    setCursorX(undefined);
-    setCursorTimeUs(undefined);
-    onCursorMove?.(null);
-    hideTooltip();
-  }, [isSelecting, onCursorMove, hideTooltip]);
-
-  const handleDoubleClick = useCallback(() => {
-    onResetZoom?.();
-  }, [onResetZoom]);
-
-  // Commit selection on window mouseup (handles release outside SVG).
-  useEffect(() => {
-    if (!isSelecting) return;
-    const onWindowMouseUp = () => commitSelection();
-    window.addEventListener('mouseup', onWindowMouseUp);
-    return () => window.removeEventListener('mouseup', onWindowMouseUp);
-  }, [isSelecting, commitSelection]);
-
-  // ── External cursor tooltip ───────────────────────────────────────────────
-  const hasExternalSelection = externalSelection !== null && externalSelection !== undefined;
-  const isExternalTooltipActive =
-    !isSelecting &&
-    cursorX === undefined &&
-    !hasExternalSelection &&
-    externalCursorTime !== null &&
-    externalCursorTime !== undefined;
-
-  useEffect(() => {
-    if (
-      externalCursorTime === null ||
-      externalCursorTime === undefined ||
-      hasExternalSelection ||
-      isSelecting ||
-      cursorX !== undefined
-    ) {
-      if (cursorX === undefined && !isSelecting) hideTooltip();
-      return;
-    }
-    if (externalCursorTime < minTime || externalCursorTime > maxTime) {
-      hideTooltip();
-      return;
-    }
-    showTooltipAtX(timeToX(externalCursorTime));
-  }, [externalCursorTime, hasExternalSelection, isSelecting, cursorX, minTime, maxTime, showTooltipAtX, timeToX, hideTooltip]);
+  const {
+    svgRef,
+    cursorX,
+    cursorTimeUs,
+    isSelecting,
+    selectionStart,
+    selectionEnd,
+    timeToX,
+    handleMouseMove,
+    handleMouseDown,
+    handleMouseUp,
+    handleMouseLeave,
+    handleDoubleClick,
+    hasExternalSelection,
+    isExternalTooltipActive,
+  } = useStepChartInteraction({
+    xMax,
+    svgWidth: SVG_WIDTH,
+    marginLeft: MARGIN.left,
+    minTime,
+    maxTime,
+    externalCursorTime,
+    externalSelection,
+    onCursorMove,
+    onSelectionChange,
+    onTimeRangeSelected,
+    onResetZoom,
+    getTooltipData,
+    showTooltip,
+    hideTooltip,
+  });
 
   // ── Empty state ────────────────────────────────────────────────────────────
   if (!hasData) {

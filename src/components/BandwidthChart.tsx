@@ -41,7 +41,7 @@ interface BandwidthChartProps {
   requests: readonly BandwidthRequestEntry[];
   /** Request spans used by in-flight mode to build step-function stacked areas. */
   bandwidthRequestSpans?: readonly BandwidthRequestSpan[];
-  /** Completed = completion-based bars, concurrent = in-flight stacked areas. */
+  /** Completed = start-based bars, concurrent = in-flight stacked areas. */
   displayMode?: 'completed' | 'concurrent';
   /**
    * Time range for the chart — should match the sibling activity charts
