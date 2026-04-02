@@ -126,6 +126,30 @@
 2026-01-15T10:01:07.000000Z DEBUG [matrix-rust-sdk] send{request_id="req-046" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/messages?dir=b&limit=100" request_size="0"}
 2026-01-15T10:01:07.480000Z DEBUG [matrix-rust-sdk] send{request_id="req-046" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room2:example.org/messages?dir=b&limit=100" request_size="0" status=200 response_size="32768" request_duration=480ms}
 2026-01-15T10:01:10.070000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-007" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0" status=200 response_size="512" request_duration=30020ms}
+2026-01-15T10:01:10.075000Z ERROR matrix_sdk_ui::sync_service: Error while processing room list in sync service: Some(
+    RoomList(
+        SlidingSync(
+            Http(
+                Api(
+                    Server(
+                        ClientApi(
+                            Error {
+                                status_code: 404,
+                                body: Standard(
+                                    StandardErrorBody {
+                                        kind: NotFound,
+                                        message: "Could not find room_version for !room2:example.org",
+                                    },
+                                ),
+                            },
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),
+) | crates/matrix-sdk-ui/src/sync_service.rs:426
+2026-01-15T10:01:10.080000Z  INFO matrix_sdk_ui::sync_service: Entering the offline mode | crates/matrix-sdk-ui/src/sync_service.rs:160 | spans: supervisor task
 2026-01-15T10:01:10.090000Z  WARN [matrix-rust-sdk] Sync request sync-007 exceeded timeout (30000ms), actual duration: 30020ms
 2026-01-15T10:01:10.100000Z  INFO [matrix-rust-sdk] conn_id="room-list" send{request_id="sync-008" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=30000" request_size="0"}
 2026-01-15T10:01:10.400000Z  INFO [matrix-rust-sdk] send{request_id="req-050" method=PUT uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/send/m.room.message/tx-004" request_size="256"}
