@@ -452,11 +452,15 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   };
 
   const getDisplayText = (line: ParsedLogLine): string => {
+    // Always use line.message (first physical line only) — continuation lines are
+    // rendered separately in the logLineContinuation block and must not be included
+    // here. line.rawText now spans multiple physical lines for multi-line entries,
+    // which is correct for search matching but wrong for single-line display.
     if (!stripPrefix) {
-      return line.rawText;
+      return line.message;
     }
     // Strip ISO timestamp and log level from display (they're already shown in columns)
-    return stripLogPrefix(line.rawText);
+    return stripLogPrefix(line.message);
   };
 
   const handleSourceLinkClick = async (
@@ -788,6 +792,11 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 >
                   {highlightText(line, index)}
                 </span>
+                {(line.continuationLines?.length ?? 0) > 0 && (
+                  <div className={styles.logLineContinuation}>
+                    {line.continuationLines!.join('\n')}
+                  </div>
+                )}
                 {collapseInfo && gapBelow && (
                   <div className={styles.collapseSummaryBar} data-testid="collapse-bar">
                     <span className={styles.logLineNumber} aria-hidden="true" />

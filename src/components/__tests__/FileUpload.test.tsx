@@ -38,6 +38,7 @@ describe('FileUpload navigation', () => {
           level: 'INFO',
           message: 'line 0',
           strippedMessage: 'line 0',
+          continuationLines: [],
         },
       ],
     });

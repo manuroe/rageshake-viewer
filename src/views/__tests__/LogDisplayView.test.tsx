@@ -216,26 +216,36 @@ describe('LogDisplayView gap arrows & expansion', () => {
 
   it('stripPrefix toggle affects displayed text', async () => {
     const user = userEvent.setup();
-    const total = 10;
-    const matchIndices = [3, 7];
-    const logs = createLogsWithMatches(total, matchIndices);
-    useLogStore.setState({ rawLogLines: logs });
+    // The real parser sets line.message to the full raw first line (including the ISO timestamp
+    // prefix). Replicate that here so the fixture matches production behaviour.
+    const isoTimestamp = '2024-01-01T10:00:03.000000Z';
+    const fullLine = `${isoTimestamp} ERROR MATCH full-line-content`;
+    const line = createParsedLogLine({
+      lineNumber: 3,
+      isoTimestamp,
+      level: 'ERROR',
+      rawText: fullLine,
+      // message = full raw first line, as the real parser outputs
+      message: fullLine,
+      strippedMessage: 'MATCH full-line-content',
+    });
+    useLogStore.setState({ rawLogLines: [line] });
 
     render(<LogDisplayView requestFilter="MATCH" />);
 
     const line3Container = getLineContainer(3);
     const textSpan = line3Container.querySelector(`.${styles.logLineText}`) as HTMLSpanElement;
     expect(textSpan).toBeTruthy();
-    
-    // With stripPrefix=true (default), message should not start with ISO timestamp
-    const isoTimestamp = logs[3].isoTimestamp;
+
+    // With stripPrefix=true (default), the ISO timestamp must NOT appear in the text span
+    // (it is already rendered in the dedicated timestamp column).
     expect(textSpan.textContent?.trim().startsWith(isoTimestamp)).toBe(false);
 
     // Toggle stripPrefix off
     const stripCheckbox = screen.getByLabelText(/Strip prefix/i) as HTMLInputElement;
     await user.click(stripCheckbox);
 
-    // Now the log-line-text should include the timestamp prefix in the rawText (due to no strip)
+    // With stripPrefix=false the full line.message is rendered, including the ISO timestamp.
     expect(textSpan.textContent?.includes(isoTimestamp)).toBe(true);
   });
 
@@ -625,6 +635,7 @@ describe('LogDisplayView filter & search behaviors', () => {
         level: 'INFO',
         message: 'uppercase TEXT',
         strippedMessage: 'uppercase TEXT',
+        continuationLines: [],
       },
       {
         lineNumber: 1,
@@ -635,6 +646,7 @@ describe('LogDisplayView filter & search behaviors', () => {
         level: 'INFO',
         message: 'lowercase text',
         strippedMessage: 'lowercase text',
+        continuationLines: [],
       },
     ];
     useLogStore.setState({ rawLogLines: logs });
@@ -687,6 +699,7 @@ describe('LogDisplayView filter & search behaviors', () => {
         level: 'INFO',
         message: 'request-001',
         strippedMessage: 'request-001',
+        continuationLines: [],
       },
       {
         lineNumber: 1,
@@ -697,6 +710,7 @@ describe('LogDisplayView filter & search behaviors', () => {
         level: 'INFO',
         message: 'response-data',
         strippedMessage: 'response-data',
+        continuationLines: [],
       },
       {
         lineNumber: 2,
@@ -707,6 +721,7 @@ describe('LogDisplayView filter & search behaviors', () => {
         level: 'INFO',
         message: 'request-002',
         strippedMessage: 'request-002',
+        continuationLines: [],
       },
     ];
     useLogStore.setState({ rawLogLines: logs });
@@ -1462,6 +1477,127 @@ describe('LogDisplayView export button', () => {
     expect(screen.getByRole('button', { name: /set window start here/i })).toBeInTheDocument();
     fireEvent.click(trigger);
     expect(screen.queryByText(/set window start here/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('LogDisplayView multi-line (continuation) log entries', () => {
+  beforeEach(() => {
+    useLogStore.getState().clearData();
+  });
+
+  it('renders continuation lines in a separate block below the first line', () => {
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({
+          lineNumber: 1,
+          rawText: '2024-01-01T10:00:00.000000Z ERROR first line\n  second line\n  third line',
+          isoTimestamp: '2024-01-01T10:00:00.000000Z',
+          message: '2024-01-01T10:00:00.000000Z ERROR first line',
+          strippedMessage: 'first line',
+          level: 'ERROR',
+          continuationLines: ['  second line', '  third line'],
+        }),
+      ],
+    });
+
+    render(<LogDisplayView />);
+
+    const row = getLineContainer(1);
+    // The continuation block must be present
+    const continuationBlock = row.querySelector(`.${styles.logLineContinuation}`) as HTMLElement;
+    expect(continuationBlock).not.toBeNull();
+    expect(continuationBlock.textContent).toContain('second line');
+    expect(continuationBlock.textContent).toContain('third line');
+  });
+
+  it('does not render a continuation block for single-line entries', () => {
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({
+          lineNumber: 1,
+          continuationLines: [],
+        }),
+      ],
+    });
+
+    render(<LogDisplayView />);
+
+    const row = getLineContainer(1);
+    expect(row.querySelector(`.${styles.logLineContinuation}`)).toBeNull();
+  });
+
+  it('does not duplicate continuation content inside the main text span', () => {
+    // Regression test: getDisplayText() must use line.message (first physical line only),
+    // NOT line.rawText which now spans multiple physical lines. If rawText were used,
+    // the continuation content would appear twice — once inline in the text span and
+    // once in the logLineContinuation block.
+    const continuationOnlyText = 'CONTINUATION_UNIQUE_STRING';
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({
+          lineNumber: 1,
+          rawText: `2024-01-01T10:00:00.000000Z ERROR first line\n  ${continuationOnlyText}`,
+          isoTimestamp: '2024-01-01T10:00:00.000000Z',
+          message: `2024-01-01T10:00:00.000000Z ERROR first line`,
+          strippedMessage: 'first line',
+          level: 'ERROR',
+          continuationLines: [`  ${continuationOnlyText}`],
+        }),
+      ],
+    });
+
+    render(<LogDisplayView />);
+
+    const row = getLineContainer(1);
+    const textSpan = row.querySelector(`.${styles.logLineText}`) as HTMLElement;
+    // The continuation text must NOT appear inside the main text span
+    expect(textSpan.textContent).not.toContain(continuationOnlyText);
+    // But it must appear in the continuation block
+    const continuationBlock = row.querySelector(`.${styles.logLineContinuation}`) as HTMLElement;
+    expect(continuationBlock).not.toBeNull();
+    expect(continuationBlock.textContent).toContain(continuationOnlyText);
+  });
+
+  it('search matching works via rawText even when query is only in continuation lines', async () => {
+    // rawText is extended with continuation content for search purposes. A search
+    // for a term that appears only in continuation lines must still highlight the row.
+    const continuationOnlyTerm = 'SearchableOnlyInContinuation';
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({
+          lineNumber: 1,
+          rawText: `2024-01-01T10:00:00.000000Z ERROR first line\n  ${continuationOnlyTerm}`,
+          isoTimestamp: '2024-01-01T10:00:00.000000Z',
+          message: `2024-01-01T10:00:00.000000Z ERROR first line`,
+          strippedMessage: 'first line',
+          level: 'ERROR',
+          continuationLines: [`  ${continuationOnlyTerm}`],
+        }),
+        createParsedLogLine({
+          lineNumber: 2,
+          rawText: '2024-01-01T10:00:01.000000Z INFO unrelated',
+          isoTimestamp: '2024-01-01T10:00:01.000000Z',
+          message: '2024-01-01T10:00:01.000000Z INFO unrelated',
+          strippedMessage: 'unrelated',
+          continuationLines: [],
+        }),
+      ],
+    });
+
+    render(<LogDisplayView />);
+
+    const searchInput = screen.getByPlaceholderText(/Search logs/i);
+    await userEvent.type(searchInput, continuationOnlyTerm);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    // Navigation counter must show 1 match
+    expect(screen.getByText('1 / 1')).toBeInTheDocument();
+    // The matching row must have the matchLine class
+    const matchRow = getLineContainer(1);
+    expect(matchRow.classList.contains(styles.matchLine)).toBe(true);
+    // The non-matching row must not
+    const noMatchRow = getLineContainer(2);
+    expect(noMatchRow.classList.contains(styles.matchLine)).toBe(false);
   });
 });
 

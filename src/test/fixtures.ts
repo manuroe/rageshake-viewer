@@ -38,6 +38,7 @@ export function createParsedLogLine(
     strippedMessage,
     filePath: overrides.filePath,
     sourceLineNumber: overrides.sourceLineNumber,
+    ...(overrides.continuationLines !== undefined && { continuationLines: overrides.continuationLines }),
   };
 }
 

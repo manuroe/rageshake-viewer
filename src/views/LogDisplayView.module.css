@@ -4,6 +4,11 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    /* Fixed column widths — update these if any column header width changes. */
+    --col-line-number: 60px;
+    --col-timestamp: 140px;
+    --col-level: 60px;
+    --col-message-indent: calc(var(--col-line-number) + var(--col-timestamp) + var(--col-level));
 }
 
 .logToolbar {
@@ -208,7 +213,7 @@
 
 .logLineNumber {
     flex-shrink: 0;
-    width: 60px;
+    width: var(--col-line-number);
     text-align: right;
     color: var(--log-text-muted);
     user-select: none;
@@ -217,14 +222,14 @@
 
 .logLineTimestamp {
     flex-shrink: 0;
-    width: 140px;
+    width: var(--col-timestamp);
     color: var(--log-timestamp);
     padding-right: 12px;
 }
 
 .logLineLevel {
     flex-shrink: 0;
-    width: 60px;
+    width: var(--col-level);
     font-weight: 600;
     text-align: center;
     padding: 0 8px;
@@ -233,6 +238,24 @@
 .logLineText {
     flex: 1;
     overflow: hidden;
+}
+
+.logLineContinuation {
+    /* Forces a new row within the flex row, spanning the full width */
+    flex: 0 0 100%;
+    /* Align continuation text with .logLineText using the same CSS variables
+       that define the three fixed column widths. */
+    padding-left: var(--col-message-indent);
+    /* In wrap mode use pre-wrap so indentation is preserved and long lines still
+       wrap. The nowrap override below switches to pre so content scrolls instead. */
+    white-space: pre-wrap;
+    overflow: hidden;
+}
+
+/* In nowrap mode: keep continuation text on one line and let it scroll. */
+.nowrap .logLineContinuation {
+    white-space: pre;
+    overflow: visible;
 }
 
 .sourceLink {

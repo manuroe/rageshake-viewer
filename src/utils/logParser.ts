@@ -13,6 +13,13 @@ import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
  */
 type HttpRequestRecord = { -readonly [K in keyof HttpRequest]?: HttpRequest[K] };
 
+/**
+ * Mutable view of a `ParsedLogLine` used only during the parsing phase to
+ * accumulate continuation lines and update `rawText` in place. Cast to the
+ * sealed `ParsedLogLine` when pushed to the output array.
+ */
+type MutableParsedLogLine = { -readonly [K in keyof ParsedLogLine]: K extends 'continuationLines' ? string[] : ParsedLogLine[K] };
+
 // Regex patterns for parsing HTTP requests - generic (all URIs)
 // request_size= is optional: some SDK log lines (e.g. API error responses) omit it from the span.
 const HTTP_RESP_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"(?:\s+request_size="(?<req_size>[^"]+)")?\s+status=(?<status>\S+)\s+response_size="(?<resp_size>[^"]+)"\s+request_duration=(?<duration_val>[0-9.]+)(?<duration_unit>ms|s)/;
@@ -68,18 +75,28 @@ function extractSourceLocation(line: string): { filePath?: string; sourceLineNum
 }
 
 /**
- * Extract ISO timestamp from a log line.
- * Returns the full ISO 8601 datetime string.
+ * Extract ISO timestamp from the start of a log line.
+ *
+ * Anchored at position 0 so that a match also implies the line is the start of
+ * a new log entry — removing the need for a separate `lineStartsWithISOTimestamp`
+ * check and keeping the hot parser loop to a single regex call per line.
+ *
+ * Returns the full ISO timestamp string when the line starts a new entry, or
+ * an empty string when the line is a continuation (no leading timestamp).
+ *
+ * @example
+ * extractISOTimestamp('2026-04-01T09:18:52.057456Z ERROR foo'); // '2026-04-01T09:18:52.057456Z'
+ * extractISOTimestamp('    SomeError { status: 404 }');          // ''
  */
 function extractISOTimestamp(line: string): ISODateTimeString {
-  // Match full ISO timestamp: YYYY-MM-DDTHH:MM:SS[.fraction]Z?
-  const isoMatch = line.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/);
+  // Anchored at ^ so this doubles as a new-entry vs continuation discriminator.
+  const isoMatch = line.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/);
   if (isoMatch) {
     // Ensure it ends with Z for consistency
     const timestamp = isoMatch[0];
     return timestamp.endsWith('Z') ? timestamp : `${timestamp}Z`;
   }
-  return '';
+  return '' as ISODateTimeString;
 }
 
 /**
@@ -123,51 +140,97 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   const rawLogLines: ParsedLogLine[] = [];
   const sentryEvents: SentryEvent[] = [];
   let linesWithTimestamps = 0;
+  // Counts non-empty physical lines so the file-size gate below can fire even
+  // when all physical lines are continuation lines folded into one UNKNOWN entry.
+  let totalNonEmptyLines = 0;
+  // Mutable reference to the last pushed entry, used to fold continuation
+  // lines (lines without a leading ISO timestamp) into the parent record.
+  let lastEntry: MutableParsedLogLine | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    
-    // Parse every line for the raw log view
-    if (line.trim()) {
-      const isoTimestamp = extractISOTimestamp(line);
-      const level = extractLogLevel(line);
-      const timestampUs = parseTimestampMicros(isoTimestamp);
-      const displayTime = formatDisplayTime(isoTimestamp);
-      const strippedMessage = stripMessagePrefix(line);
-      const { filePath, sourceLineNumber } = extractSourceLocation(line);
-      
-      if (isoTimestamp) {
-        linesWithTimestamps++;
-      }
-      
-      rawLogLines.push({
-        lineNumber: i + 1,
-        rawText: line,
-        isoTimestamp,
-        timestampUs,
-        displayTime,
-        level,
-        message: line,
-        strippedMessage,
-        filePath,
-        sourceLineNumber,
-      });
 
-      // Detect Sentry events
-      if (line.includes(SENTRY_ANDROID_STR)) {
-        sentryEvents.push({ platform: 'android', lineNumber: i + 1, message: line });
+    // Empty lines terminate a multi-line block; nothing to display or accumulate.
+    // Reset lastEntry so that a non-timestamped line after a blank line is not
+    // folded into the previous entry across the blank-line boundary.
+    if (!line.trim()) {
+      lastEntry = null;
+      continue;
+    }
+
+    totalNonEmptyLines++;
+
+    // A single anchored regex call doubles as the new-entry vs continuation
+    // discriminator (empty string → continuation; non-empty → new entry).
+    const isoTimestamp = extractISOTimestamp(line);
+
+    // Continuation line: non-empty but no leading ISO timestamp → belongs to
+    // the previous log entry (e.g. the indented body of a multi-line Rust error).
+    if (!isoTimestamp) {
+      if (lastEntry !== null) {
+        if (!lastEntry.continuationLines) lastEntry.continuationLines = [];
+        lastEntry.continuationLines.push(line);
+        // Extend rawText so search queries can match content in continuation lines.
+        lastEntry.rawText = lastEntry.rawText + '\n' + line;
       } else {
-        const iosMatch = line.match(SENTRY_IOS_RE);
-        if (iosMatch) {
-          const sentryId = iosMatch[1];
-          sentryEvents.push({
-            platform: 'ios',
-            lineNumber: i + 1,
-            message: line,
-            sentryId,
-            sentryUrl: `${SENTRY_URL_BASE}${sentryId}`,
-          });
-        }
+        // Orphaned continuation line: appears before any timestamped entry (e.g.
+        // a malformed log that starts mid-message). Emit it as a standalone UNKNOWN
+        // entry so the content is visible in the log view rather than silently lost.
+        const orphan: MutableParsedLogLine = {
+          lineNumber: i + 1,
+          rawText: line,
+          isoTimestamp: '' as ISODateTimeString,
+          timestampUs: 0 as TimestampMicros,
+          displayTime: '',
+          level: 'UNKNOWN',
+          message: line,
+          strippedMessage: line,
+        };
+        rawLogLines.push(orphan as ParsedLogLine);
+        lastEntry = orphan;
+      }
+      // Continuation lines never contain HTTP span patterns; skip HTTP parsing.
+      continue;
+    }
+
+    // === New log entry (line has a leading ISO timestamp) ===
+    const level = extractLogLevel(line);
+    const timestampUs = parseTimestampMicros(isoTimestamp);
+    const displayTime = formatDisplayTime(isoTimestamp);
+    const strippedMessage = stripMessagePrefix(line);
+    const { filePath, sourceLineNumber } = extractSourceLocation(line);
+
+    linesWithTimestamps++;
+
+    const entry: MutableParsedLogLine = {
+      lineNumber: i + 1,
+      rawText: line,
+      isoTimestamp,
+      timestampUs,
+      displayTime,
+      level,
+      message: line,
+      strippedMessage,
+      filePath,
+      sourceLineNumber,
+    };
+    rawLogLines.push(entry as ParsedLogLine);
+    lastEntry = entry;
+
+    // Detect Sentry events
+    if (line.includes(SENTRY_ANDROID_STR)) {
+      sentryEvents.push({ platform: 'android', lineNumber: i + 1, message: line });
+    } else {
+      const iosMatch = line.match(SENTRY_IOS_RE);
+      if (iosMatch) {
+        const sentryId = iosMatch[1];
+        sentryEvents.push({
+          platform: 'ios',
+          lineNumber: i + 1,
+          message: line,
+          sentryId,
+          sentryUrl: `${SENTRY_URL_BASE}${sentryId}`,
+        });
       }
     }
 
@@ -430,9 +493,15 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     }
   }
 
-  // Validate that we found at least some timestamps
-  const timestampPercentage = rawLogLines.length > 0 ? (linesWithTimestamps / rawLogLines.length) * 100 : 0;
-  if (rawLogLines.length > 100 && timestampPercentage < 10) {
+  // Validate that we found at least some timestamps.
+  // Gate on physical file size (totalNonEmptyLines) so short test snippets aren't
+  // rejected. Use logical entry count (rawLogLines.length) as the ratio denominator
+  // instead of physical lines — this prevents a valid log dominated by large
+  // multi-line entries from being wrongly rejected because continuation lines inflate
+  // the denominator and dilute the apparent timestamp density.
+  const logicalEntryCount = rawLogLines.length;
+  const timestampPercentage = logicalEntryCount > 0 ? (linesWithTimestamps / logicalEntryCount) * 100 : 0;
+  if (totalNonEmptyLines > 100 && timestampPercentage < 10) {
     throw new ParsingError(
       'Log file appears to be invalid. Please ensure this is a valid rageshake log file.',
       'error'

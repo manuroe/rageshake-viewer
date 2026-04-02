@@ -101,6 +101,11 @@ export interface LogParserResult {
  */
 export interface ParsedLogLine {
   readonly lineNumber: number;
+  /**
+   * Full raw text of this logical log entry, including any continuation lines
+   * joined with `\n`. Used for search matching so queries can find text that
+   * appears in continuation lines (e.g. the body of a multi-line Rust error).
+   */
   readonly rawText: string;
   /** Original ISO 8601 timestamp from log (e.g., "2026-01-26T16:01:13.382222Z") */
   readonly isoTimestamp: ISODateTimeString;
@@ -115,6 +120,15 @@ export interface ParsedLogLine {
   readonly filePath?: string;
   /** Source file line number extracted from log */
   readonly sourceLineNumber?: number;
+  /**
+   * Physical lines that follow this log entry's first line and share its logical
+   * record — i.e. lines that have no leading ISO timestamp and belong to the
+   * same structured log message (e.g. a multi-line Rust error value).
+   * Absent (undefined) for the common single-line case — intentionally omitted
+   * rather than set to [] to keep object memory footprint small and preserve
+   * cache efficiency when iterating large log arrays.
+   */
+  readonly continuationLines?: readonly string[];
 }
 
 export type LogLevel = 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'UNKNOWN';

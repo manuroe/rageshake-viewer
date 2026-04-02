@@ -165,6 +165,7 @@ describe('LogActivityChart', () => {
         level: 'INFO',
         message: 'message',
         strippedMessage: 'message',
+        continuationLines: [],
       });
     }
 
@@ -424,6 +425,7 @@ describe('LogActivityChart', () => {
         level: 'INFO',
         message: 'message 0',
         strippedMessage: 'message 0',
+        continuationLines: [],
       },
     ];
 

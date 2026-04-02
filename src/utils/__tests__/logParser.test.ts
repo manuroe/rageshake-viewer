@@ -202,6 +202,138 @@ describe('logParser', () => {
       });
     });
 
+    describe('multi-line log entries', () => {
+      // Reproduces the real-world case from the bug report: a Rust ERROR that spans
+      // many physical lines followed by a normal INFO line on its own line.
+      const MULTI_LINE_ERROR = [
+        '2026-04-01T09:18:52.057456Z ERROR matrix_sdk_ui::sync_service: Error while processing room list in sync service: Some(',
+        '    RoomList(',
+        '        SlidingSync(',
+        '            Http(',
+        '                Api(',
+        '                    Server(',
+        '                        ClientApi(',
+        '                            Error {',
+        '                                status_code: 404,',
+        '                                body: Standard(',
+        '                                    StandardErrorBody {',
+        '                                        kind: NotFound,',
+        '                                        message: "Could not find room_version for !aroomid:example.org",',
+        '                                    },',
+        '                                ),',
+        '                            },',
+        '                        ),',
+        '                    ),',
+        '                ),',
+        '            ),',
+        '        ),',
+        '    ),',
+        ') | crates/matrix-sdk-ui/src/sync_service.rs:426',
+        '2026-04-01T09:18:52.059145Z  INFO matrix_sdk_ui::sync_service: Entering the offline mode | crates/matrix-sdk-ui/src/sync_service.rs:160 | spans: supervisor task',
+      ].join('\n');
+
+      it('groups continuation lines into the parent entry', () => {
+        const result = parseAllHttpRequests(MULTI_LINE_ERROR);
+
+        // 23 physical lines → 2 logical log entries (1 ERROR + 1 INFO)
+        expect(result.rawLogLines).toHaveLength(2);
+      });
+
+      it('stores continuation lines on the parent entry', () => {
+        const result = parseAllHttpRequests(MULTI_LINE_ERROR);
+        const errorEntry = result.rawLogLines[0];
+
+        // 22 continuation lines (all physical lines after the first)
+        expect(errorEntry.continuationLines).toHaveLength(22);
+        // First continuation line is the indent of "RoomList("
+        expect(errorEntry.continuationLines[0]).toContain('RoomList(');
+        // One of the continuation lines contains the NotFound message
+        expect(errorEntry.continuationLines.some((l) => l.includes('NotFound'))).toBe(true);
+      });
+
+      it('includes continuation text in rawText for search matching', () => {
+        const result = parseAllHttpRequests(MULTI_LINE_ERROR);
+        const errorEntry = result.rawLogLines[0];
+
+        // rawText must span all physical lines so text search can find "NotFound"
+        expect(errorEntry.rawText).toContain('NotFound');
+        expect(errorEntry.rawText).toContain('sync_service.rs:426');
+      });
+
+      it('preserves correct level and timestamp on the parent entry', () => {
+        const result = parseAllHttpRequests(MULTI_LINE_ERROR);
+        const errorEntry = result.rawLogLines[0];
+
+        expect(errorEntry.level).toBe('ERROR');
+        expect(errorEntry.isoTimestamp).toBe('2026-04-01T09:18:52.057456Z');
+        expect(errorEntry.lineNumber).toBe(1);
+      });
+
+      it('parses the following single-line entry independently', () => {
+        const result = parseAllHttpRequests(MULTI_LINE_ERROR);
+        const infoEntry = result.rawLogLines[1];
+
+        expect(infoEntry.level).toBe('INFO');
+        expect(infoEntry.continuationLines).toBeUndefined();
+        expect(infoEntry.isoTimestamp).toBe('2026-04-01T09:18:52.059145Z');
+      });
+
+      it('single-line entries have no continuationLines property', () => {
+        const result = parseAllHttpRequests(INFO_LINE);
+
+        expect(result.rawLogLines[0].continuationLines).toBeUndefined();
+      });
+
+      it('orphaned continuation lines before any timestamp become standalone UNKNOWN entries', () => {
+        // A log that begins with non-timestamped lines before the first real entry.
+        const content = [
+          '    some preamble text with no timestamp',
+          '    another orphaned line',
+          INFO_LINE,
+        ].join('\n');
+
+        const result = parseAllHttpRequests(content);
+
+        // First orphaned line creates a standalone UNKNOWN entry; the second orphaned
+        // line is folded into it as a continuation (lastEntry is set after the first).
+        // The INFO line becomes the second entry.
+        expect(result.rawLogLines).toHaveLength(2);
+        expect(result.rawLogLines[0].level).toBe('UNKNOWN');
+        expect(result.rawLogLines[0].rawText).toContain('some preamble text with no timestamp');
+        expect(result.rawLogLines[0].rawText).toContain('another orphaned line');
+        expect(result.rawLogLines[0].isoTimestamp).toBe('');
+        // The real INFO entry is parsed correctly.
+        expect(result.rawLogLines[1].level).toBe('INFO');
+      });
+
+      it('does not fold continuation lines across a blank-line boundary', () => {
+        // A blank line between the ERROR and a non-timestamped line must prevent
+        // the latter from being folded into the ERROR entry.
+        const content = [
+          '2026-04-01T09:00:00.000000Z ERROR first entry first line',
+          '    continuation of first entry',
+          '',
+          '    this line is after a blank line and must NOT be a continuation',
+          '2026-04-01T09:00:01.000000Z INFO second entry',
+        ].join('\n');
+
+        const result = parseAllHttpRequests(content);
+
+        // The ERROR entry should only have 1 continuation line (not 2)
+        const errorEntry = result.rawLogLines[0];
+        expect(errorEntry.level).toBe('ERROR');
+        expect(errorEntry.continuationLines).toHaveLength(1);
+        expect(errorEntry.continuationLines[0]).toContain('continuation of first entry');
+
+        // The post-blank non-timestamped line becomes a standalone UNKNOWN entry
+        expect(result.rawLogLines[1].level).toBe('UNKNOWN');
+        expect(result.rawLogLines[1].rawText).toContain('this line is after a blank line');
+
+        // The INFO line is a normal third entry
+        expect(result.rawLogLines[2].level).toBe('INFO');
+      });
+    });
+
     describe('duration parsing', () => {
       it('parses millisecond durations', () => {
         const line = RESPONSE_LINE.replace('359.998542ms', '100.5ms');
@@ -401,6 +533,24 @@ describe('logParser', () => {
         const noTimestamps = Array(150).fill('some random text without timestamps').join('\n');
         
         expect(() => parseAllHttpRequests(noTimestamps)).toThrow(ParsingError);
+      });
+
+      it('accepts a valid log dominated by long multi-line stack traces', () => {
+        // A log with a few timestamped entries each followed by many continuation
+        // lines (e.g. a Rust error with a 300-line stack trace). The continuation
+        // lines must not inflate the denominator and cause a false rejection.
+        const header = '2026-01-01T00:00:00.000000Z ERROR matrix-rust-sdk error occurred';
+        const continuationLines = Array(300).fill('    at some::module::function (src/lib.rs:42)');
+        const block = [header, ...continuationLines].join('\n');
+
+        // Two such blocks = 602 physical lines, but only 2 logical entries.
+        const content = [block, block].join('\n');
+
+        const result = parseAllHttpRequests(content);
+        expect(result.rawLogLines).toHaveLength(2);
+        // Each entry must have its 300 continuation lines.
+        expect(result.rawLogLines[0].continuationLines).toHaveLength(300);
+        expect(result.rawLogLines[1].continuationLines).toHaveLength(300);
       });
 
       it('accepts file with mostly valid timestamps', () => {
