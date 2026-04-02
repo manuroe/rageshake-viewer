@@ -200,9 +200,17 @@ export function SummaryView() {
     return spans;
   }, [stats.bandwidthRequestSpans, showMedia, showSync]);
 
-  /** True when at least one chart-worthy HTTP request exists (requests or bandwidth). */
+  /**
+   * True when at least one chart-worthy HTTP request exists.
+   * Includes span arrays so the HTTP Activity section remains visible in
+   * In-flight (concurrent) mode even when no requests start inside the
+   * current zoom window but some overlap it.
+   */
   const hasHttpActivityData =
-    stats.httpRequestsWithTimestamps.length > 0 || stats.httpRequestsWithBandwidth.length > 0;
+    stats.httpRequestsWithTimestamps.length > 0 ||
+    stats.httpRequestsWithBandwidth.length > 0 ||
+    stats.httpRequestSpans.length > 0 ||
+    stats.bandwidthRequestSpans.length > 0;
 
   if (rawLogLines.length === 0) {
     return (
@@ -519,7 +527,7 @@ export function SummaryView() {
                 </div>
               </>
             )}
-            {stats.httpRequestsWithBandwidth.length > 0 && (
+            {(stats.httpRequestsWithBandwidth.length > 0 || stats.bandwidthRequestSpans.length > 0) && (
               <>
                 <h3>
                   Overall bandwidth: ↑ {formatBytes(stats.totalUploadBytes)} / ↓ {formatBytes(stats.totalDownloadBytes)}
