@@ -10,6 +10,8 @@ import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../types/time.types';
 import type { SelectionRange } from '../hooks/useChartInteraction';
 import { formatBytes } from '../utils/sizeUtils';
+import type { StepPoint } from '../utils/concurrencyUtils';
+import { getCountAtTime } from '../utils/concurrencyUtils';
 import { useStepChartInteraction } from '../hooks/useStepChartInteraction';
 
 interface BandwidthConcurrencyChartProps {
@@ -33,11 +35,6 @@ interface BandwidthConcurrencyChartProps {
   height?: number;
 }
 
-interface StepPoint {
-  readonly timeUs: number;
-  readonly value: number;
-}
-
 interface LayerPoint {
   readonly timeUs: number;
   readonly y0: number;
@@ -54,32 +51,6 @@ const SVG_WIDTH = 800;
 const MARGIN = { top: 10, right: 10, bottom: 30, left: 60 };
 const UPLOAD_COLOR = 'var(--bandwidth-upload)';
 const DOWNLOAD_COLOR = 'var(--bandwidth-download)';
-
-function getValueAtTime(points: readonly StepPoint[], timeUs: number): number {
-  if (points.length === 0) return 0;
-  if (timeUs < points[0].timeUs) return 0;
-
-  const lastIndex = points.length - 1;
-  if (timeUs >= points[lastIndex].timeUs) return points[lastIndex].value;
-
-  // Binary search for the last point with timeUs <= target.
-  // Using "keep-right" pattern instead of exact-match early return so that
-  // duplicate timestamps (emitted as step pairs by computeStepSeries) always
-  // resolve to the second — post-delta — value.
-  let lo = 0;
-  let hi = lastIndex;
-  let resultIndex = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (points[mid].timeUs <= timeUs) {
-      resultIndex = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return resultIndex >= 0 ? points[resultIndex].value : 0;
-}
 
 function computeStepSeries(
   spans: readonly BandwidthRequestSpan[],
@@ -105,17 +76,17 @@ function computeStepSeries(
   }
 
   const sortedTimes = Array.from(deltas.keys()).sort((a, b) => a - b);
-  const points: StepPoint[] = [{ timeUs: minTime, value: 0 }];
+  const points: StepPoint[] = [{ timeUs: minTime, count: 0 }];
   let running = 0;
 
   for (const t of sortedTimes) {
-    if (t > minTime) points.push({ timeUs: t, value: running });
+    if (t > minTime) points.push({ timeUs: t, count: running });
     running += deltas.get(t) ?? 0;
-    points.push({ timeUs: t, value: Math.max(0, running) });
+    points.push({ timeUs: t, count: Math.max(0, running) });
   }
 
   if (points[points.length - 1]?.timeUs !== maxTime) {
-    points.push({ timeUs: maxTime, value: Math.max(0, running) });
+    points.push({ timeUs: maxTime, count: Math.max(0, running) });
   }
 
   return points.sort((a, b) => a.timeUs - b.timeUs);
@@ -165,8 +136,8 @@ export function BandwidthConcurrencyChart({
     const downloadLayer: LayerPoint[] = [];
     const uploadLayer: LayerPoint[] = [];
     for (const t of sortedTimes) {
-      const download = getValueAtTime(downloadSeries, t);
-      const upload = getValueAtTime(uploadSeries, t);
+      const download = getCountAtTime(downloadSeries, t);
+      const upload = getCountAtTime(uploadSeries, t);
       downloadLayer.push({ timeUs: t, y0: 0, y1: download });
       uploadLayer.push({ timeUs: t, y0: download, y1: download + upload });
     }
@@ -206,8 +177,8 @@ export function BandwidthConcurrencyChart({
   const getTooltipData = useCallback(
     (timeUs: number): TooltipData => ({
       timeUs,
-      downloadBytes: getValueAtTime(downloadSeries, timeUs),
-      uploadBytes: getValueAtTime(uploadSeries, timeUs),
+      downloadBytes: getCountAtTime(downloadSeries, timeUs),
+      uploadBytes: getCountAtTime(uploadSeries, timeUs),
     }),
     [downloadSeries, uploadSeries],
   );
