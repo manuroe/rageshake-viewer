@@ -55,8 +55,10 @@ export function SummaryView() {
   const [showIncomplete, setShowIncomplete] = useState(true);
   // Toggle to show/hide /sync requests (identified by a defined timeout field) in the HTTP chart
   const [showSync, setShowSync] = useState(true);
-  // Toggle to show/hide media requests (paths containing /media/) in the bandwidth chart
-  const [showMedia, setShowMedia] = useState(true);
+  // Toggle to show/hide media requests (paths containing /media/) in the bandwidth chart.
+  // Defaults to false (hidden) because media transfers are typically multi-MB outliers
+  // that compress the y-axis scale and make smaller API traffic invisible.
+  const [showMedia, setShowMedia] = useState(false);
 
   // Precompute min/max across ALL raw log lines (keyword anchor)
   const fullDataRange = useMemo(() => {

@@ -454,8 +454,11 @@ export function computeSummaryStats(
   }
 
   // ── Request-level bandwidth spans (start → end, for in-flight area mode) ─────
+  // Use allHttpRequests and filter by span overlap with the active time range so
+  // in-flight requests and requests spanning the boundary are included correctly.
+  // `computeStepSeries` clamps each span to the chart domain.
   const bandwidthRequestSpans: BandwidthRequestSpan[] = [];
-  for (const req of filteredHttpRequests) {
+  for (const req of allHttpRequests) {
     if (req.requestSize <= 0 && req.responseSize <= 0) continue;
 
     const startUs =
@@ -466,6 +469,14 @@ export function computeSummaryStats(
     if (!startUs) continue;
 
     const endUs = req.responseLineNumber ? getLineTimestampUs(req.responseLineNumber) : null;
+
+    // Span must overlap [timeRangeUs.startUs, timeRangeUs.endUs]:
+    // startUs must be before the range end, and endUs (if known) must be after the range start.
+    if (timeRangeUs) {
+      if (startUs >= timeRangeUs.endUs) continue;
+      if (endUs !== null && endUs <= timeRangeUs.startUs) continue;
+    }
+
     const timeout = timeoutByRequestId.get(req.requestId);
 
     bandwidthRequestSpans.push({
@@ -481,8 +492,10 @@ export function computeSummaryStats(
   // ── HTTP request spans (start → end, for concurrent in-flight chart) ────────
   // One span per logical request — retries are NOT expanded (the whole request
   // is considered in-flight from the first send to the final response).
+  // Use allHttpRequests and filter by span overlap so requests that start inside
+  // the window but finish outside it, and in-flight requests, are included.
   const httpRequestSpans: HttpRequestSpan[] = [];
-  for (const req of filteredHttpRequests) {
+  for (const req of allHttpRequests) {
     // Prefer the first attempt timestamp when available; fall back to sendLineNumber.
     const startUs =
       (req.attemptTimestampsUs?.[0] ?? 0) > 0
@@ -493,6 +506,13 @@ export function computeSummaryStats(
 
     const endUs =
       req.responseLineNumber ? getLineTimestampUs(req.responseLineNumber) : null;
+
+    // Span must overlap [timeRangeUs.startUs, timeRangeUs.endUs]:
+    // startUs must be before the range end, and endUs (if known) must be after the range start.
+    if (timeRangeUs) {
+      if (startUs >= timeRangeUs.endUs) continue;
+      if (endUs !== null && endUs <= timeRangeUs.startUs) continue;
+    }
 
     const timeout = timeoutByRequestId.get(req.requestId);
     const status = req.clientError ? CLIENT_ERROR_CHART_STATUS : (req.status ?? '');

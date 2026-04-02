@@ -1486,20 +1486,20 @@ describe('SummaryView', () => {
       useLogStore.getState().setHttpRequests([req], lines);
     });
 
-    it('renders the "Media" checkbox checked by default', () => {
+    it('renders the "Media" checkbox unchecked by default (media hidden to avoid scale compression)', () => {
       renderSummaryView();
       const checkbox = screen.getByRole('checkbox', { name: /media/i });
       expect(checkbox).toBeInTheDocument();
-      expect(checkbox).toBeChecked();
+      expect(checkbox).not.toBeChecked();
     });
 
     it('toggles "Media" checkbox on and off', () => {
       renderSummaryView();
       const checkbox = screen.getByRole('checkbox', { name: /media/i });
       act(() => { fireEvent.click(checkbox); });
-      expect(checkbox).not.toBeChecked();
-      act(() => { fireEvent.click(checkbox); });
       expect(checkbox).toBeChecked();
+      act(() => { fireEvent.click(checkbox); });
+      expect(checkbox).not.toBeChecked();
     });
   });
 });

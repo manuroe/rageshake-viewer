@@ -97,7 +97,7 @@ function computeStepSeries(
 
     const startUs = Math.max(minTime, span.startUs);
     const endUs = Math.min(maxTime, span.endUs ?? maxTime);
-    if (endUs < startUs) continue;
+    if (endUs <= startUs) continue;
 
     addDelta(startUs, bytes);
     addDelta(endUs, -bytes);
