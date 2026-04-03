@@ -153,6 +153,7 @@ export function RequestTable({
   const displayedRequests = showSyncRequests
     ? filteredRequests
     : filteredRequests.filter((req) => !isSyncRequest(req));
+  const isEmpty = displayedRequests.length === 0;
 
   // Log filter state with debouncing
   const [logFilterInput, setLogFilterInput] = useState(logFilter ?? '');
@@ -505,18 +506,19 @@ export function RequestTable({
 
         <div className={styles.scrollContent}>
           <div className={styles.timelineContent}>
-            {displayedRequests.length === 0 && (
+            {isEmpty && (
               <div className={styles.noData}>{emptyMessage}</div>
             )}
             {/* Always keep both panels mounted so useScrollSync listeners stay attached even when the
                 list temporarily becomes empty (e.g. mid-filter). Hiding with display:none rather than
                 conditional rendering prevents the refs from going null and breaking scroll sync. */}
             <div
+              data-testid="request-table-scroll-wrapper"
               className={styles.timelineContentWrapper}
-              style={displayedRequests.length === 0 ? { display: 'none' } : undefined}
+              style={isEmpty ? { display: 'none' } : undefined}
             >
                 {/* Left panel - sticky columns */}
-                <div className={styles.timelineRowsLeft} ref={leftPanelRef}>
+                <div data-testid="request-table-left-scroll" className={styles.timelineRowsLeft} ref={leftPanelRef}>
                   {displayedRequests.map((req) => {
                     const rowKey = getRowKey(req);
                     return (
@@ -572,7 +574,7 @@ export function RequestTable({
                 </div>
 
                 {/* Right panel - waterfall */}
-                <div className={styles.timelineRowsRight} ref={waterfallContainerRef}>
+                <div data-testid="request-table-right-scroll" className={styles.timelineRowsRight} ref={waterfallContainerRef}>
                   <div style={{ display: 'flex', flexDirection: 'column', width: `${timeline.totalWidthPx}px`, position: 'relative' }}>
                     {displayedRequests.map((req) => {
                       const sendLine = lineNumberIndex.get(req.sendLineNumber);

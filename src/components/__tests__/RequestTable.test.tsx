@@ -148,6 +148,49 @@ describe('RequestTable', () => {
       expect(screen.getByText('No requests found')).toBeInTheDocument();
     });
 
+    it('keeps scroll containers mounted when transitioning through empty filtered state', () => {
+      const requests = createRequests(2);
+      const rawLines = [
+        createParsedLogLine({ lineNumber: 0, timestampUs: 1700000000000000 }),
+        createParsedLogLine({ lineNumber: 1, timestampUs: 1700000001000000 }),
+        createParsedLogLine({ lineNumber: 2, timestampUs: 1700000002000000 }),
+        createParsedLogLine({ lineNumber: 3, timestampUs: 1700000003000000 }),
+      ];
+      useLogStore.getState().setHttpRequests(requests, rawLines);
+
+      const { rerender } = renderWithRouter(
+        <RequestTable {...createProps({ filteredRequests: [requests[0]], totalCount: 2 })} />
+      );
+
+      const initialWrapper = screen.getByTestId('request-table-scroll-wrapper');
+      const initialLeft = screen.getByTestId('request-table-left-scroll');
+      const initialRight = screen.getByTestId('request-table-right-scroll');
+
+      rerender(
+        <MemoryRouter initialEntries={['/http_requests']}>
+          <RequestTable {...createProps({ filteredRequests: [], totalCount: 2 })} />
+        </MemoryRouter>
+      );
+
+      expect(screen.getByText('No requests found')).toBeInTheDocument();
+      expect(screen.getByTestId('request-table-scroll-wrapper')).toBe(initialWrapper);
+      expect(screen.getByTestId('request-table-left-scroll')).toBe(initialLeft);
+      expect(screen.getByTestId('request-table-right-scroll')).toBe(initialRight);
+      expect(initialWrapper).toHaveStyle({ display: 'none' });
+
+      rerender(
+        <MemoryRouter initialEntries={['/http_requests']}>
+          <RequestTable {...createProps({ filteredRequests: [requests[1]], totalCount: 2 })} />
+        </MemoryRouter>
+      );
+
+      expect(screen.queryByText('No requests found')).not.toBeInTheDocument();
+      expect(screen.getByTestId('request-table-scroll-wrapper')).toBe(initialWrapper);
+      expect(screen.getByTestId('request-table-left-scroll')).toBe(initialLeft);
+      expect(screen.getByTestId('request-table-right-scroll')).toBe(initialRight);
+      expect(initialWrapper.style.display).toBe('');
+    });
+
     it('renders headerSlot when provided', () => {
       renderWithRouter(<RequestTable {...createProps({
         headerSlot: <div data-testid="custom-slot">Custom Header</div>
