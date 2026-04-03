@@ -8,6 +8,12 @@
 }
 
 .timelineContent {
+    /* Column widths shared between the sticky header and sticky row cells.
+       Changing a value here updates all four grid-template-columns at once. */
+    --col-status: 70px;
+    --col-url: 400px;
+    --col-duration: 115px;
+    --col-action: 45px;
     flex: 1;
     overflow: hidden;
     position: relative;
@@ -103,7 +109,7 @@
 
 .timelineHeaderSticky {
     display: grid;
-    grid-template-columns: 70px 400px 115px 45px 45px 45px;
+    grid-template-columns: var(--col-status) var(--col-url) var(--col-duration) var(--col-action) var(--col-action) var(--col-action);
     gap: 8px;
     padding: 4px 16px;
     background: var(--bg-primary);
@@ -114,7 +120,7 @@
 
 /* SyncView has different columns */
 :global(.sync-view) .timelineHeaderSticky {
-    grid-template-columns: 70px 115px 45px 45px;
+    grid-template-columns: var(--col-status) var(--col-duration) var(--col-action) var(--col-action);
     gap: 6px;
     padding: 3px 12px;
 }
@@ -135,7 +141,7 @@
 
 .requestRowSticky {
     display: grid;
-    grid-template-columns: 70px 400px 115px 45px 45px 45px;
+    grid-template-columns: var(--col-status) var(--col-url) var(--col-duration) var(--col-action) var(--col-action) var(--col-action);
     position: relative;
     gap: 8px;
     padding: 4px 16px;
@@ -148,7 +154,7 @@
 
 /* SyncView has different columns */
 :global(.sync-view) .requestRowSticky {
-    grid-template-columns: 70px 115px 45px 45px;
+    grid-template-columns: var(--col-status) var(--col-duration) var(--col-action) var(--col-action);
     gap: 6px;
     padding: 3px 12px;
 }
@@ -364,7 +370,7 @@
     /* sticky keeps the pill in the viewport as the user scrolls down through rows */
     position: sticky;
     top: 8px;
-    font-size: 9px;
+    font-size: var(--font-size-xs);
     font-family: var(--font-mono);
     color: var(--gap-label-color);
     white-space: nowrap;

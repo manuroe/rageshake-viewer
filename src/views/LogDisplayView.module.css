@@ -159,8 +159,10 @@
     font-size: var(--font-size-base);
     line-height: 1.5;
     /* Force dark-theme tokens for all descendants (e.g. RowTimeAction menu)
-       so they remain readable regardless of the current app colour scheme. */
-    --bg-primary: #1e1e1e;
+       so they remain readable regardless of the current app colour scheme.
+       These pin the dark-mode values of the foundation tokens — they cannot
+       reference var(--token) here because that would be circular. */
+    --bg-primary: var(--log-bg);
     --bg-hover: #3d3d3d;
     --border-default: #4d4d4d;
     --text-primary: #e0e0e0;
@@ -250,6 +252,7 @@
        wrap. The nowrap override below switches to pre so content scrolls instead. */
     white-space: pre-wrap;
     overflow: hidden;
+    word-break: break-word;
 }
 
 /* In nowrap mode: keep continuation text on one line and let it scroll. */
@@ -327,7 +330,7 @@
 /* Search Highlight */
 .searchHighlight {
     background: var(--log-search-highlight);
-    color: #000;
+    color: var(--log-search-highlight-text);
     padding: 0 2px;
     border-radius: var(--radius-sm);
     font-weight: 600;
@@ -337,7 +340,7 @@
 .logEmptyState {
     text-align: center;
     padding: 60px 20px;
-    color: #e0e0e0;
+    color: var(--log-text);
     background: var(--log-bg);
     font-size: var(--font-size-lg);
     font-weight: 500;
@@ -368,7 +371,7 @@
     background: var(--bg-tertiary);
     padding: 16px;
     height: 500px;
-    overflow: hidden;
+    overflow: auto;
 }
 
 /* Log Gap Controls */
@@ -406,26 +409,26 @@
     height: 10px;
     padding: 0;
     margin: 0;
-    background: rgba(80, 80, 80, 0.5);
-    border: 1px solid #555;
-    border-radius: 2px;
-    color: #aaa;
+    background: var(--log-gap-arrow-bg);
+    border: 1px solid var(--log-gap-arrow-border);
+    border-radius: var(--radius-sm);
+    color: var(--log-gap-arrow-text);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s;
+    transition: all var(--transition-default);
 }
 
 .logGapArrow:hover {
-    color: #fff;
-    background: rgba(100, 100, 100, 0.8);
-    border-color: #888;
+    color: var(--text-primary);
+    background: var(--log-gap-arrow-bg-hover);
+    border-color: var(--log-gap-arrow-border-hover);
 }
 
 .logGapArrow:active {
-    color: #fff;
-    background: rgba(120, 120, 120, 0.9);
+    color: var(--text-primary);
+    background: var(--log-gap-arrow-bg-active);
 }
 
 .logGapArrow svg {
