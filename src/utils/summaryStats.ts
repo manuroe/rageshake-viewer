@@ -369,6 +369,7 @@ export function computeSummaryStats(
                   (attemptIndex === lastValidIndex ? finalStatus : undefined),
               ),
               timestampUs,
+              uri: req.uri,
               ...(timeout !== undefined && { timeout }),
             };
           })
@@ -385,6 +386,7 @@ export function computeSummaryStats(
         requestId: req.requestId,
         status: finalStatus,
         timestampUs: sendTimestampUs,
+        uri: req.uri,
         ...(timeout !== undefined && { timeout }),
       },
     ];
@@ -432,6 +434,7 @@ export function computeSummaryStats(
             downloadBytes: req.responseSize,
             uri: req.uri,
             status: req.status,
+            isIncomplete: false,
             ...(timeoutByRequestId.has(req.requestId) && { timeout: timeoutByRequestId.get(req.requestId) }),
           });
         }
@@ -447,6 +450,7 @@ export function computeSummaryStats(
             downloadBytes: 0,
             uri: req.uri,
             status: req.clientError ? CLIENT_ERROR_CHART_STATUS : '',
+            isIncomplete: true,
             ...(timeoutByRequestId.has(req.requestId) && { timeout: timeoutByRequestId.get(req.requestId) }),
           });
         }
@@ -532,6 +536,7 @@ export function computeSummaryStats(
       startUs,
       endUs: endUs ?? null,
       status,
+      uri: req.uri,
       ...(timeout !== undefined && { timeout }),
     });
   }

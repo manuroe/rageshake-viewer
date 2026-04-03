@@ -18,6 +18,7 @@ function makeEntry(
     downloadBytes: 4096,
     uri: 'https://matrix.example.org/_matrix/client/v3/sync',
     status: '200 OK',
+    isIncomplete: false,
     ...overrides,
   };
 }

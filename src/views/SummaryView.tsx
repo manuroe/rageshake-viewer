@@ -178,32 +178,36 @@ export function SummaryView() {
     let reqs = stats.httpRequestsWithTimestamps;
     if (!showIncomplete) reqs = reqs.filter((r) => r.status !== '');
     if (!showSync) reqs = reqs.filter(isNotSync);
+    if (!showMedia) reqs = reqs.filter((r) => !MEDIA_PATH_RE.test(r.uri));
     return reqs;
-  }, [stats.httpRequestsWithTimestamps, showIncomplete, showSync]);
+  }, [stats.httpRequestsWithTimestamps, showIncomplete, showSync, showMedia]);
 
   const httpRequestSpansForChart = useMemo(() => {
     let spans = stats.httpRequestSpans;
     if (!showIncomplete) spans = spans.filter((s) => s.endUs !== null);
     if (!showSync) spans = spans.filter(isNotSync);
+    if (!showMedia) spans = spans.filter((s) => !MEDIA_PATH_RE.test(s.uri));
     return spans;
-  }, [stats.httpRequestSpans, showIncomplete, showSync]);
+  }, [stats.httpRequestSpans, showIncomplete, showSync, showMedia]);
 
-  /** Bandwidth chart requests, filtered by media and sync toggles. */
+  /** Bandwidth chart requests, filtered by media, sync, and incomplete toggles. */
   const bandwidthRequestsForChart = useMemo(() => {
     let reqs = stats.httpRequestsWithBandwidth;
     if (!showMedia) reqs = reqs.filter((r) => !MEDIA_PATH_RE.test(r.uri));
     if (!showSync) reqs = reqs.filter(isNotSync);
+    if (!showIncomplete) reqs = reqs.filter((r) => !r.isIncomplete);
     return reqs;
-  }, [stats.httpRequestsWithBandwidth, showMedia, showSync]);
+  }, [stats.httpRequestsWithBandwidth, showMedia, showSync, showIncomplete]);
 
-  /** Bandwidth chart request spans, filtered by media and sync toggles. */
+  /** Bandwidth chart request spans, filtered by media, sync, and incomplete toggles. */
   const bandwidthSpansForChart = useMemo(() => {
 
     let spans = stats.bandwidthRequestSpans;
     if (!showMedia) spans = spans.filter((r) => !MEDIA_PATH_RE.test(r.uri));
     if (!showSync) spans = spans.filter(isNotSync);
+    if (!showIncomplete) spans = spans.filter((s) => s.endUs !== null);
     return spans;
-  }, [stats.bandwidthRequestSpans, showMedia, showSync]);
+  }, [stats.bandwidthRequestSpans, showMedia, showSync, showIncomplete]);
 
   /**
    * True when at least one chart-worthy HTTP request exists.

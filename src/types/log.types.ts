@@ -52,6 +52,8 @@ export interface HttpRequestWithTimestamp {
   readonly requestId: string;
   readonly status: string;
   readonly timestampUs: TimestampMicros;
+  /** Full request URI — used by consumers to filter by path (e.g. hide /media/ uploads). */
+  readonly uri: string;
   /** Timeout in ms when this is a /sync request; 0 = catch-up, ≥30000 = long-poll. */
   readonly timeout?: number;
 }
@@ -74,6 +76,8 @@ export interface HttpRequestSpan {
   /** Response (or error) timestamp; `null` when the request is still in-flight. */
   readonly endUs: TimestampMicros | null;
   readonly status: string;
+  /** Full request URI — used by consumers to filter by path (e.g. hide /media/ uploads). */
+  readonly uri: string;
   /** Timeout in ms when this is a /sync request; 0 = catch-up, ≥30000 = long-poll. */
   readonly timeout?: number;
 }
@@ -93,6 +97,8 @@ export interface BandwidthRequestEntry {
   readonly downloadBytes: number;
   /** Full request URI — used by consumers to filter by path (e.g. hide /media/ uploads). */
   readonly uri: string;
+  /** True when no response has been received yet; the entry carries upload bytes only. */
+  readonly isIncomplete: boolean;
   /**
    * HTTP status string (e.g. `'200 OK'`, `'client-error'`, `''` for incomplete).
    * Mirrors {@link HttpRequest.status} so the bandwidth chart can colour bars by

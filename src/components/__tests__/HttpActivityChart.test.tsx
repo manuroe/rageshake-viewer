@@ -12,6 +12,7 @@ function makeReq(overrides: Partial<HttpRequestWithTimestamp> = {}): HttpRequest
     requestId: 'R-1',
     status: '200',
     timestampUs: (2_000 * MICROS_PER_MILLISECOND) as TimestampMicros, // 2 s
+    uri: '/_matrix/client/v3/sync',
     ...overrides,
   };
 }
@@ -293,6 +294,7 @@ function makeSpan(overrides: Partial<HttpRequestSpan> = {}): HttpRequestSpan {
     startUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
     endUs: (3_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
     status: '200',
+    uri: '/_matrix/client/v3/sync',
     ...overrides,
   };
 }

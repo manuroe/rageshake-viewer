@@ -400,6 +400,7 @@ describe('computeSummaryStats — httpRequestsWithTimestamps', () => {
         requestId: 'STARTS-IN',
         status: '200',
         timestampUs: rawLines[1].timestampUs,
+        uri: 'https://matrix.example.org/_matrix/client/v3/sync?request=1',
       },
     ]);
     expect(result.httpRequestCount).toBe(1);
@@ -428,11 +429,13 @@ describe('computeSummaryStats — httpRequestsWithTimestamps', () => {
         requestId: 'RETRY-STARTS',
         status: '503',
         timestampUs: rawLines[0].timestampUs,
+        uri: 'https://matrix.example.org/_matrix/client/v3/sync?request=0',
       },
       {
         requestId: 'RETRY-STARTS',
         status: '200',
         timestampUs: rawLines[2].timestampUs,
+        uri: 'https://matrix.example.org/_matrix/client/v3/sync?request=0',
       },
     ]);
     expect(result.httpRequestCount).toBe(1);
