@@ -505,10 +505,16 @@ export function RequestTable({
 
         <div className={styles.scrollContent}>
           <div className={styles.timelineContent}>
-            {displayedRequests.length === 0 ? (
+            {displayedRequests.length === 0 && (
               <div className={styles.noData}>{emptyMessage}</div>
-            ) : (
-              <div className={styles.timelineContentWrapper}>
+            )}
+            {/* Always keep both panels mounted so useScrollSync listeners stay attached even when the
+                list temporarily becomes empty (e.g. mid-filter). Hiding with display:none rather than
+                conditional rendering prevents the refs from going null and breaking scroll sync. */}
+            <div
+              className={styles.timelineContentWrapper}
+              style={displayedRequests.length === 0 ? { display: 'none' } : undefined}
+            >
                 {/* Left panel - sticky columns */}
                 <div className={styles.timelineRowsLeft} ref={leftPanelRef}>
                   {displayedRequests.map((req) => {
@@ -702,11 +708,11 @@ export function RequestTable({
                   </div>
                 </div>
               </div>
-            )}
           </div>
         </div>
 
         {renderExpandedLogViewer()}
+
       </div>
     </div>
   );
