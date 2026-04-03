@@ -1,40 +1,12 @@
 import { useMemo, useCallback } from 'react';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_SECOND, MICROS_PER_MILLISECOND } from '../types/time.types';
-import { BaseActivityChart } from './BaseActivityChart';
-import { formatBytes } from '../utils/sizeUtils';
 import type { BandwidthRequestEntry, BandwidthRequestSpan } from '../types/log.types';
 import { renderBandwidthTooltip, type BandwidthBucket } from './BandwidthChartTooltip';
 import type { SelectionRange } from '../hooks/useChartInteraction';
 import { BandwidthConcurrencyChart } from './BandwidthConcurrencyChart';
-
-/**
- * Upload category key for the bandwidth stacked bar chart.
- * Rendered on top of the download bar so the upward direction is visually
- * associated with "sending" data.
- */
-const UPLOAD_KEY = 'upload' as const;
-
-/**
- * Download category key for the bandwidth stacked bar chart.
- * Rendered at the bottom of each bar — downloads are typically dominant and
- * placing them at the base keeps the chart stable.
- */
-const DOWNLOAD_KEY = 'download' as const;
-
-type BandwidthCategory = typeof UPLOAD_KEY | typeof DOWNLOAD_KEY;
-
-/** Blue — consistent with the "outgoing/send" direction convention. */
-const UPLOAD_COLOR = 'var(--bandwidth-upload)';
-
-/** Orange — distinct from the upload blue and from HTTP status greens/reds. */
-const DOWNLOAD_COLOR = 'var(--bandwidth-download)';
-
-/**
- * Stacking order: download at bottom (largest contributor, visual anchor),
- * upload on top.
- */
-const CATEGORIES: BandwidthCategory[] = [DOWNLOAD_KEY, UPLOAD_KEY];
+import { BandwidthHistogramChart } from './BandwidthHistogramChart';
+import { getBucketKey, sortStatusCodes } from '../utils/httpStatusBuckets';
 
 interface BandwidthChartProps {
   /** Bandwidth data points to chart, one per HTTP request. */
@@ -65,13 +37,14 @@ interface BandwidthChartProps {
 /**
  * Bandwidth chart component.
  *
- * Plots HTTP bandwidth (upload and download bytes) aggregated into ~100 time
- * buckets as a stacked bar chart. The bucket resolution matches
- * `HttpActivityChart` so bandwidth peaks align with request-count peaks when
- * both charts are displayed together in `SummaryView`.
+ * Plots HTTP bandwidth (upload and download bytes) as a **mirrored diverging bar chart**:
+ * upload bytes (sent) stack **above** the zero line; download bytes (received) stack
+ * **below** it.  Each direction is broken down by HTTP status bucket and coloured with
+ * the same palette as `HttpActivityChart`, giving a coherent cross-chart colour language.
  *
- * The y-axis displays human-readable byte labels (B / KB / MB) via
- * `formatBytes`, which is passed to `BaseActivityChart` as `yAxisTickFormat`.
+ * Data is aggregated into ~100 time buckets matching the `HttpActivityChart` resolution so
+ * bandwidth peaks align with request-count peaks when both charts are displayed together
+ * in `SummaryView`.
  *
  * @example
  * <BandwidthChart
@@ -103,7 +76,9 @@ export function BandwidthChart({
     if (displayMode === 'concurrent') {
       return {
         buckets: [] as BandwidthBucket[],
-        maxCount: 0,
+        maxDownload: 0,
+        maxUpload: 0,
+        statusKeys: [] as string[],
         minTime: timeRange.minTime,
         maxTime: timeRange.maxTime,
       };
@@ -114,7 +89,9 @@ export function BandwidthChart({
     if (minTime === 0 && maxTime === 0) {
       return {
         buckets: [] as BandwidthBucket[],
-        maxCount: 0,
+        maxDownload: 0,
+        maxUpload: 0,
+        statusKeys: [] as string[],
         minTime: 0 as TimestampMicros,
         maxTime: 0 as TimestampMicros,
       };
@@ -139,46 +116,41 @@ export function BandwidthChart({
         timestamp: k,
         timeLabel: formatTime(k),
         total: 0,
-        uploadBytes: 0,
-        downloadBytes: 0,
+        totalDownload: 0,
+        totalUpload: 0,
+        downloadByStatus: {},
+        uploadByStatus: {},
       });
     }
+
+    const allStatusKeys = new Set<string>();
 
     for (const req of requests) {
       const k = Math.floor(req.timestampUs / bucketSize) * bucketSize;
       const bucket = bucketMap.get(k);
       if (bucket) {
-        bucket.uploadBytes += req.uploadBytes;
-        bucket.downloadBytes += req.downloadBytes;
-        bucket.total += req.uploadBytes + req.downloadBytes;
+        const statusKey = getBucketKey({ status: req.status, timeout: req.timeout });
+        allStatusKeys.add(statusKey);
+        bucket.downloadByStatus[statusKey] =
+          (bucket.downloadByStatus[statusKey] ?? 0) + req.downloadBytes;
+        bucket.uploadByStatus[statusKey] =
+          (bucket.uploadByStatus[statusKey] ?? 0) + req.uploadBytes;
+        bucket.totalDownload += req.downloadBytes;
+        bucket.totalUpload += req.uploadBytes;
+        bucket.total += req.downloadBytes + req.uploadBytes;
       }
     }
 
     const dataBuckets = Array.from(bucketMap.values()).sort((a, b) => a.timestamp - b.timestamp);
-    const maxCount = Math.max(...dataBuckets.map((b) => b.total), 1);
-    return { buckets: dataBuckets, maxCount, minTime, maxTime };
+    const maxDownload = Math.max(...dataBuckets.map((b) => b.totalDownload), 1);
+    const maxUpload = Math.max(...dataBuckets.map((b) => b.totalUpload), 1);
+    const statusKeys = sortStatusCodes(Array.from(allStatusKeys));
+
+    return { buckets: dataBuckets, maxDownload, maxUpload, statusKeys, minTime, maxTime };
   }, [displayMode, requests, timeRange, formatTime]);
-
-  const getCategoryColor = useCallback(
-    (category: BandwidthCategory): string =>
-      category === UPLOAD_KEY ? UPLOAD_COLOR : DOWNLOAD_COLOR,
-    [],
-  );
-
-  const getCategoryCount = useCallback(
-    (bucket: BandwidthBucket, category: BandwidthCategory): number =>
-      category === UPLOAD_KEY ? bucket.uploadBytes : bucket.downloadBytes,
-    [],
-  );
 
   const renderTooltipContent = useCallback(
     (bucket: BandwidthBucket) => renderBandwidthTooltip(bucket),
-    [],
-  );
-
-  /** Format y-axis tick values as human-readable byte sizes (B / KB / MB). */
-  const yAxisTickFormat = useCallback(
-    (value: { valueOf(): number }): string => formatBytes(value.valueOf()),
     [],
   );
 
@@ -206,19 +178,16 @@ export function BandwidthChart({
   }
 
   return (
-    <BaseActivityChart
+    <BandwidthHistogramChart
       buckets={chartData.buckets}
-      maxCount={chartData.maxCount}
+      maxDownload={chartData.maxDownload}
+      maxUpload={chartData.maxUpload}
+      statusKeys={chartData.statusKeys}
       minTime={chartData.minTime}
       maxTime={chartData.maxTime}
-      categories={CATEGORIES}
-      getCategoryColor={getCategoryColor}
-      getCategoryCount={getCategoryCount}
       renderTooltipContent={renderTooltipContent}
       onTimeRangeSelected={onTimeRangeSelected}
       onResetZoom={onResetZoom}
-      emptyMessage="No bandwidth data to display"
-      yAxisTickFormat={yAxisTickFormat}
       marginLeft={60}
       externalCursorTime={externalCursorTime}
       externalSelection={externalSelection}

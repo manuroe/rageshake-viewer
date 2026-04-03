@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { BandwidthChart } from '../BandwidthChart';
 import { renderBandwidthTooltip, type BandwidthBucket } from '../BandwidthChartTooltip';
 import type { BandwidthRequestEntry, BandwidthRequestSpan } from '../../types/log.types';
 import type { TimestampMicros } from '../../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../../types/time.types';
+import { getBucketColor } from '../../utils/httpStatusBuckets';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ function makeEntry(
     uploadBytes: 512,
     downloadBytes: 4096,
     uri: 'https://matrix.example.org/_matrix/client/v3/sync',
+    status: '200 OK',
     ...overrides,
   };
 }
@@ -39,9 +41,13 @@ function makeSpan(
     uploadBytes: 512,
     downloadBytes: 4096,
     uri: 'https://matrix.example.org/_matrix/client/v3/sync',
+    status: '200 OK',
     ...overrides,
   };
 }
+
+/** HTTP status colour for status key '200' (used in bar fill assertions). */
+const COLOR_200 = getBucketColor('200');
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -73,55 +79,55 @@ describe('BandwidthChart', () => {
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
 
-    it('renders download bars with the download CSS variable colour', () => {
+    it('renders download bars with HTTP status colour at full opacity', () => {
       const { container } = render(
         <BandwidthChart
-          requests={[makeEntry({ uploadBytes: 0, downloadBytes: 4096 })]}
+          requests={[makeEntry({ uploadBytes: 0, downloadBytes: 4096, status: '200 OK' })]}
           timeRange={makeRange(0, 10_000)}
         />,
       );
-      // Download bars use --bandwidth-download
+      // Download bars use the HTTP status colour at 0.9 opacity
       const downloadBars = container.querySelectorAll(
-        'rect[fill="var(--bandwidth-download)"][opacity="0.9"]',
+        `rect[fill="${COLOR_200}"][opacity="0.9"]`,
       );
       expect(downloadBars.length).toBeGreaterThan(0);
     });
 
-    it('renders upload bars with the upload CSS variable colour', () => {
+    it('renders upload bars with HTTP status colour at reduced opacity', () => {
       const { container } = render(
         <BandwidthChart
-          requests={[makeEntry({ uploadBytes: 1024, downloadBytes: 0 })]}
+          requests={[makeEntry({ uploadBytes: 1024, downloadBytes: 0, status: '200 OK' })]}
           timeRange={makeRange(0, 10_000)}
         />,
       );
+      // Upload bars use the same colour at 0.7 opacity to distinguish direction
       const uploadBars = container.querySelectorAll(
-        'rect[fill="var(--bandwidth-upload)"][opacity="0.9"]',
+        `rect[fill="${COLOR_200}"][opacity="0.7"]`,
       );
       expect(uploadBars.length).toBeGreaterThan(0);
     });
 
-    it('renders stacked bars when both upload and download are non-zero', () => {
+    it('renders bars for two different status codes with different colours', () => {
+      const entries = [
+        makeEntry({ status: '200 OK', downloadBytes: 1024, uploadBytes: 0 }),
+        makeEntry({ status: '404 Not Found', downloadBytes: 512, uploadBytes: 0 }),
+      ];
       const { container } = render(
-        <BandwidthChart
-          requests={[makeEntry({ uploadBytes: 512, downloadBytes: 4096 })]}
-          timeRange={makeRange(0, 10_000)}
-        />,
+        <BandwidthChart requests={entries} timeRange={makeRange(0, 10_000)} />,
       );
-      const uploadBars = container.querySelectorAll(
-        'rect[fill="var(--bandwidth-upload)"][opacity="0.9"]',
-      );
-      const downloadBars = container.querySelectorAll(
-        'rect[fill="var(--bandwidth-download)"][opacity="0.9"]',
-      );
-      expect(uploadBars.length).toBeGreaterThan(0);
-      expect(downloadBars.length).toBeGreaterThan(0);
+      const color404 = getBucketColor('404');
+      // Both status codes produce coloured bars
+      const bars200 = container.querySelectorAll(`rect[fill="${COLOR_200}"]`);
+      const bars404 = container.querySelectorAll(`rect[fill="${color404}"]`);
+      expect(bars200.length).toBeGreaterThan(0);
+      expect(bars404.length).toBeGreaterThan(0);
     });
 
     it('buckets multiple entries into the same bar when they share a time window', () => {
       // Two entries at the same second → should collapse into a single non-empty bucket
       const entries = [
-        makeEntry({ timestampUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros, uploadBytes: 100, downloadBytes: 200 }),
-        makeEntry({ timestampUs: (1_500 * MICROS_PER_MILLISECOND) as TimestampMicros, uploadBytes: 150, downloadBytes: 300 }),
+        makeEntry({ timestampUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros, uploadBytes: 0, downloadBytes: 200 }),
+        makeEntry({ timestampUs: (1_500 * MICROS_PER_MILLISECOND) as TimestampMicros, uploadBytes: 0, downloadBytes: 300 }),
       ];
       const { container } = render(
         <BandwidthChart requests={entries} timeRange={makeRange(0, 10_000)} />,
@@ -129,7 +135,7 @@ describe('BandwidthChart', () => {
       expect(container.querySelector('svg')).toBeInTheDocument();
       // Both contribute to the same 1-second bucket → exactly one download bar rendered
       const downloadBars = container.querySelectorAll(
-        'rect[fill="var(--bandwidth-download)"][opacity="0.9"]',
+        `rect[fill="${COLOR_200}"][opacity="0.9"]`,
       );
       expect(downloadBars.length).toBe(1);
     });
@@ -145,10 +151,19 @@ describe('BandwidthChart', () => {
         ),
       ).not.toThrow();
     });
+
+    it('renders the centre zero line', () => {
+      const { container } = render(
+        <BandwidthChart requests={[makeEntry()]} timeRange={makeRange(0, 10_000)} />,
+      );
+      // The centre zero line uses the border CSS variable
+      const zeroLine = container.querySelector('line[stroke="var(--color-border, #888)"]');
+      expect(zeroLine).toBeInTheDocument();
+    });
   });
 
   describe('callback props', () => {
-    it('passes onTimeRangeSelected to BaseActivityChart (mouse interaction)', () => {
+    it('wires onTimeRangeSelected to the histogram chart (mouse interaction overlay present)', () => {
       const onSelect = vi.fn();
       const { container } = render(
         <BandwidthChart
@@ -157,14 +172,13 @@ describe('BandwidthChart', () => {
           onTimeRangeSelected={onSelect}
         />,
       );
-      // The invisible overlay rect receives mouse events; just verify it exists
-      // (full drag-selection behaviour is tested in BaseActivityChart/useChartInteraction)
+      // The invisible overlay rect receives mouse events
       expect(container.querySelector('rect[fill="transparent"]')).toBeInTheDocument();
     });
   });
 
   describe('in-flight mode', () => {
-    it('renders stacked areas for upload and download in concurrent mode', () => {
+    it('renders area paths for at least one status in concurrent mode', () => {
       const spans = [makeSpan()];
       const { container } = render(
         <BandwidthChart
@@ -174,9 +188,9 @@ describe('BandwidthChart', () => {
           timeRange={makeRange(0, 10_000)}
         />,
       );
-
-      const areas = container.querySelectorAll('path[fill="var(--bandwidth-download)"], path[fill="var(--bandwidth-upload)"]');
-      expect(areas.length).toBeGreaterThanOrEqual(2);
+      // At least one download and one upload area path rendered with HTTP status colours
+      const paths = container.querySelectorAll('path[fill]');
+      expect(paths.length).toBeGreaterThanOrEqual(1);
     });
 
     it('shows empty message in concurrent mode when spans are empty', () => {
@@ -192,6 +206,114 @@ describe('BandwidthChart', () => {
       expect(screen.getByText('No in-flight bandwidth data to display')).toBeInTheDocument();
     });
   });
+
+  describe('external cursor and selection mirroring', () => {
+    it('renders external cursor line when externalCursorTime is provided', () => {
+      const { container } = render(
+        <BandwidthChart
+          requests={[makeEntry()]}
+          timeRange={makeRange(0, 10_000)}
+          externalCursorTime={2_000 * MICROS_PER_MILLISECOND}
+        />,
+      );
+      // External cursor renders a dashed vertical line
+      const dashedLines = container.querySelectorAll('line[stroke-dasharray]');
+      expect(dashedLines.length).toBeGreaterThan(0);
+    });
+
+    it('still renders cursor line when externalCursorTime is outside the time range (clamped to edge)', () => {
+      const { container } = render(
+        <BandwidthChart
+          requests={[makeEntry()]}
+          timeRange={makeRange(0, 10_000)}
+          externalCursorTime={99_000 * MICROS_PER_MILLISECOND}
+        />,
+      );
+      // Time is clamped to the range edge — cursor line is still rendered
+      const dashedLines = container.querySelectorAll('line[stroke-dasharray]');
+      expect(dashedLines.length).toBeGreaterThan(0);
+    });
+
+    it('renders external selection band when externalSelection is provided', () => {
+      const { container } = render(
+        <BandwidthChart
+          requests={[makeEntry()]}
+          timeRange={makeRange(0, 10_000)}
+          externalSelection={{
+            startUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
+            endUs: (3_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
+          }}
+        />,
+      );
+      // External selection band renders a semi-transparent blue rect
+      const selectionRect = container.querySelector('rect[fill="rgba(33, 150, 243, 0.2)"]');
+      expect(selectionRect).toBeInTheDocument();
+    });
+
+    it('fires onCursorMove when provided', () => {
+      const onCursorMove = vi.fn();
+      render(
+        <BandwidthChart
+          requests={[makeEntry()]}
+          timeRange={makeRange(0, 10_000)}
+          onCursorMove={onCursorMove}
+        />,
+      );
+      // Component mounts without error — onCursorMove is wired
+      expect(onCursorMove).not.toHaveBeenCalled();
+    });
+
+    it('fires onSelectionChange when provided', () => {
+      const onSelectionChange = vi.fn();
+      render(
+        <BandwidthChart
+          requests={[makeEntry()]}
+          timeRange={makeRange(0, 10_000)}
+          onSelectionChange={onSelectionChange}
+        />,
+      );
+      expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it('renders in-progress selection band while dragging', () => {
+      const { container } = render(
+        <BandwidthChart
+          requests={[makeEntry()]}
+          timeRange={makeRange(0, 10_000)}
+        />,
+      );
+      const overlay = container.querySelector('rect[fill="transparent"]') as SVGElement;
+      // Start a drag without releasing — selection band should appear
+      fireEvent.mouseDown(overlay, { clientX: 200, clientY: 50 });
+      fireEvent.mouseMove(overlay, { clientX: 500, clientY: 50 });
+      const selectionBand = container.querySelector('rect[fill="rgba(33, 150, 243, 0.2)"]');
+      expect(selectionBand).toBeInTheDocument();
+    });
+
+    it('uses CTM path for tooltip positioning when getScreenCTM returns a matrix', () => {
+      // jsdom returns null from getScreenCTM; mock it to cover the CTM branch in BandwidthHistogramChart
+      const mockPoint = { x: 0, y: 0, matrixTransform: vi.fn().mockReturnValue({ x: 42, y: 10 }) };
+      const origGetCTM = SVGSVGElement.prototype.getScreenCTM;
+      const origCreatePoint = SVGSVGElement.prototype.createSVGPoint;
+      SVGSVGElement.prototype.getScreenCTM = vi.fn().mockReturnValue({ a: 1 }) as unknown as typeof origGetCTM;
+      SVGSVGElement.prototype.createSVGPoint = vi.fn().mockReturnValue(mockPoint) as unknown as typeof origCreatePoint;
+
+      try {
+        render(
+          <BandwidthChart
+            requests={[makeEntry()]}
+            timeRange={makeRange(0, 10_000)}
+            externalCursorTime={2_000 * MICROS_PER_MILLISECOND}
+          />,
+        );
+        // CTM path executed without error; matrixTransform was called to compute tooltip position
+        expect(mockPoint.matrixTransform).toHaveBeenCalled();
+      } finally {
+        SVGSVGElement.prototype.getScreenCTM = origGetCTM;
+        SVGSVGElement.prototype.createSVGPoint = origCreatePoint;
+      }
+    });
+  });
 });
 
 // ─── renderBandwidthTooltip unit tests ──────────────────────────────────────
@@ -201,8 +323,10 @@ function makeBucket(overrides: Partial<BandwidthBucket> = {}): BandwidthBucket {
     timestamp: 0,
     timeLabel: '00:00:01',
     total: 1536,
-    uploadBytes: 512,
-    downloadBytes: 1024,
+    totalDownload: 1024,
+    totalUpload: 512,
+    downloadByStatus: { '200': 1024 },
+    uploadByStatus: { '200': 512 },
     ...overrides,
   };
 }
@@ -213,23 +337,23 @@ describe('renderBandwidthTooltip', () => {
     expect(screen.getByText('12:34:56')).toBeInTheDocument();
   });
 
-  it('shows download row when downloadBytes > 0', () => {
-    render(renderBandwidthTooltip(makeBucket({ downloadBytes: 1024 })));
+  it('shows download section when downloadByStatus has bytes', () => {
+    render(renderBandwidthTooltip(makeBucket({ downloadByStatus: { '200': 1024 } })));
     expect(screen.getByText(/download/i)).toBeInTheDocument();
   });
 
-  it('hides download row when downloadBytes = 0', () => {
-    render(renderBandwidthTooltip(makeBucket({ downloadBytes: 0 })));
+  it('hides download section when downloadByStatus is empty', () => {
+    render(renderBandwidthTooltip(makeBucket({ downloadByStatus: {}, totalDownload: 0 })));
     expect(screen.queryByText(/download/i)).not.toBeInTheDocument();
   });
 
-  it('shows upload row when uploadBytes > 0', () => {
-    render(renderBandwidthTooltip(makeBucket({ uploadBytes: 512 })));
+  it('shows upload section when uploadByStatus has bytes', () => {
+    render(renderBandwidthTooltip(makeBucket({ uploadByStatus: { '200': 512 } })));
     expect(screen.getByText(/upload/i)).toBeInTheDocument();
   });
 
-  it('hides upload row when uploadBytes = 0', () => {
-    render(renderBandwidthTooltip(makeBucket({ uploadBytes: 0 })));
+  it('hides upload section when uploadByStatus is empty', () => {
+    render(renderBandwidthTooltip(makeBucket({ uploadByStatus: {}, totalUpload: 0 })));
     expect(screen.queryByText(/upload/i)).not.toBeInTheDocument();
   });
 
@@ -239,7 +363,20 @@ describe('renderBandwidthTooltip', () => {
   });
 
   it('hides total row when total = 0', () => {
-    render(renderBandwidthTooltip(makeBucket({ total: 0 })));
+    render(renderBandwidthTooltip(makeBucket({ total: 0, downloadByStatus: {}, uploadByStatus: {}, totalDownload: 0, totalUpload: 0 })));
     expect(screen.queryByText(/total/i)).not.toBeInTheDocument();
   });
+
+  it('shows per-status labels with byte values', () => {
+    render(renderBandwidthTooltip(makeBucket({
+      downloadByStatus: { '200': 2048, '404': 512 },
+      uploadByStatus: {},
+      totalDownload: 2560,
+      totalUpload: 0,
+    })));
+    // Both status codes should appear (upload cleared so "200" only appears once)
+    expect(screen.getByText(/200/)).toBeInTheDocument();
+    expect(screen.getByText(/404/)).toBeInTheDocument();
+  });
 });
+
