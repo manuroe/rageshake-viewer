@@ -53,8 +53,17 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
 
     const sentryLineNumbers = new Set((sentryEvents ?? []).map(e => e.lineNumber));
 
-    // Find time range (all in microseconds)
-    const timestamps = logLines.map((line) => line.timestampUs);
+    // Find time range (all in microseconds); exclude lines with no timestamp
+    // (timestampUs === 0 for orphaned continuation lines that appear before the
+    // first timestamped entry — including them would pull dataMinTime to Unix epoch).
+    const timestamps = logLines
+      .map((line) => line.timestampUs)
+      .filter((ts) => ts !== 0);
+
+    if (timestamps.length === 0) {
+      return { buckets: [] as LogBucket[], maxCount: 0, minTime: 0 as TimestampMicros, maxTime: 0 as TimestampMicros };
+    }
+
     const dataMinTime = Math.min(...timestamps) as TimestampMicros;
     const dataMaxTime = Math.max(...timestamps) as TimestampMicros;
     const timeRange = dataMaxTime - dataMinTime;

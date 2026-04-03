@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { screen, fireEvent } from '@testing-library/dom';
 import { LogActivityChart } from '../LogActivityChart';
-import { createParsedLogLines } from '../../test/fixtures';
+import { createParsedLogLines, createParsedLogLine } from '../../test/fixtures';
 import type { SentryEvent } from '../../types/log.types';
 
 describe('LogActivityChart', () => {
@@ -571,5 +571,41 @@ describe('LogActivityChart', () => {
     );
 
     expect(screen.queryByText(/^Total:/)).not.toBeInTheDocument();
+  });
+
+  it('ignores orphaned lines with timestampUs === 0 when computing the time range', () => {
+    // Simulate a log file where a continuation line appears before the first
+    // timestamped entry — the parser assigns timestampUs: 0 to such lines.
+    // The chart must not use those zeros when computing dataMinTime, otherwise
+    // the x-axis would start at 1970-01-01T00:00:00 (Unix epoch).
+    const realLogs = createParsedLogLines(20, { baseTime: new Date('2026-03-19T18:29:14Z') });
+    const orphan = createParsedLogLine({
+      lineNumber: 0,
+      rawText: ' | ',
+      isoTimestamp: '',
+      timestampUs: 0,
+      displayTime: '',
+      level: 'UNKNOWN',
+      message: ' | ',
+      strippedMessage: ' | ',
+    });
+
+    const logs = [orphan, ...realLogs];
+    const { container } = render(<LogActivityChart logLines={logs} />);
+
+    // The chart must still render (not fall back to the empty state)
+    const bars = container.querySelectorAll('rect[opacity="0.9"]');
+    expect(bars.length).toBeGreaterThan(0);
+
+    // The start time label must reflect the first real timestamp (18:29:14),
+    // not the Unix epoch (00:00:00).
+    const textElements = Array.from(container.querySelectorAll('text'));
+    const timeLabels = textElements
+      .map((el) => el.textContent ?? '')
+      .filter((t) => /\d{2}:\d{2}:\d{2}/.test(t));
+
+    expect(timeLabels.length).toBeGreaterThanOrEqual(2);
+    expect(timeLabels.some((t) => t.startsWith('00:00:00'))).toBe(false);
+    expect(timeLabels.some((t) => t.startsWith('18:29'))).toBe(true);
   });
 });
