@@ -35,7 +35,7 @@ const EARLIER_ISO = '2023-11-14T22:13:20.000000Z';
 describe('RowTimeAction', () => {
   beforeEach(() => {
     mockSetTimeFilter.mockReset();
-    useLogStore.setState({ startTime: null, endTime: null });
+    useLogStore.getState().clearData();
   });
 
   // -----------------------------------------------------------------------

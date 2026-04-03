@@ -17,7 +17,7 @@ vi.mock('../../hooks/useURLParams', () => ({
 describe('TimeFilter', () => {
   beforeEach(() => {
     mockSetTimeFilter.mockReset();
-    useLogStore.setState({ startTime: null, endTime: null });
+    useLogStore.getState().clearData();
   });
 
   describe('display text', () => {

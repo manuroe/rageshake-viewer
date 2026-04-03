@@ -7,12 +7,27 @@
  */
 
 /**
+ * Regular expression that matches a rageshake ISO-8601 datetime stamp at the
+ * start of a log line.  Fractional seconds and the trailing `Z` are both
+ * optional, matching every format emitted by the Rust SDK.
+ *
+ * Exported so consumers can reuse the canonical pattern without duplicating
+ * the regex literal.
+ *
+ * @example
+ * ISO_TIMESTAMP_RE.test("2026-01-28T13:24:43.950890Z INFO foo") // => true
+ * ISO_TIMESTAMP_RE.test("2026-01-28T13:24:43Z WARN bar")       // => true
+ * ISO_TIMESTAMP_RE.test("continuation line")                   // => false
+ */
+export const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/;
+
+/**
  * Regular expression that matches the ISO timestamp + log-level prefix of a
  * rageshake log line, allowing the prefix to be stripped via
  * {@link stripLogPrefix}.
  *
- * Exported so consumers can reuse the canonical pattern without duplicating the
- * regex literal.
+ * Built on the same date portion as {@link ISO_TIMESTAMP_RE}; accepts any
+ * single-word level token (`\w+`) rather than enumerating the known levels.
  *
  * @example
  * LOG_PREFIX_RE.test("2026-01-28T13:24:43.950890Z INFO foo") // => true
@@ -65,15 +80,12 @@ export function stripLogPrefix(rawText: string): string {
  * // => "No timestamp here"
  */
 export function extractCoreMessage(message: string): string {
-  // Pattern: ISO timestamp followed by TRACE|DEBUG|INFO|WARN|ERROR and the payload.
-  // The timestamp and level are separated from the payload by arbitrary whitespace.
-  // Fractional seconds (".SSSSSS") and trailing "Z" are both made optional to match
-  // all formats that logParser's extractISOTimestamp accepts.
-  const match = message.match(
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+(?:TRACE|DEBUG|INFO|WARN|ERROR)\s+(.+)$/
-  );
-  if (match && match[1]) {
-    return match[1].trim();
-  }
-  return message;
+  // LOG_PREFIX_RE covers ISO timestamp + any level-word token — the canonical
+  // pattern reused here so the ISO date literal is not duplicated.
+  // Rageshake only emits TRACE/DEBUG/INFO/WARN/ERROR, so the permissive \w+
+  // in LOG_PREFIX_RE is safe in practice.
+  if (!LOG_PREFIX_RE.test(message)) return message;
+  const payload = stripLogPrefix(message).trim();
+  // Guard against a degenerate line that has only a prefix and no payload.
+  return payload.length > 0 ? payload : message;
 }

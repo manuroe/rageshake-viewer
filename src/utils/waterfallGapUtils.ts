@@ -22,6 +22,8 @@
  * `SyncView` continue to render correctly.
  */
 
+import { mergeNumberRanges } from './rangeUtils';
+
 /** Minimum inter-request idle gap (ms) that triggers compression. */
 export const IDLE_GAP_THRESHOLD_MS = 5_000;
 
@@ -94,22 +96,12 @@ interface TimeWindow {
 /**
  * Merge overlapping or adjacent time windows into the minimal covering set.
  * Input windows use ms values relative to any shared epoch.
+ * Delegates to the shared {@link mergeNumberRanges} utility by mapping
+ * `{startMs, endMs}` → `{start, end}` and back.
  */
 function mergeWindows(windows: TimeWindow[]): TimeWindow[] {
-  if (windows.length === 0) return [];
-  const sorted = [...windows].sort((a, b) => a.startMs - b.startMs);
-  const merged: TimeWindow[] = [{ startMs: sorted[0].startMs, endMs: sorted[0].endMs }];
-  for (let i = 1; i < sorted.length; i++) {
-    const current = merged[merged.length - 1];
-    const next = sorted[i];
-    if (next.startMs <= current.endMs) {
-      // Overlapping or adjacent – extend the current window.
-      current.endMs = Math.max(current.endMs, next.endMs);
-    } else {
-      merged.push({ startMs: next.startMs, endMs: next.endMs });
-    }
-  }
-  return merged;
+  const merged = mergeNumberRanges(windows.map((w) => ({ start: w.startMs, end: w.endMs })));
+  return merged.map((r) => ({ startMs: r.start, endMs: r.end }));
 }
 
 // ---------------------------------------------------------------------------

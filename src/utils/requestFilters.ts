@@ -8,7 +8,7 @@
 import type { HttpRequest, SyncRequest, ParsedLogLine } from '../types/log.types';
 import type { TimestampMicros, TimeFilterValue } from '../types/time.types';
 import { calculateTimeRangeMicros, getMinMaxTimestamps } from './timeUtils';
-import { INCOMPLETE_STATUS_KEY, CLIENT_ERROR_STATUS_KEY } from './statusCodeUtils';
+import { INCOMPLETE_STATUS_KEY, CLIENT_ERROR_STATUS_KEY, isNumericStatus } from './statusCodeUtils';
 
 export interface SyncRequestFilters {
   selectedConnId: string;
@@ -106,7 +106,7 @@ export function filterSyncRequests(
       // Map non-numeric outcomes to their appropriate filter key:
       // 'Incomplete' placeholder → INCOMPLETE_STATUS_KEY; real transport failures → CLIENT_ERROR_STATUS_KEY.
       const matchesAttempt = r.attemptOutcomes?.some((o) => {
-        if (/^\d+$/.test(o)) return statusCodeFilter.has(o);
+        if (isNumericStatus(o)) return statusCodeFilter.has(o);
         const key = o === INCOMPLETE_STATUS_KEY ? INCOMPLETE_STATUS_KEY : CLIENT_ERROR_STATUS_KEY;
         return statusCodeFilter.has(key);
       }) ?? false;
@@ -160,7 +160,7 @@ export function filterHttpRequests(
       // Map non-numeric outcomes to their appropriate filter key:
       // 'Incomplete' placeholder → INCOMPLETE_STATUS_KEY; real transport failures → CLIENT_ERROR_STATUS_KEY.
       const matchesAttempt = r.attemptOutcomes?.some((o) => {
-        if (/^\d+$/.test(o)) return statusCodeFilter.has(o);
+        if (isNumericStatus(o)) return statusCodeFilter.has(o);
         const key = o === INCOMPLETE_STATUS_KEY ? INCOMPLETE_STATUS_KEY : CLIENT_ERROR_STATUS_KEY;
         return statusCodeFilter.has(key);
       }) ?? false;

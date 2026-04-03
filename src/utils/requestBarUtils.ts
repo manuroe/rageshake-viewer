@@ -5,7 +5,7 @@
 
 import type { HttpRequest } from '../types/log.types';
 import { getHttpStatusColor } from './httpStatusColors';
-import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
+import { INCOMPLETE_STATUS_KEY, isNumericStatus } from './statusCodeUtils';
 
 /**
  * Returns the CSS color string for a single retry-attempt outcome.
@@ -21,7 +21,7 @@ import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
  * getAttemptSegmentColor(INCOMPLETE_STATUS_KEY) // → 'var(--http-incomplete)'
  */
 export function getAttemptSegmentColor(outcome: string): string {
-  if (/^\d+$/.test(outcome)) return getHttpStatusColor(outcome);
+  if (isNumericStatus(outcome)) return getHttpStatusColor(outcome);
   if (outcome === INCOMPLETE_STATUS_KEY) return 'var(--http-incomplete)';
   return 'var(--http-client-error)';
 }

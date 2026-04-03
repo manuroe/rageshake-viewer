@@ -17,7 +17,7 @@ vi.mock('../../hooks/useURLParams', () => ({
 describe('StatusFilterDropdown', () => {
   beforeEach(() => {
     mockSetStatusFilter.mockReset();
-    useLogStore.setState({ statusCodeFilter: null });
+    useLogStore.getState().clearData();
   });
 
   describe('button label', () => {

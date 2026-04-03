@@ -9,6 +9,25 @@ export const INCOMPLETE_STATUS_KEY = 'Incomplete';
 export const CLIENT_ERROR_STATUS_KEY = 'Client Error';
 
 /**
+ * Returns `true` when `s` is a numeric HTTP status code string (e.g. `"200"`).
+ *
+ * Central predicate used across filter, bar-colour, and summary-stat modules to
+ * distinguish numeric status codes from synthetic keys such as `'Incomplete'`
+ * and transport-error names such as `'TimedOut'`.
+ *
+ * @param s - String to test.
+ * @returns `true` iff `s` consists entirely of ASCII digits.
+ *
+ * @example
+ * isNumericStatus('200')       // => true
+ * isNumericStatus('TimedOut')  // => false
+ * isNumericStatus(INCOMPLETE_STATUS_KEY) // => false
+ */
+export function isNumericStatus(s: string): boolean {
+  return /^\d+$/.test(s);
+}
+
+/**
  * Extract unique status codes from an array of requests.
  *
  * Numeric HTTP status codes are sorted ascending; the two synthetic keys
@@ -52,7 +71,7 @@ export function extractAvailableStatusCodes(
     }
     // Include intermediate attempt statuses (e.g. 503 from a retried request)
     req.attemptOutcomes?.forEach((outcome) => {
-      if (/^\d+$/.test(outcome)) {
+      if (isNumericStatus(outcome)) {
         // Numeric-looking strings are HTTP status codes
         codes.add(outcome);
       } else if (outcome === INCOMPLETE_STATUS_KEY) {

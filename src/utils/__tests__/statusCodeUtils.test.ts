@@ -1,5 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { extractAvailableStatusCodes, INCOMPLETE_STATUS_KEY, CLIENT_ERROR_STATUS_KEY } from '../statusCodeUtils';
+import { extractAvailableStatusCodes, isNumericStatus, INCOMPLETE_STATUS_KEY, CLIENT_ERROR_STATUS_KEY } from '../statusCodeUtils';
+
+describe('isNumericStatus', () => {
+  it('returns true for a numeric HTTP status code string', () => {
+    expect(isNumericStatus('200')).toBe(true);
+    expect(isNumericStatus('404')).toBe(true);
+    expect(isNumericStatus('503')).toBe(true);
+  });
+
+  it('returns false for synthetic status keys', () => {
+    expect(isNumericStatus(INCOMPLETE_STATUS_KEY)).toBe(false);
+    expect(isNumericStatus(CLIENT_ERROR_STATUS_KEY)).toBe(false);
+  });
+
+  it('returns false for transport-error names', () => {
+    expect(isNumericStatus('TimedOut')).toBe(false);
+    expect(isNumericStatus('Connect')).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isNumericStatus('')).toBe(false);
+  });
+});
 
 describe('INCOMPLETE_STATUS_KEY', () => {
   it('is the string Incomplete', () => {

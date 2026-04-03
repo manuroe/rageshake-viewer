@@ -17,7 +17,7 @@
 import type { HttpRequest, HttpRequestSpan, HttpRequestWithTimestamp, SyncRequest, ParsedLogLine, SentryEvent, BandwidthRequestEntry, BandwidthRequestSpan } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { getTimeRangeUs } from './requestFilters';
-import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
+import { INCOMPLETE_STATUS_KEY, isNumericStatus } from './statusCodeUtils';
 import { getMinMaxTimestamps } from './timeUtils';
 import { extractCoreMessage } from './logMessageUtils';
 import type { TimeFilterValue } from '../types/time.types';
@@ -191,7 +191,7 @@ export function computeSummaryStats(
 
   const mapAttemptOutcomeToChartStatus = (outcome: string | undefined): string => {
     if (!outcome || outcome === INCOMPLETE_STATUS_KEY) return '';
-    if (/^\d+$/.test(outcome)) return outcome;
+    if (isNumericStatus(outcome)) return outcome;
     return CLIENT_ERROR_CHART_STATUS;
   };
 
@@ -265,7 +265,7 @@ export function computeSummaryStats(
     // eventually succeeded with 200) so they appear in the error breakdown.
     // Slice stops before the last element to avoid double-counting the final outcome.
     req.attemptOutcomes?.slice(0, (req.numAttempts ?? 1) - 1).forEach((outcome) => {
-      if (/^\d+$/.test(outcome)) {
+      if (isNumericStatus(outcome)) {
         httpStatusCounts[outcome] = (httpStatusCounts[outcome] ?? 0) + 1;
       }
     });
@@ -295,7 +295,7 @@ export function computeSummaryStats(
     // Count intermediate failed attempt outcomes from retried requests
     // (e.g. a 503 → 200 request still surfaces its URI in Top Failed URLs).
     req.attemptOutcomes?.slice(0, (req.numAttempts ?? 1) - 1).forEach((outcome) => {
-      if (/^\d+$/.test(outcome)) {
+      if (isNumericStatus(outcome)) {
         const attemptCode = parseInt(outcome, 10);
         if (attemptCode >= 400) recordFailedUrl(req.uri, outcome);
       } else if (outcome !== INCOMPLETE_STATUS_KEY) {

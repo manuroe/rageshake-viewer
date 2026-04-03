@@ -4,6 +4,7 @@ import { isoToMicros, extractTimeFromISO } from './timeUtils';
 import { parseSizeString } from './sizeUtils';
 import { ParsingError } from './errorHandling';
 import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
+import { ISO_TIMESTAMP_RE, stripLogPrefix } from './logMessageUtils';
 
 /**
  * Mutable builder record used during log parsing before all fields have been
@@ -48,11 +49,13 @@ function extractLogLevel(line: string): LogLevel {
 }
 
 function stripMessagePrefix(message: string): string {
-  // Strip timestamp, log level, and common prefixes to get the actual message content
-  const stripped = message
-    .replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+/, '') // ISO timestamp
-    .replace(/^\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+/, '') // Time-only timestamp
-    .replace(/\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+/, ' '); // Log level
+  // stripLogPrefix handles the ISO-timestamp + level prefix in one pass,
+  // delegating to the canonical LOG_PREFIX_RE so the ISO pattern is not
+  // duplicated here. For lines that use a time-only prefix (no date), the
+  // second replace handles the timestamp and the third strips the level.
+  const stripped = stripLogPrefix(message)
+    .replace(/^\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+/, '')  // Time-only timestamp
+    .replace(/\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+/, ' '); // Log level (time-only lines)
   return stripped.trim();
 }
 
@@ -89,8 +92,10 @@ function extractSourceLocation(line: string): { filePath?: string; sourceLineNum
  * extractISOTimestamp('    SomeError { status: 404 }');          // ''
  */
 function extractISOTimestamp(line: string): ISODateTimeString {
-  // Anchored at ^ so this doubles as a new-entry vs continuation discriminator.
-  const isoMatch = line.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/);
+  // ISO_TIMESTAMP_RE is the canonical pattern; using it here avoids duplicating
+  // the literal. Anchored at ^ so this doubles as a new-entry vs continuation
+  // discriminator.
+  const isoMatch = line.match(ISO_TIMESTAMP_RE);
   if (isoMatch) {
     // Ensure it ends with Z for consistency
     const timestamp = isoMatch[0];
