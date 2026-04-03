@@ -89,8 +89,9 @@ export function HttpRequestsView() {
   }, [allRequests]);
 
   /**
-   * Apply sync-specific bar colors for /sync requests (catchup vs long-poll).
-   * HttpRequest objects don't carry timeout directly, so we enrich from the map.
+   * Determine the bar color for a request. Returns the sync-specific color for
+   * requests that have a timeout entry in the map (catchup vs long-poll hue),
+   * otherwise falls back to `defaultColor`.
    */
   const getBarColor = useCallback(
     (req: HttpRequest, defaultColor: string) => {

@@ -18,7 +18,8 @@ export function msToMinPixels(durationMs: number, msPerPixel = DEFAULT_MS_PER_PI
  * Calculate timeline width based on visible requests to optimize initial display
  * Uses configurable minimum scaling to ensure consistency with bar widths and positions
  * @param containerWidth - Available width in pixels
- * @param visibleTimes - Timestamps of first ~20 visible requests (in ms)
+ * @param visibleTimes - Reserved for call-site compatibility; not read by the
+ *   current implementation (parameter retained to avoid a breaking change).
  * @param minTime - Minimum time across all requests
  * @param maxTime - Maximum time across all requests
  * @param msPerPixel - Scaling factor (ms per pixel), defaults to 10

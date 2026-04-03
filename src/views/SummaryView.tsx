@@ -20,6 +20,9 @@ import tableStyles from '../components/Table.module.css';
 /** Pattern matching media upload/download paths. */
 const MEDIA_PATH_RE = /\/media\//i;
 
+/** Returns true when the request is not a /sync long-poll (has no timeout). */
+const isNotSync = (r: { timeout?: number }): boolean => r.timeout === undefined;
+
 export function SummaryView() {
   const navigate = useNavigate();
   const {
@@ -172,14 +175,14 @@ export function SummaryView() {
   const httpRequestsForChart = useMemo(() => {
     let reqs = stats.httpRequestsWithTimestamps;
     if (!showIncomplete) reqs = reqs.filter((r) => r.status !== '');
-    if (!showSync) reqs = reqs.filter((r) => r.timeout === undefined);
+    if (!showSync) reqs = reqs.filter(isNotSync);
     return reqs;
   }, [stats.httpRequestsWithTimestamps, showIncomplete, showSync]);
 
   const httpRequestSpansForChart = useMemo(() => {
     let spans = stats.httpRequestSpans;
     if (!showIncomplete) spans = spans.filter((s) => s.endUs !== null);
-    if (!showSync) spans = spans.filter((s) => s.timeout === undefined);
+    if (!showSync) spans = spans.filter(isNotSync);
     return spans;
   }, [stats.httpRequestSpans, showIncomplete, showSync]);
 
@@ -187,7 +190,7 @@ export function SummaryView() {
   const bandwidthRequestsForChart = useMemo(() => {
     let reqs = stats.httpRequestsWithBandwidth;
     if (!showMedia) reqs = reqs.filter((r) => !MEDIA_PATH_RE.test(r.uri));
-    if (!showSync) reqs = reqs.filter((r) => r.timeout === undefined);
+    if (!showSync) reqs = reqs.filter(isNotSync);
     return reqs;
   }, [stats.httpRequestsWithBandwidth, showMedia, showSync]);
 
@@ -196,7 +199,7 @@ export function SummaryView() {
 
     let spans = stats.bandwidthRequestSpans;
     if (!showMedia) spans = spans.filter((r) => !MEDIA_PATH_RE.test(r.uri));
-    if (!showSync) spans = spans.filter((r) => r.timeout === undefined);
+    if (!showSync) spans = spans.filter(isNotSync);
     return spans;
   }, [stats.bandwidthRequestSpans, showMedia, showSync]);
 
@@ -556,8 +559,7 @@ export function SummaryView() {
           {/* TOP HTTP Errors Section */}
           {stats.topFailedUrls.length > 0 && (
             <section className={styles.summarySection}>
-              {stats.topFailedUrls.length > 0 && (
-                <div className={styles.summaryTableContainer}>
+              <div className={styles.summaryTableContainer}>
                   <table className={styles.summaryTable}>
                     <thead>
                       <tr>
@@ -624,7 +626,6 @@ export function SummaryView() {
                     </tbody>
                   </table>
                 </div>
-              )}
             </section>
           )}
 
