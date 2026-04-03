@@ -8,12 +8,6 @@
 }
 
 .timelineContent {
-    /* Column widths shared between the sticky header and sticky row cells.
-       Changing a value here updates all four grid-template-columns at once. */
-    --col-status: 70px;
-    --col-url: 400px;
-    --col-duration: 115px;
-    --col-action: 45px;
     flex: 1;
     overflow: hidden;
     position: relative;
@@ -50,6 +44,13 @@
 
 /* Timeline container */
 .timelineContainer {
+    /* Column widths shared between the sticky header and all row cells.
+       Both .timelineHeaderSticky and .requestRowSticky consume these
+       variables, so they must live on their common ancestor. */
+    --col-status: 70px;
+    --col-url: 400px;
+    --col-duration: 115px;
+    --col-action: 45px;
     display: flex;
     flex-direction: column;
     flex: 1;

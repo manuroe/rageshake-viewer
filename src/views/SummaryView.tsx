@@ -20,7 +20,9 @@ import tableStyles from '../components/Table.module.css';
 /** Pattern matching media upload/download paths. */
 const MEDIA_PATH_RE = /\/media\//i;
 
-/** Returns true when the request is not a /sync long-poll (has no timeout). */
+/** Returns true when the request has no `timeout` field, i.e. it is not a
+ * /sync long-poll. Sync requests carry a `timeout` value; all other request
+ * types leave the field undefined. */
 const isNotSync = (r: { timeout?: number }): boolean => r.timeout === undefined;
 
 export function SummaryView() {

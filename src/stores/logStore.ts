@@ -13,8 +13,12 @@
  * 2. Both sync and HTTP views need the complete line array for timestamp
  *    lookups and gap navigation — not a subset scoped to their own requests.
  *
- * `loadLogParserResult` populates all parsed datasets in one store update so
- * subscribers never observe a half-loaded state.
+ * `loadLogParserResult` populates all parsed datasets atomically: it runs one
+ * `set()` for the main data then triggers `filterRequests`/`filterHttpRequests`
+ * which each run their own `set()`. Zustand notifies listeners after every
+ * `set()`, so intermediate states are briefly visible to store subscribers;
+ * React batches the resulting re-renders in the browser, so no temporary UI
+ * flicker is expected in practice.
  *
  * ## `statusCodeFilter` semantics
  *
@@ -127,11 +131,12 @@ interface LogStore {
   clearError: () => void;
 
   /**
-   * Load all parsed log data across three store updates: (1) main data and
-   * derived fields, (2) filteredRequests, (3) filteredHttpRequests. React
-   * batches these re-renders in a browser context, so the intermediate states
-   * are not observable in the UI. Use this instead of calling the individual
-   * setters manually.
+   * Load all parsed log data. Under the hood this runs three Zustand `set()`
+   * calls: (1) main data + derived fields, (2) filteredRequests, (3)
+   * filteredHttpRequests. Zustand notifies subscribers after each `set()`;
+   * React batches the resulting re-renders so no intermediate UI flicker is
+   * expected in a browser context. Use this instead of calling the individual
+   * setters manually to avoid setting data without derived filters.
    */
   loadLogParserResult: (result: LogParserResult) => void;
   
