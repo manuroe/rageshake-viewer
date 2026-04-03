@@ -60,7 +60,7 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
     // can throw on very large arrays.
     const { min: dataMinTime, max: dataMaxTime } = getMinMaxTimestamps(logLines);
 
-    if (dataMinTime === 0) {
+    if (dataMinTime === 0 && dataMaxTime === 0) {
       return { buckets: [] as LogBucket[], maxCount: 0, minTime: 0 as TimestampMicros, maxTime: 0 as TimestampMicros };
     }
     const timeRange = dataMaxTime - dataMinTime;

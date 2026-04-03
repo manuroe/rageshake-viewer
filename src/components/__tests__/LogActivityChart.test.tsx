@@ -578,7 +578,7 @@ describe('LogActivityChart', () => {
     // timestamped entry — the parser assigns timestampUs: 0 to such lines.
     // The chart must not use those zeros when computing dataMinTime, otherwise
     // the x-axis would start at 1970-01-01T00:00:00 (Unix epoch).
-    const realLogs = createParsedLogLines(20, { baseTime: new Date('2026-03-19T18:29:14Z') });
+    const realLogs = createParsedLogLines(20, { baseTime: new Date('2026-03-19T18:29:14Z'), startLineNumber: 1 });
     const orphan = createParsedLogLine({
       lineNumber: 0,
       rawText: ' | ',
