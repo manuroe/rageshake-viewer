@@ -160,8 +160,9 @@
     line-height: 1.5;
     /* Force dark-theme tokens for all descendants (e.g. RowTimeAction menu)
        so they remain readable regardless of the current app colour scheme.
-       These pin the dark-mode values of the foundation tokens — they cannot
-       reference var(--token) here because that would be circular. */
+       --bg-primary is overridden using --log-bg, which is a flat hardcoded
+       token (not a theme-switching var), so there is no circular reference.
+       Other overrides use literal values for the same reason. */
     --bg-primary: var(--log-bg);
     --bg-hover: #3d3d3d;
     --border-default: #4d4d4d;

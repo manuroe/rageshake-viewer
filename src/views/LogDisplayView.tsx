@@ -45,7 +45,7 @@ function getHttpErrorStatus(rawText: string): string | null {
  *
  * ### `lineRange` — secondary scoping within the line array
  *
- * `lineRange` is an **inclusive** `[start, end]` filter on `lineNumber`
+ * `lineRange` is an **inclusive** `{ start, end }` filter on `lineNumber`
  * that is applied *after* selecting the line source:
  *
  * - If `logLines` is also set, `lineRange` further restricts that slice
