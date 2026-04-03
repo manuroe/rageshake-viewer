@@ -289,6 +289,30 @@ describe('BandwidthChart', () => {
       const selectionBand = container.querySelector('rect[fill="rgba(33, 150, 243, 0.2)"]');
       expect(selectionBand).toBeInTheDocument();
     });
+
+    it('uses CTM path for tooltip positioning when getScreenCTM returns a matrix', () => {
+      // jsdom returns null from getScreenCTM; mock it to cover the CTM branch in BandwidthHistogramChart
+      const mockPoint = { x: 0, y: 0, matrixTransform: vi.fn().mockReturnValue({ x: 42, y: 10 }) };
+      const origGetCTM = SVGSVGElement.prototype.getScreenCTM;
+      const origCreatePoint = SVGSVGElement.prototype.createSVGPoint;
+      SVGSVGElement.prototype.getScreenCTM = vi.fn().mockReturnValue({ a: 1 }) as unknown as typeof origGetCTM;
+      SVGSVGElement.prototype.createSVGPoint = vi.fn().mockReturnValue(mockPoint) as unknown as typeof origCreatePoint;
+
+      try {
+        render(
+          <BandwidthChart
+            requests={[makeEntry()]}
+            timeRange={makeRange(0, 10_000)}
+            externalCursorTime={2_000 * MICROS_PER_MILLISECOND}
+          />,
+        );
+        // CTM path executed without error; matrixTransform was called to compute tooltip position
+        expect(mockPoint.matrixTransform).toHaveBeenCalled();
+      } finally {
+        SVGSVGElement.prototype.getScreenCTM = origGetCTM;
+        SVGSVGElement.prototype.createSVGPoint = origCreatePoint;
+      }
+    });
   });
 });
 
