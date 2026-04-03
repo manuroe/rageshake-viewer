@@ -129,11 +129,11 @@ export interface SentryEvent {
 }
 
 export interface LogParserResult {
-  readonly requests: SyncRequest[];
-  readonly httpRequests: HttpRequest[];
-  readonly connectionIds: string[];
-  readonly rawLogLines: ParsedLogLine[];
-  readonly sentryEvents: SentryEvent[];
+  readonly requests: readonly SyncRequest[];
+  readonly httpRequests: readonly HttpRequest[];
+  readonly connectionIds: readonly string[];
+  readonly rawLogLines: readonly ParsedLogLine[];
+  readonly sentryEvents: readonly SentryEvent[];
 }
 
 /**

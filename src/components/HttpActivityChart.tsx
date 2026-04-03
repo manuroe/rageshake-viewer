@@ -18,7 +18,7 @@ export type { HttpRequestSpan } from '../types/log.types';
 import type { SelectionRange } from '../hooks/useChartInteraction';
 
 interface HttpActivityChartProps {
-  httpRequests: HttpRequestWithTimestamp[];
+  httpRequests: readonly HttpRequestWithTimestamp[];
   /** Time range to use for the chart - must match LogActivityChart for alignment */
   timeRange: { minTime: TimestampMicros; maxTime: TimestampMicros };
   /**

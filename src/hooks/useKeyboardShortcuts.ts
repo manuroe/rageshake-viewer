@@ -23,8 +23,9 @@ interface UseKeyboardShortcutsOptions {
 /**
  * Low-level hook for detecting Vim-style chord sequences and individual key events.
  *
- * Chord example:
- *   Press 'g' → chord starts (onChordStart fires)
+ * Chord example — the hook intercepts individual key events and the consumer
+ * drives chord state by calling `startChord(key)` from the `onKey` callback:
+ *   Consumer calls `startChord('g')` → chord starts (onChordStart fires)
  *   Press 's' within CHORD_TIMEOUT_MS → chord completes (onChordComplete fires with 'g', 's')
  *   If no second key within timeout → chord cancels (onChordTimeout fires)
  */

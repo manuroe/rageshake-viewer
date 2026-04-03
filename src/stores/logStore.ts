@@ -13,8 +13,12 @@
  * 2. Both sync and HTTP views need the complete line array for timestamp
  *    lookups and gap navigation — not a subset scoped to their own requests.
  *
- * `loadLogParserResult` populates all parsed datasets in one store update so
- * subscribers never observe a half-loaded state.
+ * `loadLogParserResult` populates all parsed datasets atomically: it runs one
+ * `set()` for the main data then triggers `filterRequests`/`filterHttpRequests`
+ * which each run their own `set()`. Zustand notifies listeners after every
+ * `set()`, so intermediate states are briefly visible to store subscribers;
+ * React batches the resulting re-renders in the browser, so no temporary UI
+ * flicker is expected in practice.
  *
  * ## `statusCodeFilter` semantics
  *
@@ -127,10 +131,12 @@ interface LogStore {
   clearError: () => void;
 
   /**
-   * Load all parsed log data in a single store update — sets requests, HTTP
-   * requests, Sentry events, and all derived fields (lineNumberIndex,
-   * detectedPlatform) together so subscribers never observe a partially-loaded
-   * state. Use this instead of calling the individual setters manually.
+   * Load all parsed log data. Under the hood this runs three Zustand `set()`
+   * calls: (1) main data + derived fields, (2) filteredRequests, (3)
+   * filteredHttpRequests. Zustand notifies subscribers after each `set()`;
+   * React batches the resulting re-renders so no intermediate UI flicker is
+   * expected in a browser context. Use this instead of calling the individual
+   * setters manually to avoid setting data without derived filters.
    */
   loadLogParserResult: (result: LogParserResult) => void;
   
@@ -139,7 +145,7 @@ interface LogStore {
 }
 
 /** Build a Map from line number to ParsedLogLine for O(1) lookups. */
-function buildLineNumberIndex(rawLines: ParsedLogLine[]): Map<number, ParsedLogLine> {
+function buildLineNumberIndex(rawLines: readonly ParsedLogLine[]): Map<number, ParsedLogLine> {
   const index = new Map<number, ParsedLogLine>();
   for (const line of rawLines) {
     index.set(line.lineNumber, line);
@@ -148,7 +154,7 @@ function buildLineNumberIndex(rawLines: ParsedLogLine[]): Map<number, ParsedLogL
 }
 
 /** Scan parsed log lines to detect the host platform (Android or iOS). */
-function detectPlatform(rawLines: ParsedLogLine[]): 'android' | 'ios' | null {
+function detectPlatform(rawLines: readonly ParsedLogLine[]): 'android' | 'ios' | null {
   const limit = Math.min(rawLines.length, 10000);
   let foundAndroid = false;
   let foundIos = false;
@@ -275,30 +281,30 @@ export const useLogStore = create<LogStore>((set, get) => ({
     set({ sentryEvents: events });
   },
 
-  toggleRowExpansion: (requestId) => {
+  toggleRowExpansion: (rowKey) => {
     const expandedRows = new Set(get().expandedRows);
-    if (expandedRows.has(requestId)) {
-      expandedRows.delete(requestId);
+    if (expandedRows.has(rowKey)) {
+      expandedRows.delete(rowKey);
     } else {
-      expandedRows.add(requestId);
+      expandedRows.add(rowKey);
     }
     set({ expandedRows });
   },
 
-  setActiveRequest: (requestId) => {
-    if (requestId === null) {
+  setActiveRequest: (rowKey) => {
+    if (rowKey === null) {
       // Clear all selections
       set({ expandedRows: new Set(), openLogViewerIds: new Set() });
     } else {
       // Atomically close all rows and open the new one
-      const expandedRows = new Set([requestId]);
-      const openLogViewerIds = new Set([requestId]);
+      const expandedRows = new Set([rowKey]);
+      const openLogViewerIds = new Set([rowKey]);
       set({ expandedRows, openLogViewerIds });
     }
   },
 
   filterRequests: () => {
-    const { allRequests, rawLogLines, selectedConnId, showIncomplete, selectedTimeout, statusCodeFilter, startTime, endTime } = get();
+    const { allRequests, rawLogLines, lineNumberIndex, selectedConnId, showIncomplete, selectedTimeout, statusCodeFilter, startTime, endTime } = get();
     const filtered = filterSyncRequests(allRequests, rawLogLines, {
       selectedConnId,
       showIncomplete,
@@ -306,7 +312,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       statusCodeFilter,
       startTime,
       endTime,
-    });
+    }, lineNumberIndex.size > 0 ? lineNumberIndex : undefined);
     set({ filteredRequests: filtered });
   },
 
@@ -318,7 +324,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       logFilter,
       startTime,
       endTime,
-    }, lineNumberIndex);
+    }, lineNumberIndex.size > 0 ? lineNumberIndex : undefined);
     set({ filteredHttpRequests: filtered });
   },
 
@@ -348,15 +354,15 @@ export const useLogStore = create<LogStore>((set, get) => ({
     set({ expandedRows: new Set(), openLogViewerIds: new Set() });
   },
   
-  openLogViewer: (requestId) => {
+  openLogViewer: (rowKey) => {
     const current = new Set(get().openLogViewerIds);
-    current.add(requestId);
+    current.add(rowKey);
     set({ openLogViewerIds: current });
   },
   
-  closeLogViewer: (requestId) => {
+  closeLogViewer: (rowKey) => {
     const current = new Set(get().openLogViewerIds);
-    current.delete(requestId);
+    current.delete(rowKey);
     set({ openLogViewerIds: current });
   },
 
@@ -388,12 +394,12 @@ export const useLogStore = create<LogStore>((set, get) => ({
         ? 'room-list'
         : result.connectionIds[0] ?? '';
       set({
-        allRequests: result.requests,
-        connectionIds: result.connectionIds,
+        allRequests: [...result.requests],
+        connectionIds: [...result.connectionIds],
         selectedConnId: defaultConn,
-        allHttpRequests: result.httpRequests,
-        sentryEvents: result.sentryEvents,
-        rawLogLines: result.rawLogLines,
+        allHttpRequests: [...result.httpRequests],
+        sentryEvents: [...result.sentryEvents],
+        rawLogLines: [...result.rawLogLines],
         lineNumberIndex,
         detectedPlatform,
         error: null,

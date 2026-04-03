@@ -6,8 +6,8 @@ import { BaseActivityChart, type ActivityBucket } from './BaseActivityChart';
 import type { SelectionRange } from '../hooks/useChartInteraction';
 
 interface LogActivityChartProps {
-  logLines: ParsedLogLine[];
-  sentryEvents?: SentryEvent[];
+  logLines: readonly ParsedLogLine[];
+  sentryEvents?: readonly SentryEvent[];
   /** Callback when user selects a time range. Values are in microseconds. */
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   onResetZoom?: () => void;

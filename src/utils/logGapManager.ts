@@ -50,26 +50,26 @@ import type { ParsedLogLine } from '../types/log.types';
  */
 
 export interface GapInfo {
-  gapId: string;
-  gapSize: number;
-  remainingGap: number;
-  isFirst?: boolean;
-  isLast?: boolean;
+  readonly gapId: string;
+  readonly gapSize: number;
+  readonly remainingGap: number;
+  readonly isFirst?: boolean;
+  readonly isLast?: boolean;
 }
 
 export interface DisplayItem {
-  type: 'line';
-  data: {
-    line: ParsedLogLine;
-    index: number;
+  readonly type: 'line';
+  readonly data: {
+    readonly line: ParsedLogLine;
+    readonly index: number;
   };
-  gapAbove?: GapInfo;
-  gapBelow?: GapInfo;
+  readonly gapAbove?: GapInfo;
+  readonly gapBelow?: GapInfo;
 }
 
 export interface FilteredLine {
-  line: ParsedLogLine;
-  index: number;
+  readonly line: ParsedLogLine;
+  readonly index: number;
 }
 
 /**
@@ -88,20 +88,20 @@ export interface FilteredLine {
  */
 export interface ForcedRange {
   /** Inclusive start index into the raw log-line array. */
-  start: number;
+  readonly start: number;
   /** Exclusive end index into the raw log-line array. */
-  end: number;
+  readonly end: number;
 }
 
 /**
  * Merges overlapping or adjacent forced ranges.
  * Forced ranges are inclusive-exclusive: [start, end).
  */
-function mergeRanges(ranges: ForcedRange[]): ForcedRange[] {
+function mergeRanges(ranges: ReadonlyArray<ForcedRange>): ForcedRange[] {
   if (ranges.length === 0) return [];
 
   const sorted = [...ranges].sort((a, b) => a.start - b.start || a.end - b.end);
-  const merged: ForcedRange[] = [{ ...sorted[0] }];
+  const merged: { start: number; end: number }[] = [{ ...sorted[0] }];
 
   for (let i = 1; i < sorted.length; i++) {
     const current = sorted[i];
@@ -215,11 +215,14 @@ export function buildDisplayItems(
     // Gap above
     const aboveGapSize = prevIndex === null ? currentIndex : currentIndex - prevIndex - 1;
     if (aboveGapSize > 0) {
-      items[i].gapAbove = {
-        gapId: `up-${currentIndex}`,
-        gapSize: aboveGapSize,
-        remainingGap: aboveGapSize,
-        isFirst: prevIndex === null,
+      items[i] = {
+        ...items[i],
+        gapAbove: {
+          gapId: `up-${currentIndex}`,
+          gapSize: aboveGapSize,
+          remainingGap: aboveGapSize,
+          isFirst: prevIndex === null,
+        },
       };
     }
 
@@ -227,11 +230,14 @@ export function buildDisplayItems(
     const belowGapSize =
       nextIndex === null ? rawLogLines.length - 1 - currentIndex : nextIndex - currentIndex - 1;
     if (belowGapSize > 0) {
-      items[i].gapBelow = {
-        gapId: `down-${currentIndex}`,
-        gapSize: belowGapSize,
-        remainingGap: belowGapSize,
-        isLast: nextIndex === null,
+      items[i] = {
+        ...items[i],
+        gapBelow: {
+          gapId: `down-${currentIndex}`,
+          gapSize: belowGapSize,
+          remainingGap: belowGapSize,
+          isLast: nextIndex === null,
+        },
       };
     }
   }

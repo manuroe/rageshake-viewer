@@ -95,8 +95,17 @@
   --log-collapse-similar: #64b5f6;
   --log-timestamp: #9cdcfe;
   --log-search-highlight: #ffeb3b;
+  --log-search-highlight-text: #000;        /* High-contrast text on the yellow highlight */
   --log-match-bg: rgba(255, 255, 0, 0.1);
   --log-current-match-bg: rgba(255, 165, 0, 0.2);
+
+  /* Log gap-arrow controls (always rendered on the dark log background) */
+  --log-gap-arrow-bg: rgba(80, 80, 80, 0.5);
+  --log-gap-arrow-border: #555;
+  --log-gap-arrow-text: #aaa;
+  --log-gap-arrow-bg-hover: rgba(100, 100, 100, 0.8);
+  --log-gap-arrow-border-hover: #888;
+  --log-gap-arrow-bg-active: rgba(120, 120, 120, 0.9);
 
   /* -------------------------------------------------------------------------
      Typography
@@ -268,7 +277,7 @@
   --text-primary: #e0e0e0;
   --text-secondary: #b0b0b0;
   --text-tertiary: #909090;
-  --text-muted: #707070;
+  --text-muted: #9e9e9e;
   --text-placeholder: #606060;
 
   /* Background Colors */
@@ -306,7 +315,7 @@
   --gap-stripe-a: rgba(255, 255, 255, 0.03);
   --gap-stripe-b: rgba(255, 255, 255, 0.08);
   --gap-border: rgba(255, 255, 255, 0.15);
-  --gap-label-color: #707070;
+  --gap-label-color: #9e9e9e;
 
   /* HTTP Status Code Colors (dark theme - brighter for visibility) */
   --http-200: #4caf50;
@@ -382,7 +391,7 @@
     --text-primary: #e0e0e0;
     --text-secondary: #b0b0b0;
     --text-tertiary: #909090;
-    --text-muted: #707070;
+    --text-muted: #9e9e9e;
     --text-placeholder: #606060;
 
     /* Background Colors */
@@ -420,7 +429,7 @@
     --gap-stripe-a: rgba(255, 255, 255, 0.03);
     --gap-stripe-b: rgba(255, 255, 255, 0.08);
     --gap-border: rgba(255, 255, 255, 0.15);
-    --gap-label-color: #707070;
+    --gap-label-color: #9e9e9e;
 
     /* HTTP Status Code Colors (dark theme - brighter for visibility) */
     --http-200: #4caf50;

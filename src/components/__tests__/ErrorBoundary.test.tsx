@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { AppError } from '../../utils/errorHandling';
@@ -6,6 +6,10 @@ import { AppError } from '../../utils/errorHandling';
 // Suppress expected error output in tests
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 /** A component that throws when shouldThrow prop is true */

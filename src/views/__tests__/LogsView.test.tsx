@@ -116,7 +116,7 @@ describe('LogsView', () => {
     expect(screen.getByText('0', { selector: '#total-count' })).toBeInTheDocument();
   });
 
-  it('passes LogDisplayView the correct props', () => {
+  it('renders log lines from the store', () => {
     const logs = createParsedLogLines(20);
     useLogStore.setState({ rawLogLines: logs });
 

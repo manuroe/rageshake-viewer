@@ -75,7 +75,7 @@ export interface SummaryStats {
   /** Number of log lines in the active time window. */
   readonly totalLogLines: number;
   /** Log lines in the active window (forwarded to `LogActivityChart`). */
-  readonly filteredLogLines: ParsedLogLine[];
+  readonly filteredLogLines: readonly ParsedLogLine[];
   /** Display timestamps of the first and last filtered log lines. */
   readonly timeSpan: { readonly start: string; readonly end: string };
   readonly errors: number;
@@ -85,7 +85,7 @@ export interface SummaryStats {
   /** Up to 5 most-frequent warning messages with their counts. */
   readonly warningsByType: readonly MessageCount[];
   /** Sentry events within the active time window. */
-  readonly sentryEvents: SentryEvent[];
+  readonly sentryEvents: readonly SentryEvent[];
   /** HTTP error status codes with counts (4xx / 5xx only). */
   readonly httpErrorsByStatus: readonly HttpStatusCount[];
   /** Up to 5 URIs with the highest number of HTTP errors. */
@@ -95,7 +95,7 @@ export interface SummaryStats {
   /** Sync request counts per connection, sorted descending. */
   readonly syncRequestsByConnection: readonly SyncByConnection[];
   /** HTTP request attempts with start timestamps (used by `HttpActivityChart`). */
-  readonly httpRequestsWithTimestamps: HttpRequestWithTimestamp[];
+  readonly httpRequestsWithTimestamps: readonly HttpRequestWithTimestamp[];
   /** HTTP requests with upload/download byte counts (used by `BandwidthChart`). */
   readonly httpRequestsWithBandwidth: readonly BandwidthRequestEntry[];
   /** Request spans with byte payloads for in-flight bandwidth area mode. */

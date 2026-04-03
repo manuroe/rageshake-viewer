@@ -45,7 +45,7 @@ function getHttpErrorStatus(rawText: string): string | null {
  *
  * ### `lineRange` — secondary scoping within the line array
  *
- * `lineRange` is an **inclusive** `[start, end]` filter on `lineNumber`
+ * `lineRange` is an **inclusive** `{ start, end }` filter on `lineNumber`
  * that is applied *after* selecting the line source:
  *
  * - If `logLines` is also set, `lineRange` further restricts that slice
@@ -79,7 +79,7 @@ interface LogDisplayViewProps {
   /** Override the line source; when absent, falls back to `rawLogLines` from the store. */
   logLines?: ParsedLogLine[];
   /**
-   * Inclusive line-number range `[start, end]`. When set, the initial
+   * Inclusive line-number range `{ start, end }`. When set, the initial
    * rendered set is restricted to lines whose `lineNumber` falls within
    * this range. Gap expansion may reveal lines outside the range. Applied
    * after the `logLines` / store selection — see interface-level JSDoc for
@@ -364,7 +364,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             href: githubUrl,
             title: 'View on GitHub',
             keyPrefix: 'source',
-            onClick: (e) => handleSourceLinkClick(e, line.filePath, line.sourceLineNumber),
+            onClick: (e) => { void handleSourceLinkClick(e, line.filePath, line.sourceLineNumber); },
           });
         }
       }
@@ -480,16 +480,20 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     if (!pendingWindow) return;
     pendingWindow.opener = null;
 
-    const resolvedUrl = await resolveSwiftFilenameToBlobUrl(filePath, sourceLineNumber);
-    const fallbackUrl = generateGitHubSourceUrl(filePath, sourceLineNumber);
-    const targetUrl = resolvedUrl || fallbackUrl;
+    try {
+      const resolvedUrl = await resolveSwiftFilenameToBlobUrl(filePath, sourceLineNumber);
+      const fallbackUrl = generateGitHubSourceUrl(filePath, sourceLineNumber);
+      const targetUrl = resolvedUrl || fallbackUrl;
 
-    if (!targetUrl) {
+      if (!targetUrl) {
+        pendingWindow.close();
+        return;
+      }
+
+      pendingWindow.location.href = targetUrl;
+    } catch {
       pendingWindow.close();
-      return;
     }
-
-    pendingWindow.location.href = targetUrl;
   };
 
   // Expand a gap by including the missing lines
