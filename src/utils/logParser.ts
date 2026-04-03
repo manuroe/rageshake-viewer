@@ -49,14 +49,21 @@ function extractLogLevel(line: string): LogLevel {
 }
 
 function stripMessagePrefix(message: string): string {
-  // stripLogPrefix handles the ISO-timestamp + level prefix in one pass,
-  // delegating to the canonical LOG_PREFIX_RE so the ISO pattern is not
-  // duplicated here. For lines that use a time-only prefix (no date), the
-  // second replace handles the timestamp and the third strips the level.
-  const stripped = stripLogPrefix(message)
+  // For ISO-prefixed lines, stripLogPrefix removes timestamp + level in one
+  // anchored pass via LOG_PREFIX_RE. Short-circuit here so we never apply the
+  // level-stripping regex to the payload (avoiding accidental removal of a
+  // level word that legitimately appears inside the message text).
+  const isoStripped = stripLogPrefix(message);
+  if (isoStripped !== message) {
+    return isoStripped.trim();
+  }
+
+  // For lines that use a time-only prefix (no date), strip the timestamp first
+  // and then remove only a leading level token from the remaining message.
+  return message
     .replace(/^\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+/, '')  // Time-only timestamp
-    .replace(/\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+/, ' '); // Log level (time-only lines)
-  return stripped.trim();
+    .replace(/^(TRACE|DEBUG|INFO|WARN|ERROR)\s+/, '')    // Leading log level (time-only lines)
+    .trim();
 }
 
 /**
