@@ -1,6 +1,6 @@
 import type { ActivityBucket } from './BaseActivityChart';
 import { formatBytes } from '../utils/sizeUtils';
-import { getBucketColor, getBucketLabel } from '../utils/httpStatusBuckets';
+import { getBucketColor, getBucketLabel, sortStatusCodes } from '../utils/httpStatusBuckets';
 
 /**
  * Bucket type for the mirrored bandwidth histogram chart, extending the generic
@@ -46,8 +46,12 @@ export interface BandwidthBucket extends ActivityBucket {
  * }));
  */
 export function renderBandwidthTooltip(bucket: BandwidthBucket): React.ReactElement {
-  const downloadEntries = Object.entries(bucket.downloadByStatus).filter(([, v]) => v > 0);
-  const uploadEntries = Object.entries(bucket.uploadByStatus).filter(([, v]) => v > 0);
+  const downloadEntries = sortStatusCodes(Object.keys(bucket.downloadByStatus))
+    .map((key): [string, number] => [key, bucket.downloadByStatus[key] ?? 0])
+    .filter(([, v]) => v > 0);
+  const uploadEntries = sortStatusCodes(Object.keys(bucket.uploadByStatus))
+    .map((key): [string, number] => [key, bucket.uploadByStatus[key] ?? 0])
+    .filter(([, v]) => v > 0);
 
   return (
     <>

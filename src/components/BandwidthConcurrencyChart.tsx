@@ -219,8 +219,8 @@ export function BandwidthConcurrencyChart({
   );
 
   /**
-   * Unified timeline for download layers — positive domain (above zero).
-   * Each layer's y0/y1 values represent cumulative download bytes in data units.
+   * Unified timeline for download layers — cumulative download bytes rendered below the zero line.
+   * y0/y1 are positive data values; `downloadScale` maps them into the bottom zone of the chart.
    */
   const downloadLayers = useMemo(() => {
     const allTimes = new Set([minTime, maxTime]);
@@ -328,12 +328,15 @@ export function BandwidthConcurrencyChart({
     useTooltip<TooltipData>();
 
   // ── Interaction ─────────────────────────────────────────────────────────
+  /** Reversed key order for tooltip — computed once per orderedKeys change, not on every mouse-move. */
+  const reversedKeys = useMemo(() => [...orderedKeys].reverse(), [orderedKeys]);
+
   const getTooltipData = useCallback(
     (timeUs: number): TooltipData => {
       let totalDownload = 0;
       let totalUpload = 0;
       const statusEntries: TooltipStatusEntry[] = [];
-      for (const key of [...orderedKeys].reverse()) {
+      for (const key of reversedKeys) {
         const dl = getCountAtTime(downloadSeriesByKey.get(key) ?? [], timeUs);
         const ul = getCountAtTime(uploadSeriesByKey.get(key) ?? [], timeUs);
         totalDownload += dl;
@@ -342,7 +345,7 @@ export function BandwidthConcurrencyChart({
       }
       return { timeUs, totalDownload, totalUpload, statusEntries };
     },
-    [orderedKeys, downloadSeriesByKey, uploadSeriesByKey],
+    [reversedKeys, downloadSeriesByKey, uploadSeriesByKey],
   );
 
   const {

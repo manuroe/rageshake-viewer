@@ -446,7 +446,7 @@ export function computeSummaryStats(
             uploadBytes: req.requestSize,
             downloadBytes: 0,
             uri: req.uri,
-            status: '',
+            status: req.clientError ? CLIENT_ERROR_CHART_STATUS : '',
             ...(timeoutByRequestId.has(req.requestId) && { timeout: timeoutByRequestId.get(req.requestId) }),
           });
         }
@@ -491,7 +491,7 @@ export function computeSummaryStats(
       uploadBytes: req.requestSize,
       downloadBytes: req.responseSize,
       uri: req.uri,
-      status: req.status,
+      status: req.clientError ? CLIENT_ERROR_CHART_STATUS : (req.status ?? ''),
       ...(timeout !== undefined && { timeout }),
     });
   }

@@ -17,9 +17,9 @@ const SVG_WIDTH = 800;
 interface BandwidthHistogramChartProps {
   /** Time-bucketed bandwidth data, one entry per histogram bar. */
   readonly buckets: readonly BandwidthBucket[];
-  /** Greatest total download bytes across all buckets — sets the positive y-axis domain. */
+  /** Greatest total download bytes across all buckets — sets the y-axis domain for the bottom zone (below the zero line). */
   readonly maxDownload: number;
-  /** Greatest total upload bytes across all buckets — sets the negative y-axis domain. */
+  /** Greatest total upload bytes across all buckets — sets the y-axis domain for the top zone (above the zero line). */
   readonly maxUpload: number;
   /** Ordered status-bucket keys that appear in this dataset, used to determine stack order. */
   readonly statusKeys: readonly string[];
