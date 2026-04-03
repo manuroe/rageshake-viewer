@@ -26,15 +26,16 @@ export const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z
  * rageshake log line, allowing the prefix to be stripped via
  * {@link stripLogPrefix}.
  *
- * Built on the same date portion as {@link ISO_TIMESTAMP_RE}; accepts any
- * single-word level token (`\w+`) rather than enumerating the known levels.
+ * Derived from {@link ISO_TIMESTAMP_RE}.source so the timestamp portion is
+ * defined exactly once; accepts any single-word level token (`\w+`) rather
+ * than enumerating the known levels.
  *
  * @example
  * LOG_PREFIX_RE.test("2026-01-28T13:24:43.950890Z INFO foo") // => true
  * LOG_PREFIX_RE.test("2026-01-28T13:24:43Z INFO foo")       // => true (no fractions)
  * LOG_PREFIX_RE.test("2026-01-28T13:24:43.123456 INFO foo")  // => true (no Z)
  */
-export const LOG_PREFIX_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+\w+\s+/;
+export const LOG_PREFIX_RE = new RegExp(`${ISO_TIMESTAMP_RE.source}\\s+\\w+\\s+`);
 
 /**
  * Strip the ISO timestamp + log-level prefix from a raw log line, keeping only
