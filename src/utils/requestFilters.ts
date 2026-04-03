@@ -49,16 +49,22 @@ export function getTimeRangeUs(
  * Return true when the request falls inside the given microsecond range.
  * For completed requests we use the response timestamp; for incomplete requests
  * (no response line) we fall back to the send timestamp.
+ *
+ * @param lineNumberIndex - Optional prebuilt index for O(1) lookups. Falls back
+ *   to a linear scan of rawLogLines when omitted.
  */
 function isRequestInTimeRange(
   request: Pick<HttpRequest, 'responseLineNumber' | 'sendLineNumber'>,
   rawLogLines: ParsedLogLine[],
-  timeRangeUs: { startUs: TimestampMicros; endUs: TimestampMicros }
+  timeRangeUs: { startUs: TimestampMicros; endUs: TimestampMicros },
+  lineNumberIndex?: Map<number, ParsedLogLine>
 ): boolean {
   const lineNumber = request.responseLineNumber || request.sendLineNumber;
   if (!lineNumber) return false;
 
-  const line = rawLogLines.find((l) => l.lineNumber === lineNumber);
+  const line = lineNumberIndex
+    ? lineNumberIndex.get(lineNumber)
+    : rawLogLines.find((l) => l.lineNumber === lineNumber);
   if (!line || !line.timestampUs) return false;
 
   return line.timestampUs >= timeRangeUs.startUs && line.timestampUs <= timeRangeUs.endUs;
@@ -66,11 +72,15 @@ function isRequestInTimeRange(
 
 /**
  * Filter sync (sliding-sync) requests according to current filter state.
+ *
+ * @param lineNumberIndex - Optional prebuilt line-number index for O(1) lookups.
+ *   When omitted, falls back to a linear scan of rawLogLines (used by tests).
  */
 export function filterSyncRequests(
   requests: SyncRequest[],
   rawLogLines: ParsedLogLine[],
-  filters: SyncRequestFilters
+  filters: SyncRequestFilters,
+  lineNumberIndex?: Map<number, ParsedLogLine>
 ): SyncRequest[] {
   const { selectedConnId, showIncomplete, selectedTimeout, statusCodeFilter, startTime, endTime } =
     filters;
@@ -104,7 +114,7 @@ export function filterSyncRequests(
     }
 
     // Time filter
-    if (timeRangeUs && !isRequestInTimeRange(r, rawLogLines, timeRangeUs)) {
+    if (timeRangeUs && !isRequestInTimeRange(r, rawLogLines, timeRangeUs, lineNumberIndex)) {
       return false;
     }
 

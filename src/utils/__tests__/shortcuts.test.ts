@@ -47,9 +47,12 @@ describe('isInputFocused', () => {
       get: () => div,
       configurable: true,
     });
-    expect(isInputFocused()).toBe(true);
-    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    delete (document as unknown as Record<string, unknown>).activeElement;
+    try {
+      expect(isInputFocused()).toBe(true);
+    } finally {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete (document as unknown as Record<string, unknown>).activeElement;
+    }
     document.body.removeChild(div);
   });
 

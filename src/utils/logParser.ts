@@ -51,7 +51,7 @@ function stripMessagePrefix(message: string): string {
   // Strip timestamp, log level, and common prefixes to get the actual message content
   const stripped = message
     .replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+/, '') // ISO timestamp
-    .replace(/^\d{2}:\d{2}:\d{2}\.\d+Z?\s+/, '') // Time-only timestamp
+    .replace(/^\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s+/, '') // Time-only timestamp
     .replace(/\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+/, ' '); // Log level
   return stripped.trim();
 }
@@ -119,9 +119,9 @@ const SENTRY_ANDROID_STR = 'Sending error to Sentry';
 const SENTRY_URL_BASE = 'https://sentry.tools.element.io/organizations/element/issues/?project=44&query=';
 
 export interface AllHttpRequestsResult {
-  httpRequests: HttpRequest[];
-  rawLogLines: ParsedLogLine[];
-  sentryEvents: SentryEvent[];
+  readonly httpRequests: readonly HttpRequest[];
+  readonly rawLogLines: readonly ParsedLogLine[];
+  readonly sentryEvents: readonly SentryEvent[];
 }
 
 export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult {

@@ -6,7 +6,7 @@ import type { FilteredLine } from './logGapManager';
  * consecutive duplicate/similar lines are detected. Add paths here to always
  * show these logs expanded.
  */
-export const COLLAPSE_IGNORE_SOURCES: string[] = [
+export const COLLAPSE_IGNORE_SOURCES: readonly string[] = [
   'crates/matrix-sdk/src/http_client/native.rs',
 ];
 
@@ -48,10 +48,10 @@ function getLineRelation(a: ParsedLogLine, b: ParsedLogLine): CollapseType | nul
     return 'exact';
   }
   if (
-    a.filePath !== null && a.filePath !== undefined &&
-    b.filePath !== null && b.filePath !== undefined &&
-    a.sourceLineNumber !== null && a.sourceLineNumber !== undefined &&
-    b.sourceLineNumber !== null && b.sourceLineNumber !== undefined &&
+    a.filePath !== undefined &&
+    b.filePath !== undefined &&
+    a.sourceLineNumber !== undefined &&
+    b.sourceLineNumber !== undefined &&
     a.filePath === b.filePath &&
     a.sourceLineNumber === b.sourceLineNumber
   ) {

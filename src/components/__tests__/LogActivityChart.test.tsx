@@ -220,7 +220,7 @@ describe('LogActivityChart', () => {
     expect(container.querySelector('svg')).toBeInTheDocument();
   });
 
-  it('calls onTimeRangeSelected callback when selection exceeds minimum range', async () => {
+  it('does not crash when mouse selection exceeds minimum range', async () => {
     const logs = createParsedLogLines(100);
     const onTimeRangeSelected = vi.fn();
     const { container } = render(
@@ -249,7 +249,7 @@ describe('LogActivityChart', () => {
     expect(container.querySelector('svg')).toBeInTheDocument();
   });
 
-  it('does not call onTimeRangeSelected for selection smaller than 100ms', async () => {
+  it('does not crash for mouse selection smaller than 100ms', async () => {
     const logs = createParsedLogLines(100);
     const onTimeRangeSelected = vi.fn();
     const { container } = render(

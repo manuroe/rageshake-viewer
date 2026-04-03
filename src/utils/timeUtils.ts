@@ -42,7 +42,7 @@ export function isoToMicros(iso: ISODateTimeString): TimestampMicros {
   if (!iso) return 0;
 
   // Match ISO format: YYYY-MM-DDTHH:MM:SS[.fraction]Z
-  const match = iso.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z)?$/);
+  const match = iso.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(?:Z)?$/);
   if (!match) return 0;
 
   const basePart = match[1];
