@@ -50,7 +50,7 @@ describe('useClickOutside', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('does not attach a listener when enabled is false', () => {
+  it('does not call onClose when disabled', () => {
     const onClose = vi.fn();
     const ref = createRef<HTMLDivElement>();
     (ref as React.MutableRefObject<HTMLDivElement>).current = container;

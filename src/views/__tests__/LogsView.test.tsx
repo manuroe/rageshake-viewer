@@ -116,7 +116,7 @@ describe('LogsView', () => {
     expect(screen.getByText('0', { selector: '#total-count' })).toBeInTheDocument();
   });
 
-  it('renders log lines from the store', () => {
+  it('renders log lines in the log display container', () => {
     const logs = createParsedLogLines(20);
     useLogStore.setState({ rawLogLines: logs });
 
@@ -176,14 +176,12 @@ describe('LogsView', () => {
     expect(newCount).toBeLessThanOrEqual(initialCount);
   });
 
-  it('does not filter by request filter - only time range', () => {
-    // LogsView should NOT apply request filtering, only time range
+  it('keeps shown count based on time range even when a log filter is set', () => {
     const logs = createParsedLogLines(10);
-    useLogStore.setState({ rawLogLines: logs });
+    useLogStore.setState({ rawLogLines: logs, logFilter: 'not-present-in-any-line' });
 
-    const { container } = render(<LogsView />);
+    render(<LogsView />);
 
-    // Should show all logs in time range regardless of content
     const shownCountEl = screen.getByText((content, element) => 
       element?.id === 'shown-count' && content !== ''
     );

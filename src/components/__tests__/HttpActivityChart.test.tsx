@@ -35,7 +35,7 @@ describe('HttpActivityChart', () => {
       expect(screen.getByText('No HTTP request data to display')).toBeInTheDocument();
     });
 
-    it('renders without errors when timeRange is 0/0 (covers early-return useMemo branch)', () => {
+    it('renders without errors when timeRange is 0/0', () => {
       const requests = [makeReq()];
       // Renders the component: exercises the `if (minTime === 0 && maxTime === 0)` early return
       // path inside the useMemo, which returns empty buckets.  We just verify it does not throw.

@@ -42,7 +42,7 @@ describe('ErrorDisplay', () => {
     });
   });
 
-  describe('severity: warning (covers cond-expr false branches on L33, L38, L39)', () => {
+  describe('severity: warning', () => {
     it('renders the warning message', () => {
       render(
         <ErrorDisplay error={makeError({ severity: 'warning', userMessage: 'Low disk space' })} />,
@@ -50,14 +50,14 @@ describe('ErrorDisplay', () => {
       expect(screen.getByText('Low disk space')).toBeInTheDocument();
     });
 
-    it('does NOT use role="alert" for warnings (idx=1 on L38)', () => {
+    it('does not use role="alert" for warnings', () => {
       const { container } = render(
         <ErrorDisplay error={makeError({ severity: 'warning' })} />,
       );
       expect(container.querySelector('[role="alert"]')).toBeNull();
     });
 
-    it('uses aria-live="polite" for warnings (idx=1 on L39)', () => {
+    it('uses aria-live="polite" for warnings', () => {
       const { container } = render(
         <ErrorDisplay error={makeError({ severity: 'warning' })} />,
       );
@@ -65,7 +65,7 @@ describe('ErrorDisplay', () => {
       expect(div.getAttribute('aria-live')).toBe('polite');
     });
 
-    it('uses warning color (#f59e0b, idx=1 on L33)', () => {
+    it('uses warning color (#f59e0b)', () => {
       const { container } = render(
         <ErrorDisplay error={makeError({ severity: 'warning' })} />,
       );

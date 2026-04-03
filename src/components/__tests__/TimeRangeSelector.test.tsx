@@ -35,16 +35,15 @@ describe('TimeRangeSelector', () => {
     it('shows "from to" format when both custom times set', () => {
       useLogStore.setState({ startTime: '12:00:00', endTime: '13:00:00' });
       render(<TimeRangeSelector />);
-      // Display should contain something about the times
       const btn = screen.getByRole('button', { name: /select time range/i });
-      expect(btn).toBeInTheDocument();
+      expect(btn).toHaveTextContent('12:00:00 to 13:00:00');
     });
 
     it('shows "Start to X" when only endTime is set', () => {
       useLogStore.setState({ startTime: null, endTime: '13:00:00' });
       render(<TimeRangeSelector />);
       const btn = screen.getByRole('button', { name: /select time range/i });
-      expect(btn).toBeInTheDocument();
+      expect(btn).toHaveTextContent('Start to 13:00:00');
     });
   });
 
