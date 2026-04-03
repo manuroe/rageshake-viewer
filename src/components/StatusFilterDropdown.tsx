@@ -78,7 +78,7 @@ export function StatusFilterDropdown({ availableStatusCodes }: StatusFilterDropd
         onClick={() => setIsOpen(!isOpen)}
         title="Filter by status code"
         aria-expanded={isOpen}
-        aria-haspopup="menu"
+        aria-haspopup="listbox"
         aria-controls="status-filter-dropdown"
       >
         {buttonLabel}
