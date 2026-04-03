@@ -94,6 +94,12 @@ export interface BandwidthRequestEntry {
   /** Full request URI — used by consumers to filter by path (e.g. hide /media/ uploads). */
   readonly uri: string;
   /**
+   * HTTP status string (e.g. `'200 OK'`, `'client-error'`, `''` for incomplete).
+   * Mirrors {@link HttpRequest.status} so the bandwidth chart can colour bars by
+   * the same status-bucket palette used in `HttpActivityChart`.
+   */
+  readonly status: string;
+  /**
    * Timeout in ms when this is a /sync request (0 = catch-up, ≥30000 = long-poll);
    * `undefined` for non-sync requests.  Mirrors the same field on
    * {@link HttpRequestWithTimestamp} so callers can identify and filter sync traffic.
@@ -114,6 +120,11 @@ export interface BandwidthRequestSpan {
   readonly downloadBytes: number;
   /** Full request URI — used by consumers to apply path filters. */
   readonly uri: string;
+  /**
+   * HTTP status string (e.g. `'200 OK'`, `'client-error'`, `''` for incomplete).
+   * Used by the concurrent bandwidth chart to colour each area layer by status bucket.
+   */
+  readonly status: string;
   /** Timeout in ms when this is a /sync request; `undefined` for non-sync requests. */
   readonly timeout?: number;
 }

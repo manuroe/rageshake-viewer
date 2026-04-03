@@ -2,7 +2,7 @@ import { useMemo, useCallback } from 'react';
 import { Group } from '@visx/group';
 import { Area, Line } from '@visx/shape';
 import { scaleLinear } from '@visx/scale';
-import { AxisBottom, AxisLeft } from '@visx/axis';
+import { AxisLeft } from '@visx/axis';
 import { useTooltip, TooltipWithBounds } from '@visx/tooltip';
 import { curveStepAfter } from 'd3-shape';
 import type { BandwidthRequestSpan } from '../types/log.types';
@@ -13,6 +13,7 @@ import { formatBytes } from '../utils/sizeUtils';
 import type { StepPoint } from '../utils/concurrencyUtils';
 import { getCountAtTime } from '../utils/concurrencyUtils';
 import { useStepChartInteraction } from '../hooks/useStepChartInteraction';
+import { getBucketKey, getBucketColor, getBucketLabel, sortStatusCodes } from '../utils/httpStatusBuckets';
 
 interface BandwidthConcurrencyChartProps {
   /** Per-request time spans, each with precise start/end timestamps and byte counts. */
@@ -37,20 +38,28 @@ interface BandwidthConcurrencyChartProps {
 
 interface LayerPoint {
   readonly timeUs: number;
+  /** Lower value in the data domain (e.g. cumulative bytes below this layer). */
   readonly y0: number;
+  /** Upper value in the data domain for this layer (e.g. cumulative bytes including this layer). */
   readonly y1: number;
 }
 
-interface TooltipData {
-  readonly timeUs: number;
+interface TooltipStatusEntry {
+  readonly key: string;
   readonly downloadBytes: number;
   readonly uploadBytes: number;
 }
 
+interface TooltipData {
+  readonly timeUs: number;
+  readonly totalDownload: number;
+  readonly totalUpload: number;
+  /** Per-status counts in display order (highest-priority first). */
+  readonly statusEntries: readonly TooltipStatusEntry[];
+}
+
 const SVG_WIDTH = 800;
 const MARGIN = { top: 10, right: 10, bottom: 30, left: 60 };
-const UPLOAD_COLOR = 'var(--bandwidth-upload)';
-const DOWNLOAD_COLOR = 'var(--bandwidth-download)';
 
 function computeStepSeries(
   spans: readonly BandwidthRequestSpan[],
@@ -93,12 +102,65 @@ function computeStepSeries(
 }
 
 /**
+ * Renders tooltip content for the concurrent bandwidth chart.
+ *
+ * Shows per-status byte breakdowns under separate Download and Upload sections,
+ * matching the layout used by `BandwidthChartTooltip.renderBandwidthTooltip`.
+ */
+function renderConcurrencyTooltip(data: TooltipData, formatTime: (t: number) => string): React.ReactElement {
+  return (
+    <>
+      <div style={{ marginBottom: '3px', fontWeight: 'bold', fontSize: '10px' }}>
+        {formatTime(data.timeUs)}
+      </div>
+      {data.statusEntries.filter((e) => e.uploadBytes > 0).length > 0 && (
+        <>
+          <div style={{ fontSize: '9px', color: '#aaa', marginBottom: '1px' }}>↑ Upload</div>
+          {data.statusEntries
+            .filter((e) => e.uploadBytes > 0)
+            .map((entry) => (
+              <div key={`ul-${entry.key}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
+                <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: getBucketColor(entry.key), borderRadius: '1px', flexShrink: 0 }} />
+                <span style={{ fontSize: '9px' }}>{getBucketLabel(entry.key)}: {formatBytes(entry.uploadBytes)}</span>
+              </div>
+            ))}
+        </>
+      )}
+      {data.statusEntries.filter((e) => e.downloadBytes > 0).length > 0 && (
+        <>
+          <div style={{ fontSize: '9px', color: '#aaa', marginTop: data.statusEntries.some((e) => e.uploadBytes > 0) ? '3px' : 0, marginBottom: '1px' }}>↓ Download</div>
+          {data.statusEntries
+            .filter((e) => e.downloadBytes > 0)
+            .map((entry) => (
+              <div key={`dl-${entry.key}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
+                <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: getBucketColor(entry.key), borderRadius: '1px', flexShrink: 0 }} />
+                <span style={{ fontSize: '9px' }}>{getBucketLabel(entry.key)}: {formatBytes(entry.downloadBytes)}</span>
+              </div>
+            ))}
+        </>
+      )}
+      {(data.totalDownload > 0 || data.totalUpload > 0) && (
+        <div style={{ marginTop: '3px', paddingTop: '2px', borderTop: '1px solid #555', fontSize: '9px' }}>
+          {data.totalDownload > 0 && <span>↓ {formatBytes(data.totalDownload)}</span>}
+          {data.totalDownload > 0 && data.totalUpload > 0 && <span style={{ margin: '0 4px', color: '#aaa' }}>·</span>}
+          {data.totalUpload > 0 && <span>↑ {formatBytes(data.totalUpload)}</span>}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
  * Step-function area chart for the "Show in-flight" concurrent mode on the /summary screen.
  *
  * Unlike the bar histogram, this chart uses the precise `startUs`/`endUs` timestamps
  * from `BandwidthRequestSpan` to compute an exact in-flight waveform — no bucketing
- * approximation.  Download and upload bytes are tracked independently in separate event
- * sweeps, then stacked (download below, upload above) for rendering.
+ * approximation.
+ *
+ * The chart is **mirrored**: download bytes (received) stack **above** the zero line
+ * using the HTTP status colour palette; upload bytes (sent) stack **below** the zero
+ * line with the same colours.  This matches the `BandwidthHistogramChart` layout so
+ * both chart modes are visually coherent.
  *
  * Interaction model mirrors `HttpConcurrencyChart`: drag-to-zoom, cursor sync, and
  * external selection mirroring are all supported via the same prop surface.
@@ -112,41 +174,112 @@ export function BandwidthConcurrencyChart({
   externalSelection,
   onCursorMove,
   onSelectionChange,
-  height = 120,
+  height = 140,
 }: BandwidthConcurrencyChartProps) {
   const { minTime, maxTime } = timeRange;
   const xMax = SVG_WIDTH - MARGIN.left - MARGIN.right;
   const yMax = height - MARGIN.top - MARGIN.bottom;
 
-  const uploadSeries = useMemo(
-    () => computeStepSeries(bandwidthRequestSpans, minTime, maxTime, (s) => s.uploadBytes),
-    [bandwidthRequestSpans, minTime, maxTime],
-  );
-  const downloadSeries = useMemo(
-    () => computeStepSeries(bandwidthRequestSpans, minTime, maxTime, (s) => s.downloadBytes),
-    [bandwidthRequestSpans, minTime, maxTime],
-  );
+  // ── Ordered status keys from all spans ───────────────────────────────────
+  const orderedKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const span of bandwidthRequestSpans) keys.add(getBucketKey(span));
+    return sortStatusCodes(Array.from(keys));
+  }, [bandwidthRequestSpans]);
 
-  const layers = useMemo(() => {
-    const allTimes = new Set<number>([minTime, maxTime]);
-    for (const p of uploadSeries) allTimes.add(p.timeUs);
-    for (const p of downloadSeries) allTimes.add(p.timeUs);
+  // ── Per-status step series (download + upload) ───────────────────────────
+  const downloadSeriesByKey = useMemo(() => {
+    const grouped = new Map<string, BandwidthRequestSpan[]>();
+    for (const key of orderedKeys) grouped.set(key, []);
+    for (const span of bandwidthRequestSpans) grouped.get(getBucketKey(span))?.push(span);
+    return new Map(
+      orderedKeys.map((key) => [
+        key,
+        computeStepSeries(grouped.get(key) ?? [], minTime, maxTime, (s) => s.downloadBytes),
+      ]),
+    );
+  }, [orderedKeys, bandwidthRequestSpans, minTime, maxTime]);
+
+  const uploadSeriesByKey = useMemo(() => {
+    const grouped = new Map<string, BandwidthRequestSpan[]>();
+    for (const key of orderedKeys) grouped.set(key, []);
+    for (const span of bandwidthRequestSpans) grouped.get(getBucketKey(span))?.push(span);
+    return new Map(
+      orderedKeys.map((key) => [
+        key,
+        computeStepSeries(grouped.get(key) ?? [], minTime, maxTime, (s) => s.uploadBytes),
+      ]),
+    );
+  }, [orderedKeys, bandwidthRequestSpans, minTime, maxTime]);
+
+  /**
+   * Unified timeline for download layers — positive domain (above zero).
+   * Each layer's y0/y1 values represent cumulative download bytes in data units.
+   */
+  const downloadLayers = useMemo(() => {
+    const allTimes = new Set([minTime, maxTime]);
+    for (const pts of downloadSeriesByKey.values()) {
+      for (const p of pts) allTimes.add(p.timeUs);
+    }
     const sortedTimes = Array.from(allTimes).sort((a, b) => a - b);
 
-    const downloadLayer: LayerPoint[] = [];
-    const uploadLayer: LayerPoint[] = [];
-    for (const t of sortedTimes) {
-      const download = getCountAtTime(downloadSeries, t);
-      const upload = getCountAtTime(uploadSeries, t);
-      downloadLayer.push({ timeUs: t, y0: 0, y1: download });
-      uploadLayer.push({ timeUs: t, y0: download, y1: download + upload });
+    const countsByKey = new Map<string, number[]>();
+    for (const key of orderedKeys) {
+      const pts = downloadSeriesByKey.get(key) ?? [];
+      countsByKey.set(key, sortedTimes.map((t) => getCountAtTime(pts, t)));
     }
-    return { downloadLayer, uploadLayer };
-  }, [uploadSeries, downloadSeries, minTime, maxTime]);
 
-  const maxBytes = useMemo(
-    () => Math.max(...layers.uploadLayer.map((p) => p.y1), 1),
-    [layers],
+    const cumulative = new Array<number>(sortedTimes.length).fill(0);
+    return orderedKeys.map((key) => {
+      const counts = countsByKey.get(key) ?? [];
+      const points: LayerPoint[] = sortedTimes.map((timeUs, idx) => {
+        const y0 = cumulative[idx];
+        const y1 = y0 + (counts[idx] ?? 0);
+        cumulative[idx] = y1;
+        return { timeUs, y0, y1 };
+      });
+      return { key, color: getBucketColor(key), points };
+    });
+  }, [orderedKeys, downloadSeriesByKey, minTime, maxTime]);
+
+  /**
+   * Unified timeline for upload layers — negative domain (below zero).
+   * y0/y1 values are stored as negative numbers so the same yScale maps them below the axis.
+   */
+  const uploadLayers = useMemo(() => {
+    const allTimes = new Set([minTime, maxTime]);
+    for (const pts of uploadSeriesByKey.values()) {
+      for (const p of pts) allTimes.add(p.timeUs);
+    }
+    const sortedTimes = Array.from(allTimes).sort((a, b) => a - b);
+
+    const countsByKey = new Map<string, number[]>();
+    for (const key of orderedKeys) {
+      const pts = uploadSeriesByKey.get(key) ?? [];
+      countsByKey.set(key, sortedTimes.map((t) => getCountAtTime(pts, t)));
+    }
+
+    const cumulative = new Array<number>(sortedTimes.length).fill(0);
+    return orderedKeys.map((key) => {
+      const counts = countsByKey.get(key) ?? [];
+      const points: LayerPoint[] = sortedTimes.map((timeUs, idx) => {
+        const y0 = cumulative[idx];
+        const y1 = cumulative[idx] + (counts[idx] ?? 0);
+        cumulative[idx] = y1;
+        return { timeUs, y0, y1 };
+      });
+      return { key, color: getBucketColor(key), points };
+    });
+  }, [orderedKeys, uploadSeriesByKey, minTime, maxTime]);
+
+  const maxDownload = useMemo(
+    () => Math.max(...downloadLayers.flatMap((l) => l.points.map((p) => p.y1)), 1),
+    [downloadLayers],
+  );
+
+  const maxUpload = useMemo(
+    () => Math.max(...uploadLayers.flatMap((l) => l.points.map((p) => p.y1)), 1),
+    [uploadLayers],
   );
 
   const hasData = useMemo(
@@ -158,9 +291,24 @@ export function BandwidthConcurrencyChart({
     () => scaleLinear<number>({ domain: [minTime, maxTime], range: [0, xMax], clamp: true }),
     [minTime, maxTime, xMax],
   );
-  const yScale = useMemo(
-    () => scaleLinear<number>({ domain: [0, maxBytes], range: [yMax, 0], nice: true }),
-    [maxBytes, yMax],
+
+  /**
+   * Fixed pixel y-coordinate of the zero line.
+   * Upload (↑ send) occupies the top 25% of the chart area; download (↓ receive) the bottom 75%.
+   * This keeps upload legible even when much smaller than download.
+   */
+  const zeroY = yMax * 0.25;
+
+  /** Maps upload bytes to pixel y: 0 → zeroY (baseline), maxUpload → 0 (top). */
+  const uploadScale = useMemo(
+    () => scaleLinear<number>({ domain: [0, maxUpload], range: [zeroY, 0], nice: true }),
+    [maxUpload, zeroY],
+  );
+
+  /** Maps download bytes to pixel y: 0 → zeroY (baseline), maxDownload → yMax (bottom). */
+  const downloadScale = useMemo(
+    () => scaleLinear<number>({ domain: [0, maxDownload], range: [zeroY, yMax], nice: true }),
+    [maxDownload, zeroY, yMax],
   );
 
   const formatTime = useCallback((timestampUs: number): string => {
@@ -173,14 +321,21 @@ export function BandwidthConcurrencyChart({
     useTooltip<TooltipData>();
 
   // ── Interaction ─────────────────────────────────────────────────────────
-  /** Returns tooltip data at the given chart timestamp; chart-specific logic. */
   const getTooltipData = useCallback(
-    (timeUs: number): TooltipData => ({
-      timeUs,
-      downloadBytes: getCountAtTime(downloadSeries, timeUs),
-      uploadBytes: getCountAtTime(uploadSeries, timeUs),
-    }),
-    [downloadSeries, uploadSeries],
+    (timeUs: number): TooltipData => {
+      let totalDownload = 0;
+      let totalUpload = 0;
+      const statusEntries: TooltipStatusEntry[] = [];
+      for (const key of [...orderedKeys].reverse()) {
+        const dl = getCountAtTime(downloadSeriesByKey.get(key) ?? [], timeUs);
+        const ul = getCountAtTime(uploadSeriesByKey.get(key) ?? [], timeUs);
+        totalDownload += dl;
+        totalUpload += ul;
+        if (dl > 0 || ul > 0) statusEntries.push({ key, downloadBytes: dl, uploadBytes: ul });
+      }
+      return { timeUs, totalDownload, totalUpload, statusEntries };
+    },
+    [orderedKeys, downloadSeriesByKey, uploadSeriesByKey],
   );
 
   const {
@@ -225,7 +380,7 @@ export function BandwidthConcurrencyChart({
   }
 
   const activeCursorX = cursorX !== undefined ? cursorX - MARGIN.left : undefined;
-  const activeCursorTime = cursorTimeUs !== undefined ? formatTime(cursorTimeUs) : undefined;
+  const activeCursorTimeUs = cursorTimeUs !== undefined ? cursorTimeUs : undefined;
 
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -238,42 +393,76 @@ export function BandwidthConcurrencyChart({
           style={{ display: 'block' }}
         >
           <Group left={MARGIN.left} top={MARGIN.top}>
-            <Area<LayerPoint>
-              data={layers.downloadLayer}
-              x={(d) => xScale(d.timeUs)}
-              y0={(d) => yScale(d.y0)}
-              y1={(d) => yScale(d.y1)}
-              curve={curveStepAfter}
-              fill={DOWNLOAD_COLOR}
-              fillOpacity={0.7}
-            />
-            <Area<LayerPoint>
-              data={layers.uploadLayer}
-              x={(d) => xScale(d.timeUs)}
-              y0={(d) => yScale(d.y0)}
-              y1={(d) => yScale(d.y1)}
-              curve={curveStepAfter}
-              fill={UPLOAD_COLOR}
-              fillOpacity={0.7}
+            {/* ── Upload layers (above zero, own scale top 25%) ────── */}
+            {uploadLayers.map((layer) => (
+              <Area<LayerPoint>
+                key={`ul-${layer.key}`}
+                data={layer.points}
+                x={(d) => xScale(d.timeUs)}
+                y0={(d) => uploadScale(d.y0)}
+                y1={(d) => uploadScale(d.y1)}
+                curve={curveStepAfter}
+                fill={layer.color}
+                fillOpacity={0.7}
+              />
+            ))}
+
+            {/* ── Download layers (below zero, own scale bottom 75%) ── */}
+            {downloadLayers.map((layer) => (
+              <Area<LayerPoint>
+                key={`dl-${layer.key}`}
+                data={layer.points}
+                x={(d) => xScale(d.timeUs)}
+                y0={(d) => downloadScale(d.y0)}
+                y1={(d) => downloadScale(d.y1)}
+                curve={curveStepAfter}
+                fill={layer.color}
+                fillOpacity={0.7}
+              />
+            ))}
+
+            {/* ── Upload zone tint (top 25%) ──────────────────────────── */}
+            <rect x={0} y={0} width={xMax} height={zeroY} fill="currentColor" opacity={0.04} pointerEvents="none" />
+
+            {/* ── Centre zero line ───────────────────────────────────── */}
+            <line
+              x1={0}
+              y1={zeroY}
+              x2={xMax}
+              y2={zeroY}
+              stroke="var(--color-border, #888)"
+              strokeWidth={2}
+              pointerEvents="none"
             />
 
-            <AxisBottom
-              top={yMax}
-              scale={xScale}
-              tickFormat={() => ''}
-              stroke="#666"
-              tickStroke="#666"
-            />
+            {/* ── Direction labels (right edge) ───────────────────────── */}
+            <text x={xMax - 4} y={10} textAnchor="end" fontSize={8} fill="#888" pointerEvents="none">
+              ↑ Upload
+            </text>
+            <text x={xMax - 4} y={yMax - 4} textAnchor="end" fontSize={8} fill="#888" pointerEvents="none">
+              ↓ Download
+            </text>
+
             <AxisLeft
-              scale={yScale}
+              scale={uploadScale}
+              tickValues={uploadScale.ticks(2).filter((v) => v > 0)}
               stroke="#666"
               tickStroke="#666"
-              numTicks={4}
               tickFormat={(value) => formatBytes(value.valueOf())}
               tickLabelProps={() => ({ fill: '#666', fontSize: 10, textAnchor: 'end', dx: -4 })}
             />
+            <AxisLeft
+              scale={downloadScale}
+              tickValues={downloadScale.ticks(4).filter((v) => v > 0)}
+              stroke="#666"
+              tickStroke="#666"
+              tickFormat={(value) => formatBytes(value.valueOf())}
+              tickLabelProps={() => ({ fill: '#666', fontSize: 10, textAnchor: 'end', dx: -4 })}
+            />
+            <text x={-8} y={zeroY + 4} textAnchor="end" fontSize={10} fill="#666" pointerEvents="none">0</text>
 
             {/* Start/end time labels */}
+            <line x1={0} y1={yMax} x2={xMax} y2={yMax} stroke="#666" strokeWidth={1} pointerEvents="none" />
             <text x={0} y={yMax + 16} textAnchor="start" fontSize={9} fill="#666" pointerEvents="none">
               {formatTime(minTime)}
             </text>
@@ -328,7 +517,6 @@ export function BandwidthConcurrencyChart({
               </>
             )}
 
-            {/* Local cursor line + time label */}
             {!isSelecting && activeCursorX !== undefined && (
               <>
                 <Line
@@ -339,9 +527,19 @@ export function BandwidthConcurrencyChart({
                   pointerEvents="none"
                   strokeDasharray="4,2"
                 />
-                <text x={activeCursorX} y={yMax + 20} textAnchor="middle" fontSize={10} fill="#333" fontWeight="bold" pointerEvents="none">
-                  {activeCursorTime}
-                </text>
+                {activeCursorTimeUs !== undefined && (
+                  <text
+                    x={Math.max(10, Math.min(xMax - 10, activeCursorX))}
+                    y={yMax + 16}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fill="#333"
+                    fontWeight="bold"
+                    pointerEvents="none"
+                  >
+                    {formatTime(activeCursorTimeUs)}
+                  </text>
+                )}
               </>
             )}
 
@@ -356,7 +554,15 @@ export function BandwidthConcurrencyChart({
                   pointerEvents="none"
                   strokeDasharray="4,2"
                 />
-                <text x={timeToX(externalCursorTime)} y={yMax + 20} textAnchor="middle" fontSize={10} fill="#333" fontWeight="bold" pointerEvents="none">
+                <text
+                  x={Math.max(10, Math.min(xMax - 10, timeToX(externalCursorTime)))}
+                  y={yMax + 16}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fill="#333"
+                  fontWeight="bold"
+                  pointerEvents="none"
+                >
                   {formatTime(externalCursorTime)}
                 </text>
               </>
@@ -401,22 +607,9 @@ export function BandwidthConcurrencyChart({
               lineHeight: '1.3',
             }}
           >
-            <div style={{ marginBottom: '2px', fontWeight: 'bold', fontSize: '10px' }}>{formatTime(tooltipData.timeUs)}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-              <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: DOWNLOAD_COLOR, borderRadius: '1px' }} />
-              <span style={{ fontSize: '9px' }}>Download: {formatBytes(tooltipData.downloadBytes)}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-              <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: UPLOAD_COLOR, borderRadius: '1px' }} />
-              <span style={{ fontSize: '9px' }}>Upload: {formatBytes(tooltipData.uploadBytes)}</span>
-            </div>
-            <div style={{ marginTop: '2px', paddingTop: '2px', borderTop: '1px solid #555', fontSize: '9px' }}>
-              In-flight: {formatBytes(tooltipData.downloadBytes + tooltipData.uploadBytes)}
-            </div>
+            {renderConcurrencyTooltip(tooltipData, formatTime)}
           </TooltipWithBounds>
         )}
-
-        {/* Tooltip — external/mirrored cursor */}
         {!isSelecting && tooltipData && tooltipLeft !== undefined && tooltipTop !== undefined && isExternalTooltipActive && (
           <div
             style={{
@@ -433,18 +626,7 @@ export function BandwidthConcurrencyChart({
               zIndex: 1000,
             }}
           >
-            <div style={{ marginBottom: '2px', fontWeight: 'bold', fontSize: '10px' }}>{formatTime(tooltipData.timeUs)}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-              <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: DOWNLOAD_COLOR, borderRadius: '1px' }} />
-              <span style={{ fontSize: '9px' }}>Download: {formatBytes(tooltipData.downloadBytes)}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-              <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: UPLOAD_COLOR, borderRadius: '1px' }} />
-              <span style={{ fontSize: '9px' }}>Upload: {formatBytes(tooltipData.uploadBytes)}</span>
-            </div>
-            <div style={{ marginTop: '2px', paddingTop: '2px', borderTop: '1px solid #555', fontSize: '9px' }}>
-              In-flight: {formatBytes(tooltipData.downloadBytes + tooltipData.uploadBytes)}
-            </div>
+            {renderConcurrencyTooltip(tooltipData, formatTime)}
           </div>
         )}
       </div>

@@ -1,27 +1,34 @@
 import type { ActivityBucket } from './BaseActivityChart';
 import { formatBytes } from '../utils/sizeUtils';
-
-/** Blue — consistent with the "outgoing/send" direction convention. */
-const UPLOAD_COLOR = 'var(--bandwidth-upload)';
-
-/** Orange — distinct from the upload blue and from HTTP status greens/reds. */
-const DOWNLOAD_COLOR = 'var(--bandwidth-download)';
+import { getBucketColor, getBucketLabel } from '../utils/httpStatusBuckets';
 
 /**
- * Bucket type for the bandwidth stacked bar chart, extending the generic
- * {@link ActivityBucket} with per-bucket upload and download byte totals.
+ * Bucket type for the mirrored bandwidth histogram chart, extending the generic
+ * {@link ActivityBucket} with per-status byte totals for both upload and download.
+ *
+ * Per-status maps allow the histogram to render each bar as a stack of status-coloured
+ * segments (matching the `HttpActivityChart` palette) rather than two flat blocks.
  *
  * Kept in a separate file from {@link BandwidthChart} so it can be exported
  * for direct unit-testing without violating the react-refresh rule that
  * component files should only export components.
  */
 export interface BandwidthBucket extends ActivityBucket {
-  uploadBytes: number;
-  downloadBytes: number;
+  /** Total download bytes across all statuses in this time slot. */
+  totalDownload: number;
+  /** Total upload bytes across all statuses in this time slot. */
+  totalUpload: number;
+  /** Per-status-bucket download bytes, keyed by `getBucketKey()` output. */
+  downloadByStatus: Record<string, number>;
+  /** Per-status-bucket upload bytes, keyed by `getBucketKey()` output. */
+  uploadByStatus: Record<string, number>;
 }
 
 /**
  * Renders the tooltip content for a single bandwidth bar.
+ *
+ * Shows per-status rows under a Download section (above zero) and an Upload
+ * section (below zero), matching the mirrored bar layout of the chart.
  *
  * Extracted as a module-level function (rather than an inline useCallback) so
  * it can be unit-tested directly without needing to simulate SVG mouse hover
@@ -32,48 +39,68 @@ export interface BandwidthBucket extends ActivityBucket {
  *   timestamp: 0,
  *   timeLabel: '00:00:01',
  *   total: 1536,
- *   uploadBytes: 512,
- *   downloadBytes: 1024,
+ *   totalDownload: 1024,
+ *   totalUpload: 512,
+ *   downloadByStatus: { '200': 1024 },
+ *   uploadByStatus: { '200': 512 },
  * }));
  */
 export function renderBandwidthTooltip(bucket: BandwidthBucket): React.ReactElement {
+  const downloadEntries = Object.entries(bucket.downloadByStatus).filter(([, v]) => v > 0);
+  const uploadEntries = Object.entries(bucket.uploadByStatus).filter(([, v]) => v > 0);
+
   return (
     <>
-      <div style={{ marginBottom: '2px', fontWeight: 'bold', fontSize: '10px' }}>
+      <div style={{ marginBottom: '3px', fontWeight: 'bold', fontSize: '10px' }}>
         {bucket.timeLabel}
       </div>
-      {bucket.downloadBytes > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              width: '6px',
-              height: '6px',
-              backgroundColor: DOWNLOAD_COLOR,
-              borderRadius: '1px',
-            }}
-          />
-          <span style={{ fontSize: '9px' }}>↓ Download: {formatBytes(bucket.downloadBytes)}</span>
-        </div>
+
+      {uploadEntries.length > 0 && (
+        <>
+          <div style={{ fontSize: '9px', color: '#aaa', marginBottom: '1px' }}>↑ Upload</div>
+          {uploadEntries.map(([statusKey, bytes]) => (
+            <div key={statusKey} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '6px',
+                  height: '6px',
+                  backgroundColor: getBucketColor(statusKey),
+                  borderRadius: '1px',
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ fontSize: '9px' }}>{getBucketLabel(statusKey)}: {formatBytes(bytes)}</span>
+            </div>
+          ))}
+        </>
       )}
-      {bucket.uploadBytes > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              width: '6px',
-              height: '6px',
-              backgroundColor: UPLOAD_COLOR,
-              borderRadius: '1px',
-            }}
-          />
-          <span style={{ fontSize: '9px' }}>↑ Upload: {formatBytes(bucket.uploadBytes)}</span>
-        </div>
+
+      {downloadEntries.length > 0 && (
+        <>
+          <div style={{ fontSize: '9px', color: '#aaa', marginTop: uploadEntries.length > 0 ? '3px' : 0, marginBottom: '1px' }}>↓ Download</div>
+          {downloadEntries.map(([statusKey, bytes]) => (
+            <div key={statusKey} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '6px',
+                  height: '6px',
+                  backgroundColor: getBucketColor(statusKey),
+                  borderRadius: '1px',
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ fontSize: '9px' }}>{getBucketLabel(statusKey)}: {formatBytes(bytes)}</span>
+            </div>
+          ))}
+        </>
       )}
+
       {bucket.total > 0 && (
         <div
           style={{
-            marginTop: '2px',
+            marginTop: '3px',
             paddingTop: '2px',
             borderTop: '1px solid #555',
             fontSize: '9px',

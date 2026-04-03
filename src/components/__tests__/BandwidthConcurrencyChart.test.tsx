@@ -19,6 +19,7 @@ function makeSpan(overrides: Partial<BandwidthRequestSpan> = {}): BandwidthReque
     uploadBytes: 1024,
     downloadBytes: 4096,
     uri: 'https://matrix.example.org/_matrix/client/v3/keys/upload',
+    status: '200 OK',
     ...overrides,
   };
 }
@@ -42,7 +43,8 @@ describe('BandwidthConcurrencyChart', () => {
       />,
     );
     expect(container.querySelector('svg')).toBeInTheDocument();
-    const areas = container.querySelectorAll('path[fill="var(--bandwidth-download)"], path[fill="var(--bandwidth-upload)"]');
+    // Each status key produces one download layer and one upload layer.
+    const areas = container.querySelectorAll('path[fill]');
     expect(areas.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -239,5 +241,20 @@ describe('BandwidthConcurrencyChart interaction', () => {
     const overlay = container.querySelector('rect[fill="transparent"]') as SVGElement;
     fireEvent.mouseMove(overlay, { clientX: 400, clientY: 50 });
     expect(mockPoint.matrixTransform).toHaveBeenCalled();
+  });
+
+  it('renders in-progress selection band while dragging', () => {
+    const { container } = render(
+      <BandwidthConcurrencyChart
+        bandwidthRequestSpans={[makeSpan()]}
+        timeRange={makeRange()}
+      />,
+    );
+    const overlay = container.querySelector('rect[fill="transparent"]') as SVGElement;
+    // Start a drag without releasing — selection band should appear
+    fireEvent.mouseDown(overlay, { clientX: 200, clientY: 50 });
+    fireEvent.mouseMove(overlay, { clientX: 500, clientY: 50 });
+    const selectionBand = container.querySelector('rect[fill="rgba(33, 150, 243, 0.2)"]');
+    expect(selectionBand).toBeInTheDocument();
   });
 });

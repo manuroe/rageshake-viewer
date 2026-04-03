@@ -228,14 +228,6 @@
   --http-client-error: #9716f9;
 
   /* -------------------------------------------------------------------------
-     Bandwidth Chart Colors
-     Upload = blue (sending), download = orange (receiving). Kept distinct
-     from HTTP status greens/reds to avoid confusion with success/error states.
-     ------------------------------------------------------------------------- */
-  --bandwidth-upload: #4e9af1;
-  --bandwidth-download: #e07b3f;
-
-  /* -------------------------------------------------------------------------
      Row Backgrounds (used for zebra striping)
      ------------------------------------------------------------------------- */
   --row-bg-odd: #fafafa;
@@ -354,10 +346,6 @@
 
    --http-incomplete: #8d9878;
   --http-client-error: #a78bfa;
-
-  /* Bandwidth Chart Colors (dark theme - brighter for visibility) */
-  --bandwidth-upload: #6db8ff;
-  --bandwidth-download: #f5a05a;
 }
 
 /* Auto dark mode (respects system preference when no explicit theme is set) */
@@ -468,10 +456,6 @@
 
       --http-incomplete: #8d9878;
     --http-client-error: #a78bfa;
-
-    /* Bandwidth Chart Colors */
-    --bandwidth-upload: #6db8ff;
-    --bandwidth-download: #f5a05a;
   }
 }
 
