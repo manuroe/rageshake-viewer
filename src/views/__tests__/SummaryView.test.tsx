@@ -1382,10 +1382,11 @@ describe('SummaryView', () => {
     it('switches chart-mode select to "In-flight" and back', () => {
       renderSummaryView();
       const select = screen.getByRole('combobox', { name: /chart display mode/i });
-      act(() => { fireEvent.change(select, { target: { value: 'stepArea' } }); });
       expect(select).toHaveValue('stepArea');
       act(() => { fireEvent.change(select, { target: { value: 'histogram' } }); });
       expect(select).toHaveValue('histogram');
+      act(() => { fireEvent.change(select, { target: { value: 'stepArea' } }); });
+      expect(select).toHaveValue('stepArea');
     });
 
     it('renders exactly one shared chart-mode select for both charts', () => {
