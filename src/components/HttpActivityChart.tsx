@@ -22,17 +22,16 @@ interface HttpActivityChartProps {
   /** Time range to use for the chart - must match LogActivityChart for alignment */
   timeRange: { minTime: TimestampMicros; maxTime: TimestampMicros };
   /**
-   * Per-request time spans required by concurrent display mode.  Each entry
+   * Per-request time spans required by stepArea display mode.  Each entry
    * carries the start and end timestamp for one logical request so the chart
    * can compute how many requests overlap at each time bucket.
    */
   httpRequestSpans?: readonly HttpRequestSpan[];
   /**
-   * `'completed'` (default) — histogram of request starts; one bar segment
-   * per attempt.  `'concurrent'` — precise step-function area chart showing the
-   * exact number of simultaneously in-flight requests at every moment.
+   * `'histogram'` (default) — stacked bar chart; one bar segment per data point.
+   * `'stepArea'` — stacked step-function area chart.
    */
-  displayMode?: 'completed' | 'concurrent';
+  displayMode?: 'histogram' | 'stepArea';
   /** Callback when user selects a time range. Values are in microseconds. */
   onTimeRangeSelected?: (startUs: TimestampMicros, endUs: TimestampMicros) => void;
   onResetZoom?: () => void;
@@ -56,7 +55,7 @@ export function HttpActivityChart({
   httpRequests,
   timeRange,
   httpRequestSpans,
-  displayMode = 'completed',
+  displayMode = 'histogram',
   onTimeRangeSelected,
   onResetZoom,
   externalCursorTime,
@@ -71,8 +70,8 @@ export function HttpActivityChart({
   }, []);
 
   const chartData = useMemo(() => {
-    // In concurrent mode the histogram is not rendered; skip expensive bucketing.
-    if (displayMode === 'concurrent') {
+    // In stepArea mode the histogram is not rendered; skip expensive bucketing.
+    if (displayMode === 'stepArea') {
       return {
         buckets: [] as HttpBucket[],
         maxCount: 0,
@@ -184,8 +183,8 @@ export function HttpActivityChart({
     [chartData.statusCodes]
   );
 
-  // Concurrent mode: delegate to the precise step-function area chart.
-  if (displayMode === 'concurrent') {
+  // stepArea mode: delegate to the step-function area chart.
+  if (displayMode === 'stepArea') {
     return (
       <HttpConcurrencyChart
         httpRequestSpans={httpRequestSpans ?? []}

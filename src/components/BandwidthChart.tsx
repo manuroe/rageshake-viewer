@@ -13,8 +13,8 @@ interface BandwidthChartProps {
   requests: readonly BandwidthRequestEntry[];
   /** Request spans used by in-flight mode to build step-function stacked areas. */
   bandwidthRequestSpans?: readonly BandwidthRequestSpan[];
-  /** Completed = start-based bars, concurrent = in-flight stacked areas. */
-  displayMode?: 'completed' | 'concurrent';
+  /** Histogram = stacked bar chart; stepArea = stacked step-function area chart. */
+  displayMode?: 'histogram' | 'stepArea';
   /**
    * Time range for the chart — should match the sibling activity charts
    * (LogActivityChart, HttpActivityChart) so that all three are aligned.
@@ -57,7 +57,7 @@ interface BandwidthChartProps {
 export function BandwidthChart({
   requests,
   bandwidthRequestSpans,
-  displayMode = 'completed',
+  displayMode = 'histogram',
   timeRange,
   onTimeRangeSelected,
   onResetZoom,
@@ -72,8 +72,8 @@ export function BandwidthChart({
   }, []);
 
   const chartData = useMemo(() => {
-    // In concurrent mode the bandwidth histogram is not rendered; skip expensive bucketing.
-    if (displayMode === 'concurrent') {
+    // In stepArea mode the bandwidth histogram is not rendered; skip expensive bucketing.
+    if (displayMode === 'stepArea') {
       return {
         buckets: [] as BandwidthBucket[],
         maxDownload: 0,
@@ -154,7 +154,7 @@ export function BandwidthChart({
     [],
   );
 
-  if (displayMode === 'concurrent') {
+  if (displayMode === 'stepArea') {
     return (
       <BandwidthConcurrencyChart
         bandwidthRequestSpans={bandwidthRequestSpans ?? []}

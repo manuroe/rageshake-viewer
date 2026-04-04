@@ -287,31 +287,31 @@ function makeSpan(overrides: Partial<HttpRequestSpan> = {}): HttpRequestSpan {
   };
 }
 
-describe('HttpActivityChart — concurrent mode', () => {
+describe('HttpActivityChart — stepArea mode', () => {
   describe('empty state', () => {
-    it('shows empty message when no spans provided and displayMode is concurrent', () => {
+    it('shows empty message when no spans provided and displayMode is stepArea', () => {
       render(
         <HttpActivityChart
           httpRequests={[makeReq()]}
           httpRequestSpans={[]}
-          displayMode="concurrent"
+          displayMode="stepArea"
           timeRange={makeRange()}
         />,
       );
       expect(screen.getByText('No in-flight request data to display')).toBeInTheDocument();
     });
 
-    it('still renders completed chart when displayMode is omitted (default)', () => {
+    it('still renders histogram chart when displayMode is omitted (default)', () => {
       const { container } = render(
         <HttpActivityChart httpRequests={[makeReq()]} timeRange={makeRange(0, 10_000)} />,
       );
-      // Default mode: uses completed buckets → SVG bars present
+      // Default mode: renders histogram → SVG bars present
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
   });
 
   describe('area chart rendering', () => {
-    it('renders an SVG area path for overlapping spans in concurrent mode', () => {
+    it('renders an SVG area path for overlapping spans in stepArea mode', () => {
       const spans: HttpRequestSpan[] = [
         makeSpan({ startUs: (1_500 * MICROS_PER_MILLISECOND) as TimestampMicros, endUs: (4_000 * MICROS_PER_MILLISECOND) as TimestampMicros, status: '200' }),
         makeSpan({ startUs: (2_000 * MICROS_PER_MILLISECOND) as TimestampMicros, endUs: (5_000 * MICROS_PER_MILLISECOND) as TimestampMicros, status: '200' }),
@@ -320,7 +320,7 @@ describe('HttpActivityChart — concurrent mode', () => {
         <HttpActivityChart
           httpRequests={[makeReq()]}
           httpRequestSpans={spans}
-          displayMode="concurrent"
+          displayMode="stepArea"
           timeRange={makeRange(0, 10_000)}
         />,
       );
@@ -337,7 +337,7 @@ describe('HttpActivityChart — concurrent mode', () => {
         <HttpActivityChart
           httpRequests={[makeReq()]}
           httpRequestSpans={spans}
-          displayMode="concurrent"
+          displayMode="stepArea"
           timeRange={makeRange(0, 10_000)}
         />,
       );

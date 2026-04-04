@@ -54,8 +54,8 @@ export function SummaryView() {
   // Toggle for chart sync overlay feature (disabled by default)
   const [enableChartSync, setEnableChartSync] = useState(false);
 
-  // Chart display mode: 'completed' = histogram of request starts, 'concurrent' = in-flight step chart
-  const [displayMode, setDisplayMode] = useState<'completed' | 'concurrent'>('completed');
+  // Chart display mode: 'histogram' = stacked bar chart of data points, 'stepArea' = stacked step-function area chart
+  const [displayMode, setDisplayMode] = useState<'histogram' | 'stepArea'>('stepArea');
   // Toggle to show/hide incomplete (in-flight, no response yet) requests in the HTTP chart
   const [showIncomplete, setShowIncomplete] = useState(true);
   // Toggle to show/hide /sync requests (identified by a defined timeout field) in the HTTP chart
@@ -210,7 +210,7 @@ export function SummaryView() {
   /**
    * True when at least one chart-worthy HTTP request exists.
    * Includes span arrays so the HTTP Activity section remains visible in
-   * In-flight (concurrent) mode even when no requests start inside the
+   * stepArea mode even when no requests start inside the
    * current zoom window but some overlap it.
    */
   const hasHttpActivityData =
@@ -475,11 +475,11 @@ export function SummaryView() {
                 className={styles.chartModeSelect}
                 aria-label="Chart display mode"
                 value={displayMode}
-                onChange={(e) => setDisplayMode(e.target.value as 'completed' | 'concurrent')}
+                onChange={(e) => setDisplayMode(e.target.value as 'histogram' | 'stepArea')}
                 title="Starts: histogram of request initiations per time bucket. In-flight: step-function showing how many requests are simultaneously active at each moment."
               >
-                <option value="completed">Starts</option>
-                <option value="concurrent">In-flight</option>
+                <option value="histogram">Starts</option>
+                <option value="stepArea">In-flight</option>
               </select>
               <label className={styles.chartOption}>
                 <input

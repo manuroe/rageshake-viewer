@@ -179,13 +179,13 @@ describe('BandwidthChart', () => {
   });
 
   describe('in-flight mode', () => {
-    it('renders area paths for at least one status in concurrent mode', () => {
+    it('renders area paths for at least one status in stepArea mode', () => {
       const spans = [makeSpan()];
       const { container } = render(
         <BandwidthChart
           requests={[]}
           bandwidthRequestSpans={spans}
-          displayMode="concurrent"
+          displayMode="stepArea"
           timeRange={makeRange(0, 10_000)}
         />,
       );
@@ -194,12 +194,12 @@ describe('BandwidthChart', () => {
       expect(paths.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('shows empty message in concurrent mode when spans are empty', () => {
+    it('shows empty message in stepArea mode when spans are empty', () => {
       render(
         <BandwidthChart
           requests={[]}
           bandwidthRequestSpans={[]}
-          displayMode="concurrent"
+          displayMode="stepArea"
           timeRange={makeRange(0, 10_000)}
         />,
       );
