@@ -154,12 +154,12 @@ describe('HttpActivityChart', () => {
       // Covers sortStatusCodes path with sync codes + numeric + non-numeric
       const base = (2_000 * MICROS_PER_MILLISECOND) as TimestampMicros;
       const requests: HttpRequestWithTimestamp[] = [
-        { requestId: 'R-catchup', status: '200', timestampUs: base, timeout: 0 },
-        { requestId: 'R-longpoll', status: '200', timestampUs: base, timeout: 30_000 },
-        { requestId: 'R-200', status: '200', timestampUs: base },
-        { requestId: 'R-404', status: '404', timestampUs: base },
-        { requestId: 'R-500', status: '500', timestampUs: base },
-        { requestId: 'R-incomplete', status: '', timestampUs: base },
+        makeReq({ requestId: 'R-catchup', status: '200', timestampUs: base, timeout: 0 }),
+        makeReq({ requestId: 'R-longpoll', status: '200', timestampUs: base, timeout: 30_000 }),
+        makeReq({ requestId: 'R-200', status: '200', timestampUs: base }),
+        makeReq({ requestId: 'R-404', status: '404', timestampUs: base }),
+        makeReq({ requestId: 'R-500', status: '500', timestampUs: base }),
+        makeReq({ requestId: 'R-incomplete', status: '', timestampUs: base }),
       ];
       const { container } = render(
         <HttpActivityChart httpRequests={requests} timeRange={makeRange(0, 10_000)} />,
@@ -170,21 +170,9 @@ describe('HttpActivityChart', () => {
     it('handles requests with status codes not in the same bucket', () => {
       // Spread across different seconds to produce multiple buckets
       const requests: HttpRequestWithTimestamp[] = [
-        {
-          requestId: 'R-1',
-          status: '500',
-          timestampUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
-        },
-        {
-          requestId: 'R-2',
-          status: '404',
-          timestampUs: (5_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
-        },
-        {
-          requestId: 'R-3',
-          status: '200',
-          timestampUs: (9_000 * MICROS_PER_MILLISECOND) as TimestampMicros,
-        },
+        makeReq({ requestId: 'R-1', status: '500', timestampUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros }),
+        makeReq({ requestId: 'R-2', status: '404', timestampUs: (5_000 * MICROS_PER_MILLISECOND) as TimestampMicros }),
+        makeReq({ requestId: 'R-3', status: '200', timestampUs: (9_000 * MICROS_PER_MILLISECOND) as TimestampMicros }),
       ];
       const { container } = render(
         <HttpActivityChart httpRequests={requests} timeRange={makeRange(0, 10_000)} />,
@@ -231,9 +219,9 @@ describe('HttpActivityChart', () => {
       // Put all requests into the same bucket so tooltip shows multiple codes
       const ts = (2_000 * MICROS_PER_MILLISECOND) as TimestampMicros;
       const requests: HttpRequestWithTimestamp[] = [
-        { requestId: 'R-1', status: '200', timestampUs: ts, timeout: 0 },
-        { requestId: 'R-2', status: '200', timestampUs: ts, timeout: 30_000 },
-        { requestId: 'R-3', status: '404', timestampUs: ts },
+        makeReq({ requestId: 'R-1', status: '200', timestampUs: ts, timeout: 0 }),
+        makeReq({ requestId: 'R-2', status: '200', timestampUs: ts, timeout: 30_000 }),
+        makeReq({ requestId: 'R-3', status: '404', timestampUs: ts }),
       ];
       const { container } = render(
         <HttpActivityChart httpRequests={requests} timeRange={makeRange(0, 5_000)} />,
@@ -343,7 +331,7 @@ describe('HttpActivityChart — concurrent mode', () => {
 
     it('renders area path for incomplete spans (endUs=null)', () => {
       const spans: HttpRequestSpan[] = [
-        { startUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros, endUs: null, status: '200' },
+        makeSpan({ startUs: (1_000 * MICROS_PER_MILLISECOND) as TimestampMicros, endUs: null }),
       ];
       const { container } = render(
         <HttpActivityChart
