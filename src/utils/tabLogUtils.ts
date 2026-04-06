@@ -29,10 +29,10 @@ interface TabLogEntry {
  * }
  */
 export function storeTabLog(text: string): string | null {
-  const uuid = crypto.randomUUID();
-  const key = `${KEY_PREFIX}${uuid}`;
-  const entry: TabLogEntry = { text, createdAt: Date.now() };
   try {
+    const uuid = crypto.randomUUID();
+    const key = `${KEY_PREFIX}${uuid}`;
+    const entry: TabLogEntry = { text, createdAt: Date.now() };
     localStorage.setItem(key, JSON.stringify(entry));
     return uuid;
   } catch {
@@ -54,10 +54,32 @@ export function storeTabLog(text: string): string | null {
  *   loadLogParserResult(result);
  * }
  */
+/**
+ * Removes the stored log entry for the given UUID, e.g. when the tab that
+ * was supposed to receive it could not be opened (popup blocked). Silently
+ * no-ops if the entry is already gone or storage is inaccessible.
+ *
+ * @example
+ * const uuid = storeTabLog(text);
+ * if (uuid && !window.open(...)) removeTabLog(uuid);
+ */
+export function removeTabLog(uuid: string): void {
+  try {
+    localStorage.removeItem(`${KEY_PREFIX}${uuid}`);
+  } catch {
+    // Nothing to do — the entry will expire on its own after MAX_AGE_MS.
+  }
+}
+
 export function loadAndClearTabLog(uuid: string): string | null {
   const key = `${KEY_PREFIX}${uuid}`;
-  const raw = localStorage.getItem(key);
-  localStorage.removeItem(key);
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(key);
+    localStorage.removeItem(key);
+  } catch {
+    return null;
+  }
 
   if (!raw) return null;
 

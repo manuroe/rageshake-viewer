@@ -1623,7 +1623,7 @@ describe('LogDisplayView open-in-new-tab button', () => {
     window.open = originalOpen;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    useLogStore.setState({ rawLogLines: [] });
+    useLogStore.getState().clearData();
   });
 
   it('renders the button when onClose and onExpand are both absent', () => {
@@ -1708,6 +1708,26 @@ describe('LogDisplayView open-in-new-tab button', () => {
     render(<LogDisplayView />);
     const btn = screen.getByRole('button', { name: /open in new tab/i });
     expect(btn).toBeDisabled();
+  });
+
+  it('cleans up localStorage and shows an inline error when the popup is blocked', async () => {
+    const user = userEvent.setup();
+    // Make window.open return null to simulate a popup blocker.
+    (window.open as ReturnType<typeof vi.fn>).mockReturnValueOnce(null);
+
+    const line = createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01T10:00:00.000000Z INFO hi' });
+    useLogStore.setState({ rawLogLines: [line], lineNumberIndex: new Map([[1, line]]) });
+    render(<LogDisplayView />);
+
+    await user.click(screen.getByRole('button', { name: /open in new tab/i }));
+
+    // The orphaned localStorage entry must be removed immediately.
+    const expectedUuid = '00000000-0000-0000-0000-000000000001';
+    expect(localStorage.getItem(`rageshake-tablog-${expectedUuid}`)).toBeNull();
+
+    // An inline error message must appear.
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert').textContent).toMatch(/allow popups/i);
   });
 });
 

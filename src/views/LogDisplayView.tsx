@@ -17,7 +17,7 @@ import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
 import type { ExportContext } from '../utils/logExportUtils';
-import { storeTabLog } from '../utils/tabLogUtils';
+import { removeTabLog, storeTabLog } from '../utils/tabLogUtils';
 import { TAB_LOG_PARAM } from '../hooks/useTabLog';
 import { RowTimeAction } from '../components/RowTimeAction';
 import styles from './LogDisplayView.module.css';
@@ -314,10 +314,13 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     // Mirror the existing source-link pattern: open a blank window first so
     // popup blockers treat it as user-initiated, then navigate it safely.
     const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      newWindow.opener = null;
-      newWindow.location.href = url.toString();
+    if (!newWindow) {
+      removeTabLog(tabLogId);
+      setNewTabError('Unable to open a new tab. Please allow popups and try again.');
+      return;
     }
+    newWindow.opener = null;
+    newWindow.location.href = url.toString();
   }, [displayItems, lineNumberIndex, filterQuery, startTime, endTime]);
 
   // Search determines highlighting within all currently rendered lines (including

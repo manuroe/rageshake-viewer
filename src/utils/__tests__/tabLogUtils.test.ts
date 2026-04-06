@@ -19,6 +19,9 @@ function makeLocalStorageStub() {
 describe('tabLogUtils', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', makeLocalStorageStub());
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn(() => '12345678-1234-4234-9234-123456789abc'),
+    });
     vi.useFakeTimers();
   });
 
@@ -49,6 +52,11 @@ describe('tabLogUtils', () => {
       expect(uuid).toBeNull();
       setItemSpy.mockRestore();
     });
+
+    it('returns null when crypto.randomUUID is unavailable', () => {
+      vi.stubGlobal('crypto', {});
+      expect(storeTabLog('any text')).toBeNull();
+    });
   });
 
   describe('loadAndClearTabLog', () => {
@@ -73,6 +81,13 @@ describe('tabLogUtils', () => {
     it('returns null for an unknown UUID', () => {
       const text = loadAndClearTabLog('00000000-0000-0000-0000-000000000000');
       expect(text).toBeNull();
+    });
+
+    it('returns null when localStorage throws a SecurityError', () => {
+      vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+        throw new DOMException('SecurityError');
+      });
+      expect(loadAndClearTabLog('12345678-1234-4234-9234-123456789abc')).toBeNull();
     });
 
     it('returns null and deletes the key when the stored JSON is malformed', () => {
