@@ -98,7 +98,7 @@ export interface RequestTableProps {
    * Column IDs to show when waterfall-focus mode is active.
    * When provided, a compact toggle appears in the header; activating it hides
    * all other columns, freeing horizontal space for the waterfall timeline.
-   * Hidden column values are surfaced in the URI cell tooltip.
+   * Hidden column values are surfaced in the tooltip of the last visible focus column.
    *
    * @example ['requestId', 'uri']
    */
@@ -162,7 +162,7 @@ export function RequestTable({
   const [menuOpenForRowKey, setMenuOpenForRowKey] = useState<number | null>(null);
   /** When true, only focusModeColumnIds columns are shown to widen the waterfall timeline. */
   const [waterfallFocus, setWaterfallFocus] = useState(focusModeColumnIds !== undefined);
-  /** Stable toggle callback — passed to both the header button and the content strip. */
+  /** Stable toggle callback for the header button. */
   const handleCollapseToggle = useCallback(() => setWaterfallFocus((v) => !v), []);
 
   const isSyncRequest = (req: HttpRequest): boolean => /\/sync(?:[/?]|$)/i.test(req.uri);
@@ -316,6 +316,22 @@ export function RequestTable({
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalVirtualHeight = rowVirtualizer.getTotalSize();
+
+  // Keep idle-gap labels visually pinned while the shared vertical container scrolls.
+  // position:sticky is blocked by overflow-x:auto on .timelineRowsRight, so a JS listener
+  // on the wrapper writes --gap-label-offset = scrollTop; the label uses translateY to follow.
+  useEffect(() => {
+    const scrollElement = leftPanelRef.current;
+    if (!scrollElement) return;
+    const updateGapLabelOffset = () => {
+      scrollElement.style.setProperty('--gap-label-offset', `${scrollElement.scrollTop}px`);
+    };
+    updateGapLabelOffset();
+    scrollElement.addEventListener('scroll', updateGapLabelOffset, { passive: true });
+    return () => {
+      scrollElement.removeEventListener('scroll', updateGapLabelOffset);
+    };
+  }, []);
 
   // Handle resize for layout measurements
   useEffect(() => {
