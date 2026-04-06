@@ -707,7 +707,8 @@ describe('useChartInteraction — CTM-based tooltip positioning', () => {
 
   it('uses getBoundingClientRect fallback when svgRef.current.getScreenCTM returns null', () => {
     // When getScreenCTM returns null (e.g. in certain jsdom configurations), the hook
-    // falls back to rect.left + point.x / rect.top to position the tooltip.
+    // falls back to rect-based positioning with viewBox→CSS scaling applied so the
+    // horizontal position is correct even when the SVG is rendered responsively.
     const fakeBucket = { timestamp: 100_000, timeLabel: '00:00:00', total: 5 };
     const options = {
       ...makeOptions(),
@@ -717,9 +718,11 @@ describe('useChartInteraction — CTM-based tooltip positioning', () => {
 
     const showTooltipFn = vi.fn();
 
+    // SVG rendered at 800 CSS px but has a viewBox of 1000 units → scaleX = 0.8
     const mockSvg = {
       getScreenCTM: vi.fn().mockReturnValue(null),
       getBoundingClientRect: vi.fn().mockReturnValue({ left: 100, top: 200, width: 800 }),
+      viewBox: { baseVal: { width: 1000 } },
     };
 
     Object.defineProperty(result.current.svgRef, 'current', {
@@ -736,11 +739,12 @@ describe('useChartInteraction — CTM-based tooltip positioning', () => {
       );
     });
 
-    // Fallback: left = rect.left + point.x = 100 + 300 = 400, top = rect.top = 200
+    // Fallback with viewBox scale: left = rect.left + point.x * (rect.width / viewBoxWidth)
+    //   = 100 + 300 * (800 / 1000) = 100 + 240 = 340; top = rect.top = 200
     expect(showTooltipFn).toHaveBeenCalledWith(
       expect.objectContaining({
         tooltipData: fakeBucket,
-        tooltipLeft: 400,
+        tooltipLeft: 340,
         tooltipTop: 200,
       }),
     );

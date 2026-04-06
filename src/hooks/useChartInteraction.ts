@@ -234,7 +234,9 @@ export function useChartInteraction<TBucket>({
                 tooltipTop = tp.y;
               } else {
                 const rect = svg.getBoundingClientRect();
-                tooltipLeft = rect.left + point.x;
+                const viewBoxWidth = svg.viewBox?.baseVal?.width;
+                const scaleX = viewBoxWidth && viewBoxWidth > 0 ? rect.width / viewBoxWidth : 1;
+                tooltipLeft = rect.left + point.x * scaleX;
                 tooltipTop = rect.top;
               }
             }
