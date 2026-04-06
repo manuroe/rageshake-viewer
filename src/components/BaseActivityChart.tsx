@@ -526,7 +526,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
           <div
             style={{
               position: 'fixed',
-              left: tooltipLeft + tooltipOffsetLeft,
+              left: Math.min(tooltipLeft + tooltipOffsetLeft, window.innerWidth - 200),
               top: tooltipTop,
               backgroundColor: 'rgba(0, 0, 0, 0.85)',
               color: 'white',

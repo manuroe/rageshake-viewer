@@ -610,7 +610,7 @@ export function BandwidthConcurrencyChart({
           <div
             style={{
               position: 'fixed',
-              left: tooltipLeft + 12,
+              left: Math.min(tooltipLeft + 12, window.innerWidth - 200),
               top: tooltipTop,
               backgroundColor: 'rgba(0,0,0,0.85)',
               color: 'white',
