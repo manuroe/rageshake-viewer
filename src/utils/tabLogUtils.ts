@@ -41,20 +41,6 @@ export function storeTabLog(text: string): string | null {
 }
 
 /**
- * Reads and immediately removes the log text stored under the given UUID.
- *
- * Returns `null` when the entry is missing (never written or tab crashed) or
- * when it is older than 10 minutes. In both cases the localStorage key is
- * deleted (if present) to prevent orphaned entries from accumulating.
- *
- * @example
- * const text = loadAndClearTabLog(uuid);
- * if (text) {
- *   const result = parseLogFile(text);
- *   loadLogParserResult(result);
- * }
- */
-/**
  * Removes the stored log entry for the given UUID, e.g. when the tab that
  * was supposed to receive it could not be opened (popup blocked). Silently
  * no-ops if the entry is already gone or storage is inaccessible.
@@ -71,6 +57,20 @@ export function removeTabLog(uuid: string): void {
   }
 }
 
+/**
+ * Reads and immediately removes the log text stored under the given UUID.
+ *
+ * Returns `null` when the entry is missing (never written or tab crashed) or
+ * when it is older than 10 minutes. In both cases the localStorage key is
+ * deleted (if present) to prevent orphaned entries from accumulating.
+ *
+ * @example
+ * const text = loadAndClearTabLog(uuid);
+ * if (text) {
+ *   const result = parseLogFile(text);
+ *   loadLogParserResult(result);
+ * }
+ */
 export function loadAndClearTabLog(uuid: string): string | null {
   const key = `${KEY_PREFIX}${uuid}`;
   let raw: string | null;
