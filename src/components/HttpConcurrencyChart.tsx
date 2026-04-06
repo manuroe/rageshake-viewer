@@ -415,7 +415,6 @@ export function HttpConcurrencyChart({
               zIndex: 1000,
             }}
           >
-            <div style={{ marginBottom: '2px', fontWeight: 'bold', fontSize: '10px' }}>{formatTime(tooltipData.timeUs)}</div>
             {tooltipData.statusCounts.map(({ key, count }) => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
                 <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: getBucketColor(key), borderRadius: '1px' }} />

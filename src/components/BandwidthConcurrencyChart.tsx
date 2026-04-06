@@ -107,12 +107,9 @@ function computeStepSeries(
  * Shows per-status byte breakdowns under separate Download and Upload sections,
  * matching the layout used by `BandwidthChartTooltip.renderBandwidthTooltip`.
  */
-function renderConcurrencyTooltip(data: TooltipData, formatTime: (t: number) => string): React.ReactElement {
+function renderConcurrencyTooltip(data: TooltipData): React.ReactElement {
   return (
     <>
-      <div style={{ marginBottom: '3px', fontWeight: 'bold', fontSize: '10px' }}>
-        {formatTime(data.timeUs)}
-      </div>
       {data.statusEntries.filter((e) => e.uploadBytes > 0).length > 0 && (
         <>
           <div style={{ fontSize: '9px', color: '#aaa', marginBottom: '1px' }}>↑ Upload</div>
@@ -625,7 +622,7 @@ export function BandwidthConcurrencyChart({
               zIndex: 1000,
             }}
           >
-            {renderConcurrencyTooltip(tooltipData, formatTime)}
+            {renderConcurrencyTooltip(tooltipData)}
           </div>
         )}
       </div>

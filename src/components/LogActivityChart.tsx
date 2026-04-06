@@ -121,7 +121,6 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
   const renderTooltipContent = useCallback(
     (bucket: LogBucket) => (
       <>
-        <div style={{ marginBottom: '2px', fontWeight: 'bold', fontSize: '10px' }}>{bucket.timeLabel}</div>
         {LOG_LEVEL_ORDER.map((level) => {
           const count = bucket.counts[level];
           if (count === 0) return null;

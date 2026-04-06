@@ -350,11 +350,6 @@ function makeBucket(overrides: Partial<BandwidthBucket> = {}): BandwidthBucket {
 }
 
 describe('renderBandwidthTooltip', () => {
-  it('shows the time label', () => {
-    render(renderBandwidthTooltip(makeBucket({ timeLabel: '12:34:56' })));
-    expect(screen.getByText('12:34:56')).toBeInTheDocument();
-  });
-
   it('shows download section when downloadByStatus has bytes', () => {
     render(renderBandwidthTooltip(makeBucket({ downloadByStatus: { '200': 1024 } })));
     expect(screen.getByText(/download/i)).toBeInTheDocument();

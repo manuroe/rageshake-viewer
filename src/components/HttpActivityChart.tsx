@@ -154,7 +154,6 @@ export function HttpActivityChart({
   const renderTooltipContent = useCallback(
     (bucket: HttpBucket) => (
       <>
-        <div style={{ marginBottom: '2px', fontWeight: 'bold', fontSize: '10px' }}>{bucket.timeLabel}</div>
         {[...chartData.statusCodes].reverse().map((code) => {
           const count = bucket.counts[code] || 0;
           if (count === 0) return null;
