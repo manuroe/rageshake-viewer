@@ -183,7 +183,7 @@ export function RequestTable({
     [waterfallFocus, focusModeColumnIds, columns],
   );
 
-  /** Columns hidden in waterfall-focus mode; their values are appended to the URI cell tooltip. */
+  /** Columns hidden in waterfall-focus mode; their values are appended to the tooltip of the last visible focus column. */
   const hiddenColumns = useMemo(
     () => (waterfallFocus && focusModeColumnIds)
       ? columns.filter((c) => !focusModeColumnIds.includes(c.id))
@@ -194,11 +194,17 @@ export function RequestTable({
   /**
    * CSS grid template for the focus-mode left panel, derived from the columns
    * actually displayed. Injected as --focus-grid-template on the container so
-   * the panel shrinks exactly to fit whether there is 1 or 2 focus columns.
-   * Maps position 0 → col-status, all others → col-url.
+   * the panel shrinks exactly to fit the visible focus columns.
+   * Each track resolves from a column-id CSS variable (e.g. --col-requestId,
+   * --col-url) with --col-url as a safe fallback for unknown ids.
+   * Falls back to a single --col-url track when no focus columns match.
    */
   const focusGridTemplate = (waterfallFocus && focusModeColumnIds)
-    ? displayedColumns.map((_, i) => i === 0 ? 'var(--col-status)' : 'var(--col-url)').join(' ')
+    ? (
+        displayedColumns.length > 0
+          ? displayedColumns.map((col) => `var(--col-${col.id}, var(--col-url))`).join(' ')
+          : 'var(--col-url)'
+      )
     : undefined;
 
   // Log filter state with debouncing

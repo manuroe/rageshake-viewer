@@ -72,6 +72,8 @@
     --col-url: 280px;
     --col-duration: 115px;
     --col-action: 45px;
+    /* Alias so focusGridTemplate can resolve width via var(--col-requestId, var(--col-url)). */
+    --col-requestId: var(--col-status);
     display: flex;
     flex-direction: column;
     flex: 1;
