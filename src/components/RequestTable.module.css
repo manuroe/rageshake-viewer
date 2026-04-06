@@ -69,7 +69,7 @@
        Both .timelineHeaderSticky and .requestRowSticky consume these
        variables, so they must live on their common ancestor. */
     --col-status: 70px;
-    --col-url: 400px;
+    --col-url: 280px;
     --col-duration: 115px;
     --col-action: 45px;
     display: flex;
@@ -138,6 +138,18 @@
     flex-shrink: 0;
     align-items: center;
     border-right: 1px solid var(--border-default);
+    position: relative;
+}
+
+/* Collapse toggle lives in the 16 px left-padding zone, aligned with RowTimeAction in body rows. */
+.timelineHeaderSticky .collapseToggle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 16px;
+    height: auto;
+    border-right: 1px solid var(--border-light);
 }
 
 /* SyncView has different columns */
@@ -182,6 +194,66 @@
     grid-template-columns: var(--col-status) var(--col-duration) var(--col-action) var(--col-action);
     gap: 6px;
     padding: 3px 12px;
+}
+
+/* Waterfall-focus mode: show only essential columns to widen the timeline.
+   --focus-grid-template is set as an inline style by RequestTable to match
+   the exact number of displayed columns, so the panel shrinks to fit content. */
+.waterfallFocusMode {
+    --col-url: 200px;
+}
+
+.waterfallFocusMode .timelineHeaderSticky,
+.waterfallFocusMode .requestRowSticky {
+    grid-template-columns: var(--focus-grid-template, var(--col-status));
+}
+
+/**
+ * Collapse/expand handle — renders as a flex item at the boundary between the
+ * sticky left panel and the waterfall timeline.  No absolute positioning or
+ * z-index so it never interferes with the scroll containers.
+ *
+ * .collapseToggle  — header row version (contains the «/» chevron icon)
+ */
+.collapseToggle {
+    flex-shrink: 0;
+    width: 16px;
+    align-self: stretch;
+    background: var(--bg-secondary);
+    border: none;
+    border-right: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    user-select: none;
+    line-height: 1;
+}
+
+.collapseToggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-dark);
+}
+
+.collapseToggle:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary-muted);
+}
+
+.collapseToggleActive {
+    background: var(--color-primary-muted);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.collapseToggleActive:hover {
+    background: var(--color-primary-muted);
 }
 
 /* Zebra striping — applied via an explicit .rowOdd class based on vRow.index in

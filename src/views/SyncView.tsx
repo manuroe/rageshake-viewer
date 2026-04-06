@@ -10,6 +10,12 @@ import { renderTimeoutExceededOverlay } from '../utils/waterfallTimeoutOverlay';
 import { getSyncRequestBarColor } from '../utils/syncRequestColors';
 
 /**
+ * Column IDs shown when waterfall-focus mode is active for sync requests.
+ * Only the request ID column is kept; the rest collapse into the URI tooltip.
+ */
+const SYNC_WATERFALL_FOCUS_COLUMNS: readonly string[] = ['requestId'];
+
+/**
  * Sync Requests view - displays /sync requests in a timeline with waterfall visualization.
  * This is a thin wrapper around RequestTable with sync-specific columns and connection filtering.
  */
@@ -177,6 +183,7 @@ export function SyncView() {
       showSyncFilter={false}
       renderBarOverlay={renderBarOverlay}
       getBarColor={getBarColor}
+      focusModeColumnIds={SYNC_WATERFALL_FOCUS_COLUMNS}
     />
   );
 }

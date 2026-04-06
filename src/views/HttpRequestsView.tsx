@@ -10,6 +10,12 @@ import { renderTimeoutExceededOverlay } from '../utils/waterfallTimeoutOverlay';
 import { getSyncRequestBarColor } from '../utils/syncRequestColors';
 
 /**
+ * Column IDs to show when waterfall-focus mode is active.
+ * Only the request ID and URI are kept visible; the rest collapse into the URI tooltip.
+ */
+const WATERFALL_FOCUS_COLUMNS: readonly string[] = ['requestId', 'uri'];
+
+/**
  * HTTP Requests view - displays all HTTP requests in a timeline with waterfall visualization.
  * This is a thin wrapper around RequestTable with HTTP-specific columns and URI prefix stripping.
  */
@@ -135,6 +141,7 @@ export function HttpRequestsView() {
       emptyMessage="No HTTP requests found in log file"
       renderBarOverlay={renderBarOverlay}
       getBarColor={getBarColor}
+      focusModeColumnIds={WATERFALL_FOCUS_COLUMNS}
     />
   );
 }
