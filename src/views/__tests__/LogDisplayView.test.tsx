@@ -1601,3 +1601,133 @@ describe('LogDisplayView multi-line (continuation) log entries', () => {
   });
 });
 
+describe('LogDisplayView open-in-new-tab button', () => {
+  // Stub window.open so tests don't actually open new tabs.
+  const originalOpen = window.open;
+
+  beforeEach(() => {
+    window.open = vi.fn().mockReturnValue({ opener: null, location: { href: '' } });
+    vi.stubGlobal('localStorage', (() => {
+      const store = new Map<string, string>();
+      return {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => { store.set(k, v); },
+        removeItem: (k: string) => { store.delete(k); },
+        clear: () => { store.clear(); },
+      };
+    })());
+    vi.stubGlobal('crypto', { randomUUID: (() => { let n = 0; return () => `00000000-0000-0000-0000-${String(++n).padStart(12, '0')}`; })() });
+  });
+
+  afterEach(() => {
+    window.open = originalOpen;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    useLogStore.getState().clearData();
+  });
+
+  it('renders the button when onClose and onExpand are both absent', () => {
+    const line = createParsedLogLine({ lineNumber: 1 });
+    useLogStore.setState({ rawLogLines: [line], lineNumberIndex: new Map([[1, line]]) });
+    render(<LogDisplayView />);
+    expect(screen.getByRole('button', { name: /open in new tab/i })).toBeInTheDocument();
+  });
+
+  it('hides the button when onClose is provided (panel mode)', () => {
+    const line = createParsedLogLine({ lineNumber: 1 });
+    useLogStore.setState({ rawLogLines: [line], lineNumberIndex: new Map([[1, line]]) });
+    render(<LogDisplayView onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /open in new tab/i })).not.toBeInTheDocument();
+  });
+
+  it('hides the button when onExpand is provided (panel mode)', () => {
+    const line = createParsedLogLine({ lineNumber: 1 });
+    useLogStore.setState({ rawLogLines: [line], lineNumberIndex: new Map([[1, line]]) });
+    render(<LogDisplayView onExpand={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /open in new tab/i })).not.toBeInTheDocument();
+  });
+
+  it('stores the log crop and opens a new tab when the button is clicked', async () => {
+    const user = userEvent.setup();
+    const line1Raw = '2024-01-01T10:00:00.000000Z INFO first';
+    const line2Raw = '2024-01-01T10:00:01.000000Z INFO second';
+    const line1 = createParsedLogLine({ lineNumber: 1, rawText: line1Raw });
+    const line2 = createParsedLogLine({ lineNumber: 2, rawText: line2Raw });
+    useLogStore.setState({
+      rawLogLines: [line1, line2],
+      lineNumberIndex: new Map([[1, line1], [2, line2]]),
+    });
+    render(<LogDisplayView />);
+
+    await user.click(screen.getByRole('button', { name: /open in new tab/i }));
+
+    // A new tab must have been requested.
+    expect(window.open).toHaveBeenCalledWith('', '_blank');
+
+    // The cropped text must be stored in localStorage under the expected UUID key.
+    const expectedUuid = '00000000-0000-0000-0000-000000000001';
+    const storedRaw = localStorage.getItem(`rageshake-tablog-${expectedUuid}`);
+    expect(storedRaw).not.toBeNull();
+    const storedEntry = JSON.parse(storedRaw!) as { text: string; createdAt: number };
+    expect(storedEntry.text).toBe(`${line1Raw}\n${line2Raw}`);
+
+    // The URL navigated to must include the tabLog UUID in its hash.
+    const openedWindow = (window.open as ReturnType<typeof vi.fn>).mock.results[0].value as { location: { href: string } };
+    expect(openedWindow.location.href).toContain(`tabLog=${expectedUuid}`);
+    expect(openedWindow.location.href).toContain('#/logs');
+  });
+
+  it('propagates the active filter and time range into the new-tab URL', async () => {
+    const user = userEvent.setup();
+    const line = createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01T10:00:00.000000Z INFO match-me' });
+    useLogStore.setState({
+      rawLogLines: [line],
+      lineNumberIndex: new Map([[1, line]]),
+      startTime: '2024-01-01T00:00:00.000000Z',
+      endTime: '2024-01-01T23:59:59.000000Z',
+    });
+
+    render(<LogDisplayView requestFilter="match-me" />);
+    // Wait for the filter to be applied (it's debounced).
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    await user.click(screen.getByRole('button', { name: /open in new tab/i }));
+
+    const openedWindow = (window.open as ReturnType<typeof vi.fn>).mock.results[0].value as { location: { href: string } };
+    const hash = openedWindow.location.href.split('#')[1] ?? '';
+    const params = new URLSearchParams(hash.replace(/^\/logs\?/, ''));
+
+    expect(params.get('filter')).toBe('match-me');
+    expect(params.get('start')).toBe('2024-01-01T00:00:00.000000Z');
+    expect(params.get('end')).toBe('2024-01-01T23:59:59.000000Z');
+  });
+
+  it('disables the button when no lines are visible', () => {
+    // No lines in the store → displayItems will be empty.
+    useLogStore.setState({ rawLogLines: [] });
+    render(<LogDisplayView />);
+    const btn = screen.getByRole('button', { name: /open in new tab/i });
+    expect(btn).toBeDisabled();
+  });
+
+  it('cleans up localStorage and shows an inline error when the popup is blocked', async () => {
+    const user = userEvent.setup();
+    // Make window.open return null to simulate a popup blocker.
+    (window.open as ReturnType<typeof vi.fn>).mockReturnValueOnce(null);
+
+    const line = createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01T10:00:00.000000Z INFO hi' });
+    useLogStore.setState({ rawLogLines: [line], lineNumberIndex: new Map([[1, line]]) });
+    render(<LogDisplayView />);
+
+    await user.click(screen.getByRole('button', { name: /open in new tab/i }));
+
+    // The orphaned localStorage entry must be removed immediately.
+    const expectedUuid = '00000000-0000-0000-0000-000000000001';
+    expect(localStorage.getItem(`rageshake-tablog-${expectedUuid}`)).toBeNull();
+
+    // An inline error message must appear.
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert').textContent).toMatch(/allow popups/i);
+  });
+});
+

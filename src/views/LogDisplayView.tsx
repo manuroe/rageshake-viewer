@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useLogStore } from '../stores/logStore';
@@ -17,6 +17,8 @@ import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
 import type { ExportContext } from '../utils/logExportUtils';
+import { removeTabLog, storeTabLog } from '../utils/tabLogUtils';
+import { TAB_LOG_PARAM } from '../hooks/useTabLog';
 import { RowTimeAction } from '../components/RowTimeAction';
 import styles from './LogDisplayView.module.css';
 
@@ -89,7 +91,7 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
-  const { rawLogLines, sentryEvents, startTime, endTime } = useLogStore();
+  const { rawLogLines, lineNumberIndex, sentryEvents, startTime, endTime } = useLogStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
@@ -262,6 +264,64 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     startTime,
     endTime,
   }), [filterQuery, contextLines, lineRange, startTime, endTime]);
+
+  /** Non-blocking error message shown when the new-tab handoff fails (e.g. quota exceeded). */
+  const [newTabError, setNewTabError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!newTabError) return;
+    const id = window.setTimeout(() => setNewTabError(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [newTabError]);
+
+  /**
+   * Opens a new tab loaded with the full contiguous slice of the log from the
+   * first to the last currently-visible line number, sourced from the store's
+   * full `lineNumberIndex` so that lines excluded by the time filter (but
+   * within the visible line-number range) are also included. The current text
+   * filter and time range are carried over via URL params so the new tab
+   * starts with the same view settings.
+   */
+  const handleOpenInNewTab = useCallback(() => {
+    if (displayItems.length === 0) return;
+
+    const firstLineNumber = displayItems[0].data.line.lineNumber;
+    const lastLineNumber = displayItems[displayItems.length - 1].data.line.lineNumber;
+
+    // Source from the store's full lineNumberIndex so the crop is truly
+    // contiguous raw-log lines, regardless of any time filter applied upstream.
+    const croppedParts: string[] = [];
+    for (let ln = firstLineNumber; ln <= lastLineNumber; ln++) {
+      const line = lineNumberIndex.get(ln);
+      if (line) croppedParts.push(line.rawText);
+    }
+    const croppedText = croppedParts.join('\n');
+
+    const tabLogId = storeTabLog(croppedText);
+    if (!tabLogId) {
+      setNewTabError('The log is too large to open in a new tab.');
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set(TAB_LOG_PARAM, tabLogId);
+    if (filterQuery.trim()) params.set('filter', filterQuery);
+    if (startTime) params.set('start', startTime);
+    if (endTime) params.set('end', endTime);
+
+    const url = new URL(window.location.href);
+    url.hash = `/logs?${params.toString()}`;
+
+    // Mirror the existing source-link pattern: open a blank window first so
+    // popup blockers treat it as user-initiated, then navigate it safely.
+    const newWindow = window.open('', '_blank');
+    if (!newWindow) {
+      removeTabLog(tabLogId);
+      setNewTabError('Unable to open a new tab. Please allow popups and try again.');
+      return;
+    }
+    newWindow.opener = null;
+    newWindow.location.href = url.toString();
+  }, [displayItems, lineNumberIndex, filterQuery, startTime, endTime]);
 
   // Search determines highlighting within all currently rendered lines (including
   // lines expanded from collapsed groups via forcedRanges).
@@ -663,6 +723,26 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
           </div>
           <div className={styles.logToolbarActions}>
+            {!onClose && !onExpand && (
+              <>
+                {newTabError && (
+                  <span role="alert" className={styles.newTabError}>{newTabError}</span>
+                )}
+                <button
+                  className={`${styles.btnToolbar} ${styles.btnIcon}`}
+                  onClick={handleOpenInNewTab}
+                  aria-label="Open in new tab"
+                  title="Open cropped logs in new tab"
+                  disabled={displayItems.length === 0}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M7 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M10 2h4v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </>
+            )}
             <button
               className={`${styles.btnToolbar} ${styles.btnIcon}`}
               onClick={() => setShowExport(true)}

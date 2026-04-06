@@ -20,6 +20,7 @@ import { parseStatusParam } from './hooks/useURLParams';
 import { KeyboardShortcutProvider } from './components/KeyboardShortcutProvider';
 import { ShortcutHelpOverlay, ChordToast } from './components/ShortcutHelpOverlay';
 import { useExtensionFile } from './hooks/useExtensionFile';
+import { useTabLog, TAB_LOG_PARAM } from './hooks/useTabLog';
 
 function AppContent() {
   const [searchParams] = useSearchParams();
@@ -32,6 +33,9 @@ function AppContent() {
 
   // Load log file passed by the browser extension (no-op outside extension context).
   useExtensionFile();
+
+  // Load log text stored in localStorage when opened via "Open in new tab" on the /logs screen.
+  useTabLog();
 
   // Reset redirect flag when location changes
   useEffect(() => {
@@ -83,11 +87,14 @@ function AppContent() {
   // Redirect to landing if no data
   useEffect(() => {
     const hasData = rawLogLines.length > 0;
-    if (!hasData && location.pathname !== '/' && !isRedirecting.current) {
+    // Suppress redirect when a tab-log handoff is pending — useTabLog will
+    // populate the store in its own effect and the redirect would race it.
+    const tabLogPending = searchParams.get(TAB_LOG_PARAM) !== null;
+    if (!hasData && !tabLogPending && location.pathname !== '/' && !isRedirecting.current) {
       isRedirecting.current = true;
       void navigate('/', { replace: true });
     }
-  }, [rawLogLines.length, location.pathname, navigate]);
+  }, [rawLogLines.length, location.pathname, navigate, searchParams]);
 
   return (
     <KeyboardShortcutProvider>
