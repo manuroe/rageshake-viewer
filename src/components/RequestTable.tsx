@@ -274,6 +274,20 @@ export function RequestTable({
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalVirtualHeight = rowVirtualizer.getTotalSize();
 
+  // Replicate sticky-top behavior for gap labels: CSS position:sticky is blocked
+  // by the overflow-x: auto on .timelineRowsRight.  Update --gap-label-offset on
+  // the scroll container so gap labels can translate themselves by scrollTop,
+  // keeping the pill visible in the viewport without any React re-renders.
+  useEffect(() => {
+    const container = leftPanelRef.current;
+    if (!container) return;
+    const handleGapLabelScroll = () => {
+      container.style.setProperty('--gap-label-offset', `${container.scrollTop}px`);
+    };
+    container.addEventListener('scroll', handleGapLabelScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleGapLabelScroll);
+  }, []);
+
   // Handle resize for layout measurements
   useEffect(() => {
     const handleResize = () => {

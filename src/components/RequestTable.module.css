@@ -398,9 +398,17 @@
 }
 
 .gapLabel {
-    /* sticky keeps the pill in the viewport as the user scrolls down through rows */
-    position: sticky;
+    /*
+     * position: sticky cannot see through the overflow-x: auto on .timelineRowsRight
+     * because any non-visible overflow creates a new scroll container that blocks
+     * sticky from latching onto an ancestor scroll container.  Instead, a JS scroll
+     * listener on .timelineContentWrapper sets --gap-label-offset to scrollTop so
+     * the translateY replicates sticky-top: 8px without CSS sticky.
+     */
+    position: absolute;
     top: 8px;
+    left: 50%;
+    transform: translateX(-50%) translateY(var(--gap-label-offset, 0px));
     font-size: var(--font-size-xs);
     font-family: var(--font-mono);
     color: var(--gap-label-color);
