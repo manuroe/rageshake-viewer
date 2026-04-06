@@ -938,6 +938,87 @@ describe('RequestTable', () => {
       expect(screen.queryByTestId('log-display-view')).not.toBeInTheDocument();
     });
   });
+
+  describe('waterfall focus mode (focusModeColumnIds)', () => {
+    const focusColumns: ColumnDef[] = [
+      { id: 'requestId', label: 'Request', getValue: (r) => r.requestId },
+      { id: 'uri', label: 'URI', getValue: (r) => r.uri },
+      { id: 'method', label: 'Method', getValue: (r) => r.method },
+    ];
+
+    it('shows collapse toggle button when focusModeColumnIds is provided', () => {
+      renderWithRouter(
+        <RequestTable
+          {...createProps({ columns: focusColumns, focusModeColumnIds: ['requestId'] })}
+        />
+      );
+      expect(screen.getByRole('button', { name: /expand left panel/i })).toBeInTheDocument();
+    });
+
+    it('does not show collapse toggle button when focusModeColumnIds is absent', () => {
+      renderWithRouter(<RequestTable {...createProps({ columns: focusColumns })} />);
+      expect(screen.queryByRole('button', { name: /collapse left panel|expand left panel/i })).not.toBeInTheDocument();
+    });
+
+    it('starts collapsed (waterfallFocus=true) and expands on toggle click', () => {
+      renderWithRouter(
+        <RequestTable
+          {...createProps({ columns: focusColumns, focusModeColumnIds: ['requestId'] })}
+        />
+      );
+      // Initially collapsed — only focus column header visible
+      expect(screen.getByText('Request')).toBeInTheDocument();
+      expect(screen.queryByText('URI')).not.toBeInTheDocument();
+      expect(screen.queryByText('Method')).not.toBeInTheDocument();
+
+      // Click to expand
+      fireEvent.click(screen.getByRole('button', { name: /expand left panel/i }));
+
+      // All columns now visible
+      expect(screen.getByText('URI')).toBeInTheDocument();
+      expect(screen.getByText('Method')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /collapse left panel/i })).toBeInTheDocument();
+    });
+
+    it('surfaces hidden column values in URI cell tooltip when collapsed', () => {
+      const req = createHttpRequest({
+        requestId: 'REQ-FOCUS',
+        uri: '/example/path',
+        method: 'POST',
+        sendLineNumber: 10,
+        responseLineNumber: 11,
+        status: '200',
+      });
+      useLogStore.getState().setHttpRequests([req], [
+        createParsedLogLine({ lineNumber: 10 }),
+        createParsedLogLine({ lineNumber: 11 }),
+      ]);
+
+      const focusCols: ColumnDef[] = [
+        { id: 'requestId', label: 'Request', getValue: (r) => r.requestId },
+        { id: 'uri', label: 'URI', className: 'uri', getValue: (r) => r.uri },
+        { id: 'method', label: 'Method', getValue: (r) => r.method },
+      ];
+
+      renderWithRouter(
+        <RequestTable
+          {...createProps({
+            columns: focusCols,
+            filteredRequests: [req],
+            totalCount: 1,
+            focusModeColumnIds: ['requestId', 'uri'],
+          })}
+        />
+      );
+
+      // In collapsed mode, the URI cell's title should include the hidden method value
+      const uriCells = document.querySelectorAll('[title]');
+      const uriCell = Array.from(uriCells).find((el) =>
+        el.getAttribute('title')?.includes('/example/path')
+      );
+      expect(uriCell?.getAttribute('title')).toContain('POST');
+    });
+  });
 });
 
 // Helper to create requests for tests
