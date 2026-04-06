@@ -42,7 +42,8 @@ describe('ShortcutHelpOverlay', () => {
   it('renders the overlay when showHelp is true', () => {
     renderWithCtx(makeCtx({ showHelp: true }), <ShortcutHelpOverlay />);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Keyboard Shortcuts')).toBeInTheDocument();
+    expect(screen.getByText('Help')).toBeInTheDocument();
+    expect(screen.getByText('Keyboard shortcuts')).toBeInTheDocument();
   });
 
   it('calls toggleHelp when the close button is clicked', () => {
@@ -115,6 +116,18 @@ describe('ShortcutHelpOverlay', () => {
     renderWithCtx(makeCtx({ showHelp: true }), <ShortcutHelpOverlay />);
     expect(screen.getByText(/cycle theme/i)).toBeInTheDocument();
     expect(screen.getByText(/new session/i)).toBeInTheDocument();
+    expect(screen.getByText('Open help')).toBeInTheDocument();
+  });
+
+  it('shows log and HTTP color legends in the help overlay', () => {
+    renderWithCtx(makeCtx({ showHelp: true }), <ShortcutHelpOverlay />);
+    expect(screen.getByText('Log Colors')).toBeInTheDocument();
+    expect(screen.getByText('HTTP Colors')).toBeInTheDocument();
+    expect(screen.getByText('Sync Colors')).toBeInTheDocument();
+    expect(screen.getByText('Client-side failure')).toBeInTheDocument();
+    expect(screen.getByText('Sentry')).toBeInTheDocument();
+    expect(screen.getByText('/sync catchup success')).toBeInTheDocument();
+    expect(screen.getByText('/sync long-poll success')).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------

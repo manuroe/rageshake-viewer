@@ -14,6 +14,11 @@ interface KeyToken {
   value: string;
 }
 
+interface ColorLegendItem {
+  label: string;
+  color: string;
+}
+
 /**
  * Parse a shortcut label string into renderable tokens.
  *
@@ -81,8 +86,52 @@ const CATEGORY_ORDER: ShortcutCategory[] = [
   'ui',
 ];
 
+const LOG_COLOR_LEGEND: readonly ColorLegendItem[] = [
+  { label: 'Trace', color: 'var(--log-level-trace)' },
+  { label: 'Debug', color: 'var(--log-level-debug)' },
+  { label: 'Info', color: 'var(--log-level-info)' },
+  { label: 'Warn', color: 'var(--log-level-warn)' },
+  { label: 'Error', color: 'var(--log-level-error)' },
+  { label: 'Unknown', color: 'var(--log-level-unknown)' },
+  { label: 'Sentry', color: 'var(--color-sentry)' },
+  { label: 'Collapsed exact', color: 'var(--log-collapse-exact)' },
+  { label: 'Collapsed similar', color: 'var(--log-collapse-similar)' },
+];
+
+const HTTP_COLOR_LEGEND: readonly ColorLegendItem[] = [
+  { label: '2xx success', color: 'var(--http-2xx)' },
+  { label: '3xx redirect', color: 'var(--http-3xx)' },
+  { label: '4xx client error', color: 'var(--http-4xx)' },
+  { label: '5xx server error', color: 'var(--http-5xx)' },
+  { label: 'Client-side failure', color: 'var(--http-client-error)' },
+  { label: 'Incomplete', color: 'var(--http-incomplete)' },
+];
+
+const SYNC_COLOR_LEGEND: readonly ColorLegendItem[] = [
+  { label: '/sync catchup success', color: 'var(--sync-catchup-success)' },
+  { label: '/sync long-poll success', color: 'var(--sync-longpoll-success)' },
+];
+
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function ColorLegendSection({ title, items }: { title: string; items: readonly ColorLegendItem[] }) {
+  return (
+    <section className={styles.section}>
+      <div className={styles.categoryTitle}>{title}</div>
+      {items.map((item) => (
+        <div key={item.label} className={styles.legendRow}>
+          <span
+            aria-hidden="true"
+            className={styles.legendSwatch}
+            style={{ backgroundColor: item.color }}
+          />
+          <div className={styles.legendLabel}>{item.label}</div>
+        </div>
+      ))}
+    </section>
+  );
+}
 
 export function ShortcutHelpOverlay() {
   const { showHelp, toggleHelp } = useKeyboardShortcutContext();
@@ -154,26 +203,38 @@ export function ShortcutHelpOverlay() {
         className={styles.panel}
         role="dialog"
         aria-modal="true"
-        aria-label="Keyboard shortcuts"
+        aria-label="Help"
       >
         <div className={styles.header}>
-          <h2 className={styles.title}>Keyboard Shortcuts</h2>
+          <h2 className={styles.title}>Help</h2>
           <button ref={closeButtonRef} className={styles.closeButton} onClick={toggleHelp} aria-label="Close">
             ✕
           </button>
         </div>
 
-        {CATEGORY_ORDER.filter((cat) => grouped[cat].length > 0).map((cat) => (
-          <section key={cat} className={styles.section}>
-            <div className={styles.categoryTitle}>{SHORTCUT_CATEGORIES[cat]}</div>
-            {grouped[cat].map((shortcut) => (
-              <div key={shortcut.label} className={styles.shortcutRow}>
-                <span className={styles.shortcutDescription}>{shortcut.description}</span>
-                <ShortcutKeys label={shortcut.label} />
-              </div>
+        <div className={styles.columns}>
+          <div className={`${styles.column} ${styles.shortcutsPane}`}>
+            <div className={styles.paneTitle}>Keyboard shortcuts</div>
+            {CATEGORY_ORDER.filter((cat) => grouped[cat].length > 0).map((cat) => (
+              <section key={cat} className={styles.section}>
+                <div className={styles.categoryTitle}>{SHORTCUT_CATEGORIES[cat]}</div>
+                {grouped[cat].map((shortcut) => (
+                  <div key={shortcut.label} className={styles.shortcutRow}>
+                    <span className={styles.shortcutDescription}>{shortcut.description}</span>
+                    <ShortcutKeys label={shortcut.label} />
+                  </div>
+                ))}
+              </section>
             ))}
-          </section>
-        ))}
+          </div>
+
+          <div className={`${styles.column} ${styles.colorsPane}`}>
+            <div className={styles.paneTitle}>Colors</div>
+            <ColorLegendSection title="Log Colors" items={LOG_COLOR_LEGEND} />
+            <ColorLegendSection title="HTTP Colors" items={HTTP_COLOR_LEGEND} />
+            <ColorLegendSection title="Sync Colors" items={SYNC_COLOR_LEGEND} />
+          </div>
+        </div>
       </div>
     </div>,
     document.body,

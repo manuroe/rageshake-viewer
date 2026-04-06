@@ -109,7 +109,7 @@ export const SHORTCUTS = {
   },
   showHelp: {
     label: '?',
-    description: 'Show keyboard shortcuts help',
+    description: 'Open help',
     category: 'ui',
     requiresNoInputFocus: true,
   },

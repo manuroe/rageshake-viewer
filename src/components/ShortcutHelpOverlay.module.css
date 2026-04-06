@@ -24,9 +24,9 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
-    padding: 24px 28px;
-    width: min(560px, calc(100vw - 32px));
-    max-height: 80vh;
+    padding: 20px 24px;
+    width: min(840px, calc(100vw - 24px));
+    max-height: min(92vh, 960px);
     overflow-y: auto;
     animation: slideUp 140ms ease-out;
 }
@@ -41,7 +41,56 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
+}
+
+.columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.9fr);
+    gap: 26px;
+    align-items: start;
+}
+
+.column {
+    min-width: 0;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.column > .section + .section {
+    margin-top: 14px;
+}
+
+.shortcutsPane {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 78%, transparent), transparent 100%);
+}
+
+.colorsPane {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary-light) 28%, var(--bg-secondary) 72%), transparent 100%);
+    position: relative;
+}
+
+.colorsPane::before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: 10px;
+    bottom: 10px;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, var(--border-medium), transparent);
+}
+
+.paneTitle {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-default);
 }
 
 .title {
@@ -70,7 +119,7 @@
 
 /* Category sections */
 .section {
-    margin-bottom: 18px;
+    min-width: 0;
 }
 
 .section:last-child {
@@ -92,13 +141,35 @@
     align-items: center;
     justify-content: space-between;
     padding: 4px 0;
-    gap: 16px;
+    gap: 12px;
 }
 
 .shortcutDescription {
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-md);
     color: var(--text-secondary);
     flex: 1;
+    line-height: 1.35;
+}
+
+.legendRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+}
+
+.legendSwatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+.legendLabel {
+    font-size: var(--font-size-md);
+    color: var(--text-primary);
+    line-height: 1.35;
 }
 
 /* Key badge(s) */
@@ -162,4 +233,20 @@
 .chordHint {
     color: var(--text-muted);
     font-size: var(--font-size-base);
+}
+
+@media (max-width: 760px) {
+    .panel {
+        padding: 18px 20px;
+        width: min(560px, calc(100vw - 20px));
+    }
+
+    .columns {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .colorsPane::before {
+        display: none;
+    }
 }
