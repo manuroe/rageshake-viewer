@@ -91,7 +91,7 @@ export function useChartInteraction<TBucket>({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<SelectionPoint | undefined>();
   const [selectionEnd, setSelectionEnd] = useState<SelectionPoint | undefined>();
-  const svgRef = useRef<SVGSVGElement>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   const handleMouseDown = useCallback(
     (event: MouseEvent<SVGRectElement>) => {
