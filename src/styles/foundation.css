@@ -299,7 +299,7 @@
 
   /* Sync Request Colors */
   --sync-catchup-success: #a3e635;     /* Brighter lime for dark mode visibility */
-   --sync-longpoll-success: #7fb091;    /* Brighter sage for dark mode visibility */
+  --sync-longpoll-success: #7fb091;    /* Brighter sage for dark mode visibility */
 
   /* Idle Gap Band Colors */
   --gap-stripe-a: rgba(255, 255, 255, 0.03);
@@ -409,7 +409,7 @@
 
     /* Sync Request Colors */
     --sync-catchup-success: #a3e635;
-   --sync-longpoll-success: #7fb091;
+    --sync-longpoll-success: #7fb091;
 
     /* Idle Gap Band Colors */
     --gap-stripe-a: rgba(255, 255, 255, 0.03);
