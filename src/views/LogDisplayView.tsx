@@ -91,7 +91,7 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
-  const { rawLogLines, sentryEvents, startTime, endTime } = useLogStore();
+  const { rawLogLines, lineNumberIndex, sentryEvents, startTime, endTime } = useLogStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
@@ -265,11 +265,21 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     endTime,
   }), [filterQuery, contextLines, lineRange, startTime, endTime]);
 
+  /** Non-blocking error message shown when the new-tab handoff fails (e.g. quota exceeded). */
+  const [newTabError, setNewTabError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!newTabError) return;
+    const id = window.setTimeout(() => setNewTabError(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [newTabError]);
+
   /**
    * Opens a new tab loaded with the full contiguous slice of the log from the
-   * first to the last currently-visible line number. The current text filter
-   * and time range are carried over via URL params so the new tab starts with
-   * the same view settings.
+   * first to the last currently-visible line number, sourced from the store's
+   * full `lineNumberIndex` so that lines excluded by the time filter (but
+   * within the visible line-number range) are also included. The current text
+   * filter and time range are carried over via URL params so the new tab
+   * starts with the same view settings.
    */
   const handleOpenInNewTab = useCallback(() => {
     if (displayItems.length === 0) return;
@@ -277,19 +287,18 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     const firstLineNumber = displayItems[0].data.line.lineNumber;
     const lastLineNumber = displayItems[displayItems.length - 1].data.line.lineNumber;
 
-    // Collect all parsed lines in the contiguous range (includes lines hidden
-    // by the text filter so the new tab has the full surrounding context).
-    const croppedText = displayLogLines
-      .filter((l) => {
-        const ln = l.lineNumber ?? 0;
-        return ln >= firstLineNumber && ln <= lastLineNumber;
-      })
-      .map((l) => l.rawText)
-      .join('\n');
+    // Source from the store's full lineNumberIndex so the crop is truly
+    // contiguous raw-log lines, regardless of any time filter applied upstream.
+    const croppedParts: string[] = [];
+    for (let ln = firstLineNumber; ln <= lastLineNumber; ln++) {
+      const line = lineNumberIndex.get(ln);
+      if (line) croppedParts.push(line.rawText);
+    }
+    const croppedText = croppedParts.join('\n');
 
     const tabLogId = storeTabLog(croppedText);
     if (!tabLogId) {
-      alert('The log is too large to open in a new tab.');
+      setNewTabError('The log is too large to open in a new tab.');
       return;
     }
 
@@ -309,7 +318,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       newWindow.opener = null;
       newWindow.location.href = url.toString();
     }
-  }, [displayItems, displayLogLines, filterQuery, startTime, endTime]);
+  }, [displayItems, lineNumberIndex, filterQuery, startTime, endTime]);
 
   // Search determines highlighting within all currently rendered lines (including
   // lines expanded from collapsed groups via forcedRanges).
@@ -712,18 +721,24 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           </div>
           <div className={styles.logToolbarActions}>
             {!onClose && !onExpand && (
-              <button
-                className={`${styles.btnToolbar} ${styles.btnIcon}`}
-                onClick={handleOpenInNewTab}
-                aria-label="Open in new tab"
-                title="Open cropped logs in new tab"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M7 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M10 2h4v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
+              <>
+                {newTabError && (
+                  <span role="alert" className={styles.newTabError}>{newTabError}</span>
+                )}
+                <button
+                  className={`${styles.btnToolbar} ${styles.btnIcon}`}
+                  onClick={handleOpenInNewTab}
+                  aria-label="Open in new tab"
+                  title="Open cropped logs in new tab"
+                  disabled={displayItems.length === 0}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M7 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M10 2h4v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </>
             )}
             <button
               className={`${styles.btnToolbar} ${styles.btnIcon}`}

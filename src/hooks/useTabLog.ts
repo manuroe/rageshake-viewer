@@ -20,14 +20,26 @@ export function useTabLog(): void {
   const [searchParams, setSearchParams] = useSearchParams();
   const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
 
-  // Guard against running twice in React StrictMode's double-effect invocation.
-  const hasRun = useRef(false);
+  // Track the last UUID processed so StrictMode double-effects are suppressed
+  // while a *different* UUID later in the session is still handled correctly.
+  const lastProcessedId = useRef<string | null>(null);
 
   const tabLogId = searchParams.get(TAB_LOG_PARAM);
 
   useEffect(() => {
-    if (!tabLogId || hasRun.current) return;
-    hasRun.current = true;
+    if (!tabLogId || lastProcessedId.current === tabLogId) return;
+    lastProcessedId.current = tabLogId;
+
+    // Always remove the tabLog param — even when the entry is stale/missing —
+    // so the URL stays clean and the redirect suppression in App.tsx doesn't linger.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(TAB_LOG_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
 
     const text = loadAndClearTabLog(tabLogId);
     if (!text) {
@@ -37,16 +49,5 @@ export function useTabLog(): void {
 
     const result = parseLogFile(text);
     loadLogParserResult(result);
-
-    // Remove only the tabLog param; preserve filter, start, end, etc. so the
-    // new tab inherits the same view settings as the source tab.
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete(TAB_LOG_PARAM);
-        return next;
-      },
-      { replace: true },
-    );
   }, [tabLogId, loadLogParserResult, setSearchParams]);
 }
