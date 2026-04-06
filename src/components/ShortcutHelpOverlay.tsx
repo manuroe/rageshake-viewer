@@ -94,8 +94,6 @@ const LOG_COLOR_LEGEND: readonly ColorLegendItem[] = [
   { label: 'Error', color: 'var(--log-level-error)' },
   { label: 'Unknown', color: 'var(--log-level-unknown)' },
   { label: 'Sentry', color: 'var(--color-sentry)' },
-  { label: 'Collapsed exact', color: 'var(--log-collapse-exact)' },
-  { label: 'Collapsed similar', color: 'var(--log-collapse-similar)' },
 ];
 
 const HTTP_COLOR_LEGEND: readonly ColorLegendItem[] = [

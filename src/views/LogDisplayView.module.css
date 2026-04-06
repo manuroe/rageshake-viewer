@@ -479,16 +479,6 @@
     padding: 2px 8px;
 }
 
-/* =  exact-duplicate indicator in the level column */
-.collapseExact {
-    color: var(--log-collapse-exact, #4caf50);
-}
-
-/* ≈  similar-source indicator in the level column */
-.collapseSimilar {
-    color: var(--log-collapse-similar, #64b5f6);
-}
-
 .collapseSummaryText {
     flex: 1;
     overflow: hidden;

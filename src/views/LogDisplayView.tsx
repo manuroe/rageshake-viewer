@@ -805,7 +805,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                   <div className={styles.collapseSummaryBar} data-testid="collapse-bar">
                     <span className={styles.logLineNumber} aria-hidden="true" />
                     <span className={styles.logLineTimestamp} aria-hidden="true" />
-                    <span className={`${styles.logLineLevel} ${collapseInfo.type === 'exact' ? styles.collapseExact : styles.collapseSimilar}`}>
+                    <span className={styles.logLineLevel}>
                       {collapseInfo.type === 'exact' ? '=' : '≈'}
                     </span>
                     <span className={styles.collapseSummaryText}>

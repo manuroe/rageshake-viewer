@@ -91,8 +91,6 @@
   --log-level-error: #f44336;
   --log-level-error-text: #f48771;
   --log-level-unknown: #858585;
-  --log-collapse-exact: #4caf50;
-  --log-collapse-similar: #64b5f6;
   --log-timestamp: #9cdcfe;
   --log-search-highlight: #ffeb3b;
   --log-search-highlight-text: #000;        /* High-contrast text on the yellow highlight */
