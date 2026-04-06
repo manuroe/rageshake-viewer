@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useLogStore } from '../stores/logStore';
@@ -17,6 +17,8 @@ import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
 import type { ExportContext } from '../utils/logExportUtils';
+import { storeTabLog } from '../utils/tabLogUtils';
+import { TAB_LOG_PARAM } from '../hooks/useTabLog';
 import { RowTimeAction } from '../components/RowTimeAction';
 import styles from './LogDisplayView.module.css';
 
@@ -262,6 +264,52 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     startTime,
     endTime,
   }), [filterQuery, contextLines, lineRange, startTime, endTime]);
+
+  /**
+   * Opens a new tab loaded with the full contiguous slice of the log from the
+   * first to the last currently-visible line number. The current text filter
+   * and time range are carried over via URL params so the new tab starts with
+   * the same view settings.
+   */
+  const handleOpenInNewTab = useCallback(() => {
+    if (displayItems.length === 0) return;
+
+    const firstLineNumber = displayItems[0].data.line.lineNumber;
+    const lastLineNumber = displayItems[displayItems.length - 1].data.line.lineNumber;
+
+    // Collect all parsed lines in the contiguous range (includes lines hidden
+    // by the text filter so the new tab has the full surrounding context).
+    const croppedText = displayLogLines
+      .filter((l) => {
+        const ln = l.lineNumber ?? 0;
+        return ln >= firstLineNumber && ln <= lastLineNumber;
+      })
+      .map((l) => l.rawText)
+      .join('\n');
+
+    const tabLogId = storeTabLog(croppedText);
+    if (!tabLogId) {
+      alert('The log is too large to open in a new tab.');
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set(TAB_LOG_PARAM, tabLogId);
+    if (filterQuery.trim()) params.set('filter', filterQuery);
+    if (startTime) params.set('start', startTime);
+    if (endTime) params.set('end', endTime);
+
+    const url = new URL(window.location.href);
+    url.hash = `/logs?${params.toString()}`;
+
+    // Mirror the existing source-link pattern: open a blank window first so
+    // popup blockers treat it as user-initiated, then navigate it safely.
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.opener = null;
+      newWindow.location.href = url.toString();
+    }
+  }, [displayItems, displayLogLines, filterQuery, startTime, endTime]);
 
   // Search determines highlighting within all currently rendered lines (including
   // lines expanded from collapsed groups via forcedRanges).
@@ -663,6 +711,20 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
           </div>
           <div className={styles.logToolbarActions}>
+            {!onClose && !onExpand && (
+              <button
+                className={`${styles.btnToolbar} ${styles.btnIcon}`}
+                onClick={handleOpenInNewTab}
+                aria-label="Open in new tab"
+                title="Open cropped logs in new tab"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M7 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M10 2h4v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
             <button
               className={`${styles.btnToolbar} ${styles.btnIcon}`}
               onClick={() => setShowExport(true)}

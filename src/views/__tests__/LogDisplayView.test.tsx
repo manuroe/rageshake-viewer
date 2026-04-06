@@ -1601,3 +1601,63 @@ describe('LogDisplayView multi-line (continuation) log entries', () => {
   });
 });
 
+describe('LogDisplayView open-in-new-tab button', () => {
+  // Stub window.open so tests don't actually open new tabs.
+  const originalOpen = window.open;
+
+  beforeEach(() => {
+    window.open = vi.fn().mockReturnValue({ opener: null, location: { href: '' } });
+    vi.stubGlobal('localStorage', (() => {
+      const store = new Map<string, string>();
+      return {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => { store.set(k, v); },
+        removeItem: (k: string) => { store.delete(k); },
+        clear: () => { store.clear(); },
+      };
+    })());
+    vi.stubGlobal('crypto', { randomUUID: (() => { let n = 0; return () => `00000000-0000-0000-0000-${String(++n).padStart(12, '0')}`; })() });
+  });
+
+  afterEach(() => {
+    window.open = originalOpen;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    useLogStore.setState({ rawLogLines: [] });
+  });
+
+  it('renders the button when onClose and onExpand are both absent', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView />);
+    expect(screen.getByRole('button', { name: /open in new tab/i })).toBeInTheDocument();
+  });
+
+  it('hides the button when onClose is provided (panel mode)', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /open in new tab/i })).not.toBeInTheDocument();
+  });
+
+  it('hides the button when onExpand is provided (panel mode)', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView onExpand={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /open in new tab/i })).not.toBeInTheDocument();
+  });
+
+  it('stores the log crop and opens a new tab when the button is clicked', async () => {
+    const user = userEvent.setup();
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01T10:00:00.000000Z INFO first' }),
+        createParsedLogLine({ lineNumber: 2, rawText: '2024-01-01T10:00:01.000000Z INFO second' }),
+      ],
+    });
+    render(<LogDisplayView />);
+
+    await user.click(screen.getByRole('button', { name: /open in new tab/i }));
+
+    // window.open must have been called (a new tab was requested).
+    expect(window.open).toHaveBeenCalled();
+  });
+});
+
