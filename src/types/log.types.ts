@@ -151,6 +151,25 @@ export interface LogParserResult {
   readonly connectionIds: readonly string[];
   readonly rawLogLines: readonly ParsedLogLine[];
   readonly sentryEvents: readonly SentryEvent[];
+  /**
+   * True when the log content was previously exported with the anonymization
+   * marker prepended. Used to pre-activate the anonymized button state on load.
+   */
+  readonly isAnonymized?: boolean;
+}
+
+/**
+ * Bidirectional mapping produced by the anonymization pass.
+ *
+ * - `forward`: original identifier → anonymized alias (used to anonymize)
+ * - `reverse`: anonymized alias → original identifier (used to unanonymize)
+ *
+ * The dictionary can be exported alongside an anonymized log file so the user
+ * can recover the original identifiers later.
+ */
+export interface AnonymizationDictionary {
+  readonly forward: Readonly<Record<string, string>>;
+  readonly reverse: Readonly<Record<string, string>>;
 }
 
 /**
