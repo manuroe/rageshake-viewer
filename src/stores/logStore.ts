@@ -461,6 +461,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       try {
         // Yield first so the loading state renders before any heavy work starts.
         await new Promise<void>((r) => setTimeout(r, 0));
+        if (token.cancelled) return;
         const dict = buildAnonymizationDictionary(rawLogLines);
         // Compile the regex once — reused across all chunks so the pattern is
         // built only once regardless of how many lines are processed.
@@ -646,6 +647,11 @@ export const useLogStore = create<LogStore>((set, get) => ({
         isAnonymized: result.isAnonymized ?? false,
         anonymizationDictionary: null,
         originalLogLines: null,
+        originalAllRequests: null,
+        originalAllHttpRequests: null,
+        originalSentryEvents: null,
+        isAnonymizing: false,
+        anonymizingProgress: 0,
         error: null,
       });
       get().filterRequests();

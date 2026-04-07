@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildExportText, formatExportLine, wrapLine, type ExportOptions, type ExportContext } from '../logExportUtils';
+import { ANONYMIZED_LOG_MARKER } from '../anonymizeUtils';
 import { buildDisplayItems, type DisplayItem } from '../logGapManager';
 import { createParsedLogLine } from '../../test/fixtures';
 import type { ParsedLogLine } from '../../types/log.types';
@@ -138,6 +139,16 @@ describe('buildExportText', () => {
 
   it('returns empty string for empty displayItems', () => {
     expect(buildExportText([], BASE_OPTIONS, BASE_CONTEXT)).toBe('');
+  });
+
+  it('prepends ANONYMIZED_LOG_MARKER when context.isAnonymized is true', () => {
+    const raw = makeRaw(1);
+    const items = makeDisplayItems(raw, [0]);
+    const result = buildExportText(items, BASE_OPTIONS, { ...BASE_CONTEXT, isAnonymized: true });
+    const outputLines = result.split('\n');
+    expect(outputLines[0]).toBe(ANONYMIZED_LOG_MARKER);
+    // The log line still follows the marker
+    expect(outputLines[1]).toBe(raw[0].rawText);
   });
 
   // --------------------------------------------------------------------------

@@ -96,6 +96,22 @@ describe('UnanonymizeDialog', () => {
     expect(screen.getByText(/invalid dictionary/i)).toBeInTheDocument();
   });
 
+  it('shows an error when forward/reverse contain non-string values', async () => {
+    renderDialog();
+    const bad = JSON.stringify({ forward: { key: 123 }, reverse: {} });
+    const file = new File([bad], 'bad.json', { type: 'application/json' });
+    await loadFile(file);
+    expect(screen.getByText(/invalid dictionary/i)).toBeInTheDocument();
+  });
+
+  it('shows an error when forward is an array', async () => {
+    renderDialog();
+    const bad = JSON.stringify({ forward: ['oops'], reverse: {} });
+    const file = new File([bad], 'bad.json', { type: 'application/json' });
+    await loadFile(file);
+    expect(screen.getByText(/invalid dictionary/i)).toBeInTheDocument();
+  });
+
   it('shows an error when ev.target.result is not a string', async () => {
     // Patch FileReader so onload receives a non-string result
     const OriginalFileReader = global.FileReader;

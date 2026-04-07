@@ -101,15 +101,20 @@ export function UnanonymizeDialog({ onClose }: UnanonymizeDialogProps) {
           return;
         }
         const parsed: unknown = JSON.parse(raw);
+        const isPlainStringRecord = (v: unknown): v is Record<string, string> =>
+          typeof v === 'object' &&
+          v !== null &&
+          !Array.isArray(v) &&
+          Object.values(v as object).every((x) => typeof x === 'string');
         if (
           typeof parsed !== 'object' ||
           parsed === null ||
           !('forward' in parsed) ||
           !('reverse' in parsed) ||
-          typeof (parsed as Record<string, unknown>).forward !== 'object' ||
-          typeof (parsed as Record<string, unknown>).reverse !== 'object'
+          !isPlainStringRecord((parsed as Record<string, unknown>).forward) ||
+          !isPlainStringRecord((parsed as Record<string, unknown>).reverse)
         ) {
-          setError('Invalid dictionary file. Expected { forward: {…}, reverse: {…} }.');
+          setError('Invalid dictionary file. Expected { forward: {…}, reverse: {…} } with string values.');
           return;
         }
         setParsedDict(parsed as AnonymizationDictionary);

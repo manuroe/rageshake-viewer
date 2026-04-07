@@ -107,10 +107,15 @@ describe('buildAnonymizationDictionary', () => {
     expect(dict.forward['matrix.example.org']).toBe('domain0.org');
   });
 
-  it('handles port-bearing server names', () => {
+  it('handles port-bearing server names with bijective dictionary', () => {
     const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org:8448')]);
-    expect(dict.forward['@alice:example.org:8448']).toBeDefined();
-    // The bare domain alias should also be registered
+    // Port-bearing variant gets its own forward + reverse entry for bijectivity
+    expect(dict.forward['example.org:8448']).toBe('domain0.org:8448');
+    expect(dict.reverse['domain0.org:8448']).toBe('example.org:8448');
+    // The user ID also gets the port alias
+    expect(dict.forward['@alice:example.org:8448']).toBe('@user0:domain0.org:8448');
+    expect(dict.reverse['@user0:domain0.org:8448']).toBe('@alice:example.org:8448');
+    // The bare domain alias is registered too
     expect(dict.forward['example.org']).toBe('domain0.org');
   });
 
@@ -181,6 +186,25 @@ describe('applyUnanonymization', () => {
       makeLine(0, '@alice:example.org in !room1:example.org'),
     ]);
     const text = '@alice:example.org joined !room1:example.org';
+    const anonymized = applyAnonymization(text, dict);
+    const restored = applyUnanonymization(anonymized, dict);
+    expect(restored).toBe(text);
+  });
+
+  it('does not consume URI path when restoring identifiers embedded in URLs', () => {
+    // Regression: the old regex `(?::[^\s]+)?` consumed the `/messages` suffix,
+    // so `!room0:domain0.org/messages` was treated as one token and not found
+    // in reverse[]. The fixed regex stops at `/`.
+    const dict = buildAnonymizationDictionary([makeLine(0, '!room1:example.org')]);
+    const uri = '/_matrix/client/v3/rooms/!room1:example.org/messages';
+    const anonymized = applyAnonymization(uri, dict);
+    const restored = applyUnanonymization(anonymized, dict);
+    expect(restored).toBe(uri);
+  });
+
+  it('round-trips port-bearing server names', () => {
+    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org:8448')]);
+    const text = 'connect to @alice:example.org:8448';
     const anonymized = applyAnonymization(text, dict);
     const restored = applyUnanonymization(anonymized, dict);
     expect(restored).toBe(text);

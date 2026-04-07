@@ -110,20 +110,32 @@ export function buildAnonymizationDictionary(logLines: readonly ParsedLogLine[])
   /**
    * Return the existing or freshly-created alias for `serverName`.
    *
-   * The bare server name (port stripped) is registered in `forward` so that
-   * any standalone occurrence of that domain in log text is replaced by
-   * `applyAnonymization` without needing an extra scan pass.
+   * The bare server name (port stripped) is registered so that standalone
+   * occurrences of that domain in log text are replaced by `applyAnonymization`
+   * without needing an extra scan pass. Port-bearing variants get a distinct
+   * alias that preserves the original port suffix (e.g. `domain0.org:8448`)
+   * so the dictionary remains bijective and unanonymization can recover the
+   * exact original server name.
    */
   function getOrCreateDomainAlias(serverName: string): string {
-    const bare = serverName.replace(/:\d{1,5}$/, '');
-    if (forward[bare] !== undefined) return forward[bare];
-    const alias = `domain${domainCount++}.org`;
-    register(bare, alias);
-    // Map the port-bearing variant to the same alias (forward only; the reverse
-    // canonical target is the bare name).
-    if (serverName !== bare) {
-      forward[serverName] = alias;
+    if (forward[serverName] !== undefined) return forward[serverName];
+
+    const portMatch = serverName.match(/:\d{1,5}$/);
+    const portSuffix = portMatch?.[0] ?? '';
+    const bare = portSuffix ? serverName.slice(0, -portSuffix.length) : serverName;
+
+    let bareAlias = forward[bare];
+    if (bareAlias === undefined) {
+      bareAlias = `domain${domainCount++}.org`;
+      register(bare, bareAlias);
     }
+
+    if (portSuffix === '') {
+      return bareAlias;
+    }
+
+    const alias = `${bareAlias}${portSuffix}`;
+    register(serverName, alias);
     return alias;
   }
 
@@ -262,9 +274,10 @@ export function applyAnonymization(text: string, dict: AnonymizationDictionary):
 export function applyUnanonymization(text: string, dict: AnonymizationDictionary): string {
   const { reverse } = dict;
   if (Object.keys(reverse).length === 0) return text;
-  // Phase 1: sigil-prefixed aliases. The pattern splits on `:` so the local part
-  // and server part are captured together via the optional `(?::[^\s]+)?` group.
-  const candidateRe = /[@#!$][^\s:]+(?::[^\s]+)?/g;
+  // Phase 1: sigil-prefixed aliases. Stops at `/` (like buildCompiledUnanonymizer)
+  // so identifiers embedded in URIs (e.g. `!room0:domain0.org/messages`) are
+  // matched as `!room0:domain0.org` rather than consuming the path suffix.
+  const candidateRe = /[@#!$][^\s:]+(?::[^\s/]+)?/g;
   let result = text.replace(candidateRe, (m) => reverse[m] ?? m);
   // Phase 2: bare domain alias names.
   for (const [key, val] of Object.entries(reverse)
