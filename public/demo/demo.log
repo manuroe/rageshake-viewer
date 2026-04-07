@@ -282,3 +282,7 @@
 2026-01-15T10:07:03.750000Z  INFO [matrix-rust-sdk] send{request_id="req-077" method=GET uri="https://matrix.example.org/_matrix/client/v3/sync?timeout=0" request_size="0" status=200 response_size="8192" request_duration=650ms}
 2026-01-15T10:07:03.850000Z DEBUG [matrix-rust-sdk] send{request_id="req-078" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/members" request_size="0"}
 2026-01-15T10:07:04.200000Z DEBUG [matrix-rust-sdk] send{request_id="req-078" method=GET uri="https://matrix.example.org/_matrix/client/v3/rooms/!room1:example.org/members" request_size="0" status=200 response_size="2048" request_duration=350ms}
+2026-01-15T10:07:05.100000Z  INFO [matrix-rust-sdk] Joined room via alias #general:example.org (resolved to !room1:example.org); invited by @alice:example.org
+2026-01-15T10:07:05.200000Z DEBUG [matrix-rust-sdk] Timeline event received event_id=$VkdmKnrz9stD0mzv2QrS3sP sender=@bob:example.org room_id=!room1:example.org
+2026-01-15T10:07:05.350000Z DEBUG [matrix-rust-sdk] Redacting event $ev-redact-01:example.org in !room1:example.org on behalf of @alice:example.org
+2026-01-15T10:07:05.500000Z DEBUG [matrix-rust-sdk] Modern room !VkdmKnrz9stD0mzv2QrS3sP invited @carol:matrix.example.org; server matrix.example.org
