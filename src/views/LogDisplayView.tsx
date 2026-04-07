@@ -185,17 +185,18 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const isMetaOrCtrl = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
       // Cmd+S (macOS) or Ctrl+S (Windows/Linux) → open export dialog
-      if (isMetaOrCtrl && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
+      if (isMetaOrCtrl && !e.altKey && !e.shiftKey && key === 's') {
         e.preventDefault();
         setShowExport(true);
       }
       // w / p → toggles (only when no input focused and help overlay is closed)
       else if (!isInputFocused() && !showHelpRef.current && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey) {
-        if (e.code === 'KeyW') {
+        if (key === 'w') {
           e.preventDefault();
           setLineWrap((v) => !v);
-        } else if (e.code === 'KeyP') {
+        } else if (key === 'p') {
           e.preventDefault();
           setStripPrefix((v) => !v);
         }
