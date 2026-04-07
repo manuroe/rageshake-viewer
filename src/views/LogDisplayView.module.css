@@ -79,6 +79,13 @@
     composes: iconButton from '../components/Button.module.css';
 }
 
+/** Applied to the anonymize toolbar button when the log is in anonymized state. */
+.btnActive {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
 .closeIcon {
     font-weight: 700;
 }

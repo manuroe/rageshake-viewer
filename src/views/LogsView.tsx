@@ -74,6 +74,7 @@ export function LogsView() {
           onFilterChange={handleFilterChange}
           prevRequestLineRange={prevRequestLineRange}
           nextRequestLineRange={nextRequestLineRange}
+          showAnonymizeButton
         />
       </div>
     </div>

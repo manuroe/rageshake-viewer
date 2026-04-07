@@ -1731,3 +1731,81 @@ describe('LogDisplayView open-in-new-tab button', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Anonymize button
+// ---------------------------------------------------------------------------
+
+describe('LogDisplayView anonymize button', () => {
+  beforeEach(() => {
+    useLogStore.getState().clearData();
+  });
+
+  afterEach(() => {
+    useLogStore.getState().clearData();
+    vi.restoreAllMocks();
+  });
+
+  it('does not render the anonymize button by default (showAnonymizeButton=false)', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView />);
+    expect(screen.queryByRole('button', { name: /anonymise/i })).not.toBeInTheDocument();
+  });
+
+  it('renders the anonymize button when showAnonymizeButton=true', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })] });
+    render(<LogDisplayView showAnonymizeButton />);
+    expect(screen.getByRole('button', { name: /anonymise logs/i })).toBeInTheDocument();
+  });
+
+  it('calls anonymizeLogs when the anonymize button is clicked in non-anonymized state', () => {
+    const anonymizeLogs = vi.fn();
+    useLogStore.setState({
+      rawLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      isAnonymized: false,
+      anonymizeLogs,
+      unanonymizeLogs: vi.fn(),
+    });
+    render(<LogDisplayView showAnonymizeButton />);
+    fireEvent.click(screen.getByRole('button', { name: /anonymise logs/i }));
+    expect(anonymizeLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows "Unanonymise logs" label when isAnonymized=true', () => {
+    useLogStore.setState({
+      rawLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      isAnonymized: true,
+      originalLogLines: [createParsedLogLine({ lineNumber: 1 })],
+    });
+    render(<LogDisplayView showAnonymizeButton />);
+    expect(screen.getByRole('button', { name: /unanonymise logs/i })).toBeInTheDocument();
+  });
+
+  it('calls unanonymizeLogs() when isAnonymized=true and backup exists', () => {
+    const unanonymizeLogs = vi.fn();
+    useLogStore.setState({
+      rawLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      isAnonymized: true,
+      originalLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      unanonymizeLogs,
+      anonymizeLogs: vi.fn(),
+    });
+    render(<LogDisplayView showAnonymizeButton />);
+    fireEvent.click(screen.getByRole('button', { name: /unanonymise logs/i }));
+    expect(unanonymizeLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens UnanonymizeDialog when isAnonymized=true and no backup (file-loaded anon log)', async () => {
+    const user = userEvent.setup();
+    useLogStore.setState({
+      rawLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      isAnonymized: true,
+      originalLogLines: null,
+      unanonymizeLogs: vi.fn(),
+      anonymizeLogs: vi.fn(),
+    });
+    render(<LogDisplayView showAnonymizeButton />);
+    await user.click(screen.getByRole('button', { name: /unanonymise logs/i }));
+    expect(screen.getByRole('dialog', { name: /unanonymise logs/i })).toBeInTheDocument();
+  });
+});
+

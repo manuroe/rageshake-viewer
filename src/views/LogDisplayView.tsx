@@ -16,6 +16,8 @@ import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollap
 import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
+import { UnanonymizeDialog } from '../components/UnanonymizeDialog';
+import { AnonymizingProgressModal } from '../components/AnonymizingProgressModal';
 import type { ExportContext } from '../utils/logExportUtils';
 import { removeTabLog, storeTabLog } from '../utils/tabLogUtils';
 import { TAB_LOG_PARAM } from '../hooks/useTabLog';
@@ -88,10 +90,15 @@ interface LogDisplayViewProps {
    * the full precedence table.
    */
   lineRange?: { start: number; end: number };
+  /**
+   * When true, renders the anonymize/unanonymize toolbar button.
+   * Only the `/logs` route passes this prop; request-detail panels do not.
+   */
+  showAnonymizeButton?: boolean;
 }
 
-export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange }: LogDisplayViewProps) {
-  const { rawLogLines, lineNumberIndex, sentryEvents, startTime, endTime } = useLogStore();
+export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false }: LogDisplayViewProps) {
+  const { rawLogLines, lineNumberIndex, sentryEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs } = useLogStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
@@ -174,6 +181,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [menuOpenForIndex, setMenuOpenForIndex] = useState<number | null>(null);
   const [collapseEnabled, setCollapseEnabled] = useState(true);
   const [showExport, setShowExport] = useState(false);
+  const [showUnanonymizeDialog, setShowUnanonymizeDialog] = useState(false);
 
   // Option+w → toggle line wrap; Option+p → toggle strip prefix; Option+s → open export dialog
   useEffect(() => {
@@ -263,7 +271,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     lineRange,
     startTime,
     endTime,
-  }), [filterQuery, contextLines, lineRange, startTime, endTime]);
+    isAnonymized,
+  }), [filterQuery, contextLines, lineRange, startTime, endTime, isAnonymized]);
 
   /** Non-blocking error message shown when the new-tab handoff fails (e.g. quota exceeded). */
   const [newTabError, setNewTabError] = useState<string | null>(null);
@@ -723,6 +732,38 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
           </div>
           <div className={styles.logToolbarActions}>
+            {showAnonymizeButton && (
+              <button
+                className={`${styles.btnToolbar} ${styles.btnIcon}${isAnonymized ? ` ${styles.btnActive}` : ''}`}
+                onClick={() => {
+                  if (isAnonymized) {
+                    if (originalLogLines !== null) {
+                      unanonymizeLogs();
+                    } else {
+                      setShowUnanonymizeDialog(true);
+                    }
+                  } else {
+                    anonymizeLogs();
+                  }
+                }}
+                aria-label={isAnonymizing ? 'Anonymising…' : isAnonymized ? 'Unanonymise logs' : 'Anonymise logs'}
+                title={isAnonymizing ? 'Anonymising…' : isAnonymized ? 'Unanonymise logs' : 'Anonymise logs'}
+                disabled={isAnonymizing}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  {/* Hat crown */}
+                  <path d="M5 7V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                  {/* Hat brim */}
+                  <path d="M2.5 7.5h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  {/* Left lens */}
+                  <circle cx="5" cy="11.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
+                  {/* Right lens */}
+                  <circle cx="11" cy="11.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
+                  {/* Bridge */}
+                  <path d="M7 11.5h2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
             {!onClose && !onExpand && (
               <>
                 {newTabError && (
@@ -946,6 +987,14 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           onClose={() => setShowExport(false)}
         />
       )}
+
+      {showUnanonymizeDialog && (
+        <UnanonymizeDialog
+          onClose={() => setShowUnanonymizeDialog(false)}
+        />
+      )}
+
+      <AnonymizingProgressModal />
 
       {contextMenu && (
         <div
