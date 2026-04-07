@@ -95,6 +95,12 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
+  // Keep a ref so the keydown handler always sees the latest showHelp value without
+  // needing to re-register the listener on every help-overlay toggle.
+  const showHelpRef = useRef(shortcutCtx?.showHelp ?? false);
+  useEffect(() => {
+    showHelpRef.current = shortcutCtx?.showHelp ?? false;
+  }, [shortcutCtx?.showHelp]);
   
   // Use passed logLines if provided, otherwise use all raw log lines from store
   const displayLogLines = logLines || rawLogLines;
@@ -175,16 +181,17 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [collapseEnabled, setCollapseEnabled] = useState(true);
   const [showExport, setShowExport] = useState(false);
 
-  // Cmd+s → open export; w/p → toggle line wrap and strip prefix (when no input focused)
+  // Cmd/Ctrl+S → open export; w/p → toggle line wrap and strip prefix (when no input focused)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // Cmd+S (or Ctrl+S on Windows/Linux) → open export dialog
-      if (e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey && e.code === 'KeyS') {
+      const isMetaOrCtrl = e.metaKey || e.ctrlKey;
+      // Cmd+S (macOS) or Ctrl+S (Windows/Linux) → open export dialog
+      if (isMetaOrCtrl && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
         e.preventDefault();
         setShowExport(true);
       }
-      // w / p → toggles (only when no input focused)
-      else if (!isInputFocused() && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey) {
+      // w / p → toggles (only when no input focused and help overlay is closed)
+      else if (!isInputFocused() && !showHelpRef.current && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey) {
         if (e.code === 'KeyW') {
           e.preventDefault();
           setLineWrap((v) => !v);

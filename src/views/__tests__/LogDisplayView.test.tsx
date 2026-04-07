@@ -1101,15 +1101,18 @@ describe('LogDisplayView shortcut registration', () => {
     expect(checkbox.checked).toBe(initial);
   });
 
-  it('Cmd+s key opens export dialog', () => {
+  it.each([
+    ['Cmd+S', { metaKey: true }],
+    ['Ctrl+S', { ctrlKey: true }],
+  ])('%s key opens export dialog', (_, modifier) => {
     useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
     render(<LogDisplayView />);
 
     // Export dialog should not be visible initially
     expect(screen.queryByRole('heading', { name: /Export Logs/i })).not.toBeInTheDocument();
 
-    // Trigger Cmd+S
-    fireEvent.keyDown(document, { key: 's', code: 'KeyS', metaKey: true });
+    // Trigger export shortcut
+    fireEvent.keyDown(document, { key: 's', code: 'KeyS', ...modifier });
 
     // Export dialog should now be open
     expect(screen.getByRole('heading', { name: /Export Logs/i })).toBeInTheDocument();

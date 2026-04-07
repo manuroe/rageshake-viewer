@@ -90,7 +90,7 @@ export const SHORTCUTS = {
     requiresNoInputFocus: true,
   },
   openExport: {
-    label: 'Cmd+s',
+    label: 'Cmd+S',
     description: 'Open export / save dialog (Logs view)',
     category: 'filter',
     requiresNoInputFocus: false,
