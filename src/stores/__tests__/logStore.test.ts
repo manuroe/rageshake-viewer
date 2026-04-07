@@ -671,4 +671,203 @@ describe('logStore', () => {
       expect(lineNumberIndex.get(99)).toBeUndefined();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Anonymization actions
+  // ---------------------------------------------------------------------------
+
+  describe('anonymizeLogs / unanonymizeLogs', () => {
+    const rawLines = [
+      createParsedLogLine({
+        lineNumber: 0,
+        rawText: '2024-01-15T10:00:00.000000Z INFO @alice:example.org joined !room1:example.org',
+        message: '2024-01-15T10:00:00.000000Z INFO @alice:example.org joined !room1:example.org',
+        strippedMessage: '@alice:example.org joined !room1:example.org',
+      }),
+      createParsedLogLine({
+        lineNumber: 1,
+        rawText: '2024-01-15T10:00:01.000000Z INFO @bob:example.org left',
+        message: '2024-01-15T10:00:01.000000Z INFO @bob:example.org left',
+        strippedMessage: '@bob:example.org left',
+      }),
+    ];
+
+    function loadLines() {
+      useLogStore.getState().loadLogParserResult({
+        requests: [],
+        connectionIds: [],
+        rawLogLines: rawLines,
+        httpRequests: [],
+        sentryEvents: [],
+      });
+    }
+
+    it('starts with isAnonymized=false and null dictionary', () => {
+      loadLines();
+      const state = useLogStore.getState();
+      expect(state.isAnonymized).toBe(false);
+      expect(state.anonymizationDictionary).toBeNull();
+      expect(state.originalLogLines).toBeNull();
+    });
+
+    it('anonymizeLogs replaces identifiers and sets isAnonymized=true', () => {
+      loadLines();
+      useLogStore.getState().anonymizeLogs();
+      const state = useLogStore.getState();
+      expect(state.isAnonymized).toBe(true);
+      expect(state.anonymizationDictionary).not.toBeNull();
+      expect(state.originalLogLines).not.toBeNull();
+      expect(state.rawLogLines[0].rawText).not.toContain('@alice:example.org');
+      expect(state.rawLogLines[0].rawText).toContain('@user0:domain0.org');
+    });
+
+    it('anonymizeLogs saves original lines for backup', () => {
+      loadLines();
+      useLogStore.getState().anonymizeLogs();
+      const { originalLogLines } = useLogStore.getState();
+      expect(originalLogLines).not.toBeNull();
+      expect(originalLogLines![0].rawText).toContain('@alice:example.org');
+    });
+
+    it('anonymizeLogs is a no-op when already anonymized', () => {
+      loadLines();
+      useLogStore.getState().anonymizeLogs();
+      const firstDict = useLogStore.getState().anonymizationDictionary;
+      useLogStore.getState().anonymizeLogs();
+      // Dictionary should not have changed
+      expect(useLogStore.getState().anonymizationDictionary).toBe(firstDict);
+    });
+
+    it('unanonymizeLogs restores from in-memory backup when available', () => {
+      loadLines();
+      useLogStore.getState().anonymizeLogs();
+      useLogStore.getState().unanonymizeLogs();
+      const state = useLogStore.getState();
+      expect(state.isAnonymized).toBe(false);
+      expect(state.anonymizationDictionary).toBeNull();
+      expect(state.originalLogLines).toBeNull();
+      expect(state.rawLogLines[0].rawText).toContain('@alice:example.org');
+    });
+
+    it('unanonymizeLogs is a no-op when not anonymized', () => {
+      loadLines();
+      const originalLines = useLogStore.getState().rawLogLines.slice();
+      useLogStore.getState().unanonymizeLogs();
+      expect(useLogStore.getState().rawLogLines[0].rawText).toBe(originalLines[0].rawText);
+    });
+
+    it('unanonymizeLogs with externalDict works when no backup is available', () => {
+      loadLines();
+      // Simulate an imported-anonymized log: anonymize then strip the backup
+      useLogStore.getState().anonymizeLogs();
+      const dict = useLogStore.getState().anonymizationDictionary!;
+      // Force-remove the backup to simulate a file-loaded scenario
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (useLogStore as any).setState({ originalLogLines: null });
+      useLogStore.getState().unanonymizeLogs(dict);
+      expect(useLogStore.getState().isAnonymized).toBe(false);
+      expect(useLogStore.getState().rawLogLines[0].rawText).toContain('@alice:example.org');
+    });
+
+    it('unanonymizeLogs without dict is a no-op when no backup and no dictionary', () => {
+      loadLines();
+      useLogStore.getState().anonymizeLogs();
+      // Simulate a file-loaded anonymized log where no dict was provided
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (useLogStore as any).setState({ originalLogLines: null, anonymizationDictionary: null });
+      useLogStore.getState().unanonymizeLogs();
+      // Should remain anonymized since no dict is available
+      expect(useLogStore.getState().isAnonymized).toBe(true);
+    });
+
+    it('clearData resets anonymization state', () => {
+      loadLines();
+      useLogStore.getState().anonymizeLogs();
+      useLogStore.getState().clearData();
+      const state = useLogStore.getState();
+      expect(state.isAnonymized).toBe(false);
+      expect(state.anonymizationDictionary).toBeNull();
+      expect(state.originalLogLines).toBeNull();
+    });
+
+    it('loadLogParserResult with isAnonymized=true sets isAnonymized in store', () => {
+      useLogStore.getState().loadLogParserResult({
+        requests: [],
+        connectionIds: [],
+        rawLogLines: rawLines,
+        httpRequests: [],
+        sentryEvents: [],
+        isAnonymized: true,
+      });
+      expect(useLogStore.getState().isAnonymized).toBe(true);
+      expect(useLogStore.getState().originalLogLines).toBeNull();
+    });
+
+    it('anonymizeLogs anonymizes HTTP request URIs containing Matrix room IDs', () => {
+      useLogStore.getState().loadLogParserResult({
+        requests: [],
+        connectionIds: [],
+        rawLogLines: rawLines,
+        httpRequests: [
+          createHttpRequest({ requestId: 'HTTP-1', uri: '/_matrix/client/v3/rooms/!room1:example.org/messages' }),
+        ],
+        sentryEvents: [],
+      });
+      useLogStore.getState().anonymizeLogs();
+      const { allHttpRequests } = useLogStore.getState();
+      expect(allHttpRequests[0].uri).not.toContain('!room1:example.org');
+      expect(allHttpRequests[0].uri).toContain('!');
+    });
+
+    it('anonymizeLogs anonymizes sentryEvent messages', () => {
+      useLogStore.getState().loadLogParserResult({
+        requests: [],
+        connectionIds: [],
+        rawLogLines: rawLines,
+        httpRequests: [],
+        sentryEvents: [{ platform: 'ios', lineNumber: 0, message: 'Error involving @alice:example.org' }],
+      });
+      useLogStore.getState().anonymizeLogs();
+      const { sentryEvents } = useLogStore.getState();
+      expect(sentryEvents[0].message).not.toContain('@alice:example.org');
+      expect(sentryEvents[0].message).toContain('@user0:domain0.org');
+    });
+
+    it('unanonymizeLogs restores original HTTP request URIs and sentryEvents from in-memory backup', () => {
+      const originalUri = '/_matrix/client/v3/rooms/!room1:example.org/messages';
+      useLogStore.getState().loadLogParserResult({
+        requests: [],
+        connectionIds: [],
+        rawLogLines: rawLines,
+        httpRequests: [createHttpRequest({ requestId: 'HTTP-1', uri: originalUri })],
+        sentryEvents: [{ platform: 'ios', lineNumber: 0, message: 'Crash for @alice:example.org' }],
+      });
+      useLogStore.getState().anonymizeLogs();
+      useLogStore.getState().unanonymizeLogs();
+      const state = useLogStore.getState();
+      expect(state.allHttpRequests[0].uri).toBe(originalUri);
+      expect(state.sentryEvents[0].message).toContain('@alice:example.org');
+      expect(state.originalAllRequests).toBeNull();
+      expect(state.originalAllHttpRequests).toBeNull();
+      expect(state.originalSentryEvents).toBeNull();
+    });
+
+    it('unanonymizeLogs with externalDict restores HTTP request URIs', () => {
+      const originalUri = '/_matrix/client/v3/rooms/!room1:example.org/messages';
+      useLogStore.getState().loadLogParserResult({
+        requests: [],
+        connectionIds: [],
+        rawLogLines: rawLines,
+        httpRequests: [createHttpRequest({ requestId: 'HTTP-1', uri: originalUri })],
+        sentryEvents: [],
+      });
+      useLogStore.getState().anonymizeLogs();
+      const dict = useLogStore.getState().anonymizationDictionary!;
+      // Simulate a file-loaded anonymized state: strip all in-memory backups
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (useLogStore as any).setState({ originalLogLines: null, originalAllRequests: null, originalAllHttpRequests: null, originalSentryEvents: null });
+      useLogStore.getState().unanonymizeLogs(dict);
+      expect(useLogStore.getState().allHttpRequests[0].uri).toBe(originalUri);
+    });
+  });
 });

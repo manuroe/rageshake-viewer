@@ -29,10 +29,18 @@
  * restricts to a subset.
  */
 import { create } from 'zustand';
-import type { HttpRequest, SyncRequest, ParsedLogLine, SentryEvent, LogParserResult } from '../types/log.types';
+import type { HttpRequest, SyncRequest, ParsedLogLine, SentryEvent, LogParserResult, AnonymizationDictionary } from '../types/log.types';
 import { wrapError, type AppError } from '../utils/errorHandling';
 import { DEFAULT_MS_PER_PIXEL } from '../utils/timelineUtils';
 import { filterSyncRequests, filterHttpRequests } from '../utils/requestFilters';
+import { buildAnonymizationDictionary, anonymizeLogLine, buildCompiledAnonymizer, buildCompiledUnanonymizer } from '../utils/anonymizeUtils';
+
+/**
+ * Mutable token shared between `anonymizeLogs` and `cancelAnonymization` so
+ * the async chunked loop can detect a mid-flight cancellation without storing
+ * the flag in Zustand (which would trigger spurious re-renders on every write).
+ */
+let currentCancelToken: { cancelled: boolean } | null = null;
 
 interface LogStore {
   // Sync-specific state
@@ -90,7 +98,32 @@ interface LogStore {
 
   // Sentry events detected during parsing
   sentryEvents: SentryEvent[];
-  
+
+  // Anonymization state
+  /** Whether the currently loaded log is in anonymized form. */
+  isAnonymized: boolean;
+  /** True while the async anonymization pass is running (large logs only). */
+  isAnonymizing: boolean;
+  /** Fraction of lines processed so far during an async anonymization (0–1). */
+  anonymizingProgress: number;
+  /** Bidirectional mapping built when the user anonymizes the log. */
+  anonymizationDictionary: AnonymizationDictionary | null;
+  /**
+   * Backup of the original parsed lines saved before anonymization, so that
+   * unanonymizing restores the exact original text without needing a dictionary
+   * file upload. `null` when the log was loaded already-anonymized (no backup
+   * available).
+   */
+  originalLogLines: readonly ParsedLogLine[] | null;
+  /**
+   * Backups of derived request and event arrays saved alongside `originalLogLines`
+   * so that unanonymizing restores the exact original URI text on other screens
+   * (e.g. `/http_requests`, `/summary`). `null` when no backup is available.
+   */
+  originalAllRequests: readonly SyncRequest[] | null;
+  originalAllHttpRequests: readonly HttpRequest[] | null;
+  originalSentryEvents: readonly SentryEvent[] | null;
+
   // Error state
   error: AppError | null;
   
@@ -118,6 +151,24 @@ interface LogStore {
   /** Resets ephemeral UI state (expanded rows, open log viewers) without clearing parsed log data. */
   clearUIState: () => void;
   
+  // Anonymization actions
+  /** Anonymize the currently loaded log in-place, saving a backup. */
+  anonymizeLogs: () => void;
+  /**
+   * Abort an in-progress async anonymization and restore the original state.
+   * No-op if no anonymization is running.
+   */
+  cancelAnonymization: () => void;
+  /**
+   * Unanonymize the log.
+   *
+   * When an in-memory backup exists (`originalLogLines` is non-null), the
+   * original lines are restored directly. When the log was loaded from an
+   * already-anonymized file, `externalDict` (uploaded by the user) is used
+   * to reverse-map each line.
+   */
+  unanonymizeLogs: (externalDict?: AnonymizationDictionary) => void;
+
   // Log viewer actions
   openLogViewer: (rowKey: number) => void;
   closeLogViewer: (rowKey: number) => void;
@@ -204,6 +255,14 @@ export const useLogStore = create<LogStore>((set, get) => ({
   lastRoute: null,
   detectedPlatform: null,
   sentryEvents: [],
+  isAnonymized: false,
+  isAnonymizing: false,
+  anonymizingProgress: 0,
+  anonymizationDictionary: null,
+  originalLogLines: null,
+  originalAllRequests: null,
+  originalAllHttpRequests: null,
+  originalSentryEvents: null,
   error: null,
 
   setRequests: (requests, connIds, rawLines) => {
@@ -347,7 +406,189 @@ export const useLogStore = create<LogStore>((set, get) => ({
       openLogViewerIds: new Set(),
       detectedPlatform: null,
       sentryEvents: [],
+      isAnonymized: false,
+      isAnonymizing: false,
+      anonymizingProgress: 0,
+      anonymizationDictionary: null,
+      originalLogLines: null,
+      originalAllRequests: null,
+      originalAllHttpRequests: null,
+      originalSentryEvents: null,
     });
+  },
+
+  anonymizeLogs: () => {
+    const { rawLogLines, isAnonymized, isAnonymizing } = get();
+    if (isAnonymized || isAnonymizing) return;
+
+    // Small logs are processed synchronously so callers (and tests) can read
+    // updated state immediately without awaiting.
+    const SYNC_THRESHOLD = 500;
+    if (rawLogLines.length <= SYNC_THRESHOLD) {
+      const dict = buildAnonymizationDictionary(rawLogLines);
+      const apply = buildCompiledAnonymizer(dict);
+      const anonymizedLines = rawLogLines.map((l) => anonymizeLogLine(l, dict));
+      const newIndex = buildLineNumberIndex(anonymizedLines);
+      const { allRequests, allHttpRequests, sentryEvents } = get();
+      // Apply anonymizer to derived data shown on other screens (/http_requests, /summary, etc.)
+      const anonAllRequests = allRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
+      const anonAllHttpRequests = allHttpRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
+      const anonSentryEvents = sentryEvents.map((e) => ({ ...e, message: apply(e.message) }));
+      set({
+        rawLogLines: anonymizedLines,
+        lineNumberIndex: newIndex,
+        isAnonymized: true,
+        anonymizationDictionary: dict,
+        originalLogLines: rawLogLines,
+        allRequests: anonAllRequests,
+        allHttpRequests: anonAllHttpRequests,
+        sentryEvents: anonSentryEvents,
+        originalAllRequests: allRequests,
+        originalAllHttpRequests: allHttpRequests,
+        originalSentryEvents: sentryEvents,
+      });
+      get().filterRequests();
+      get().filterHttpRequests();
+      return;
+    }
+
+    // Large logs: chunk the work across event-loop turns so the browser stays
+    // responsive. Fire-and-forget; isAnonymizing guards against double-clicks.
+    set({ isAnonymizing: true, anonymizingProgress: 0 });
+    const token = { cancelled: false };
+    currentCancelToken = token;
+    void (async () => {
+      try {
+        // Yield first so the loading state renders before any heavy work starts.
+        await new Promise<void>((r) => setTimeout(r, 0));
+        const dict = buildAnonymizationDictionary(rawLogLines);
+        // Compile the regex once — reused across all chunks so the pattern is
+        // built only once regardless of how many lines are processed.
+        const apply = buildCompiledAnonymizer(dict);
+        // Yield after dictionary build so the browser can breathe.
+        await new Promise<void>((r) => setTimeout(r, 0));
+        // Target ~100 ms per chunk. With MATRIX_IDENTIFIER_RE + Map the per-line
+        // cost is much lower than the old alternation-regex approach, so 1 000
+        // lines is well within budget even on slow hardware.
+        const CHUNK_SIZE = 1_000;
+        const anonymizedLines: ParsedLogLine[] = [];
+        for (let i = 0; i < rawLogLines.length; i += CHUNK_SIZE) {
+          // Check for cancellation before each chunk.
+          if (token.cancelled) return;
+          const end = Math.min(i + CHUNK_SIZE, rawLogLines.length);
+          for (let j = i; j < end; j++) {
+            const l = rawLogLines[j];
+            anonymizedLines.push({
+              ...l,
+              rawText: apply(l.rawText),
+              message: apply(l.message),
+              strippedMessage: apply(l.strippedMessage),
+              continuationLines: l.continuationLines?.map(apply),
+            });
+          }
+          set({ anonymizingProgress: end / rawLogLines.length });
+          // Yield until the next animation frame so the browser paints the
+          // updated progress bar before starting the next chunk. Falls back to
+          // setTimeout in non-browser environments (e.g. Node test runners).
+          await new Promise<void>((r) =>
+            typeof requestAnimationFrame !== 'undefined'
+              ? requestAnimationFrame(() => r())
+              : setTimeout(r, 0)
+          );
+        }
+        if (token.cancelled) return;
+        currentCancelToken = null;
+        const newIndex = buildLineNumberIndex(anonymizedLines);
+        // Apply anonymizer to derived data shown on other screens.
+        // Read from get() since allRequests/allHttpRequests/sentryEvents may have
+        // been loaded independently from rawLogLines (e.g. via separate setRequests call).
+        const { allRequests, allHttpRequests, sentryEvents } = get();
+        const anonAllRequests = allRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
+        const anonAllHttpRequests = allHttpRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
+        const anonSentryEvents = sentryEvents.map((e) => ({ ...e, message: apply(e.message) }));
+        set({
+          rawLogLines: anonymizedLines,
+          lineNumberIndex: newIndex,
+          isAnonymized: true,
+          isAnonymizing: false,
+          anonymizingProgress: 1,
+          anonymizationDictionary: dict,
+          originalLogLines: rawLogLines,
+          allRequests: anonAllRequests,
+          allHttpRequests: anonAllHttpRequests,
+          sentryEvents: anonSentryEvents,
+          originalAllRequests: allRequests,
+          originalAllHttpRequests: allHttpRequests,
+          originalSentryEvents: sentryEvents,
+        });
+        get().filterRequests();
+        get().filterHttpRequests();
+      } catch {
+        // Any unexpected error (e.g. regex too complex for V8) must reset
+        // isAnonymizing so the UI does not get permanently stuck.
+        currentCancelToken = null;
+        set({ isAnonymizing: false, anonymizingProgress: 0 });
+      }
+    })();
+  },
+
+  cancelAnonymization: () => {
+    if (currentCancelToken) {
+      currentCancelToken.cancelled = true;
+      currentCancelToken = null;
+    }
+    set({ isAnonymizing: false, anonymizingProgress: 0 });
+  },
+
+  unanonymizeLogs: (externalDict) => {
+    const {
+      rawLogLines, isAnonymized, originalLogLines, anonymizationDictionary,
+      allRequests, allHttpRequests, sentryEvents,
+      originalAllRequests, originalAllHttpRequests, originalSentryEvents,
+    } = get();
+    if (!isAnonymized) return;
+    let restoredLines: ParsedLogLine[];
+    let restoredAllRequests: SyncRequest[];
+    let restoredAllHttpRequests: HttpRequest[];
+    let restoredSentryEvents: SentryEvent[];
+    if (originalLogLines !== null) {
+      // We have a full in-memory backup — restore all originals directly.
+      restoredLines = [...originalLogLines];
+      restoredAllRequests = [...(originalAllRequests ?? allRequests)];
+      restoredAllHttpRequests = [...(originalAllHttpRequests ?? allHttpRequests)];
+      restoredSentryEvents = [...(originalSentryEvents ?? sentryEvents)];
+    } else {
+      // Log was loaded already-anonymized; use the provided (or stored) dict.
+      const dict = externalDict ?? anonymizationDictionary;
+      if (!dict) return;
+      const restore = buildCompiledUnanonymizer(dict);
+      restoredLines = rawLogLines.map((l) => ({
+        ...l,
+        rawText: restore(l.rawText),
+        message: restore(l.message),
+        strippedMessage: restore(l.strippedMessage),
+        continuationLines: l.continuationLines?.map(restore),
+      }));
+      restoredAllRequests = allRequests.map((r) => ({ ...r, uri: restore(r.uri) }));
+      restoredAllHttpRequests = allHttpRequests.map((r) => ({ ...r, uri: restore(r.uri) }));
+      restoredSentryEvents = sentryEvents.map((e) => ({ ...e, message: restore(e.message) }));
+    }
+    const newIndex = buildLineNumberIndex(restoredLines);
+    set({
+      rawLogLines: restoredLines,
+      lineNumberIndex: newIndex,
+      isAnonymized: false,
+      anonymizationDictionary: null,
+      originalLogLines: null,
+      allRequests: restoredAllRequests,
+      allHttpRequests: restoredAllHttpRequests,
+      sentryEvents: restoredSentryEvents,
+      originalAllRequests: null,
+      originalAllHttpRequests: null,
+      originalSentryEvents: null,
+    });
+    get().filterRequests();
+    get().filterHttpRequests();
   },
 
   clearUIState: () => {
@@ -402,6 +643,9 @@ export const useLogStore = create<LogStore>((set, get) => ({
         rawLogLines: [...result.rawLogLines],
         lineNumberIndex,
         detectedPlatform,
+        isAnonymized: result.isAnonymized ?? false,
+        anonymizationDictionary: null,
+        originalLogLines: null,
         error: null,
       });
       get().filterRequests();
