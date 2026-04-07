@@ -10,7 +10,7 @@ import { useMatchNavigation } from '../hooks/useMatchNavigation';
 import { SearchInput } from '../components/SearchInput';
 import type { SearchInputHandle } from '../components/SearchInput';
 import { useKeyboardShortcutContextOptional } from '../components/KeyboardShortcutContext';
-import { optionKey } from '../utils/shortcuts';
+import { isInputFocused, metaKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
@@ -175,19 +175,23 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [collapseEnabled, setCollapseEnabled] = useState(true);
   const [showExport, setShowExport] = useState(false);
 
-  // Option+w → toggle line wrap; Option+p → toggle strip prefix; Option+s → open export dialog
+  // Cmd+s → open export; w/p → toggle line wrap and strip prefix (when no input focused)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (e.code === 'KeyW') {
-        e.preventDefault();
-        setLineWrap((v) => !v);
-      } else if (e.code === 'KeyP') {
-        e.preventDefault();
-        setStripPrefix((v) => !v);
-      } else if (e.code === 'KeyS') {
+      // Cmd+S (or Ctrl+S on Windows/Linux) → open export dialog
+      if (e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey && e.code === 'KeyS') {
         e.preventDefault();
         setShowExport(true);
+      }
+      // w / p → toggles (only when no input focused)
+      else if (!isInputFocused() && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey) {
+        if (e.code === 'KeyW') {
+          e.preventDefault();
+          setLineWrap((v) => !v);
+        } else if (e.code === 'KeyP') {
+          e.preventDefault();
+          setStripPrefix((v) => !v);
+        }
       }
     };
     document.addEventListener('keydown', handleKey);
@@ -660,7 +664,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           )}
         </div>
         <div className={styles.logToolbarRight}>
-          <label className={styles.logToolbarOption} title={`Toggle line wrap (${optionKey}+w)`}>
+          <label className={styles.logToolbarOption} title="Toggle line wrap (w)">
             <input
               type="checkbox"
               checked={lineWrap}
@@ -668,7 +672,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             />
             Line wrap
           </label>
-          <label className={styles.logToolbarOption} title={`Toggle strip prefix (${optionKey}+p)`}>
+          <label className={styles.logToolbarOption} title="Toggle strip prefix (p)">
             <input
               type="checkbox"
               checked={stripPrefix}
@@ -747,7 +751,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
               className={`${styles.btnToolbar} ${styles.btnIcon}`}
               onClick={() => setShowExport(true)}
               aria-label="Export logs"
-              title="Export visible logs"
+              title={`Export visible logs (${metaKey}+S)`}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>

@@ -1061,31 +1061,31 @@ describe('LogDisplayView shortcut registration', () => {
     expect(() => capturedFilterFn?.()).not.toThrow();
   });
 
-  it('Option+w key toggles line wrap', () => {
+  it('w key toggles line wrap', () => {
     useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
     render(<LogDisplayView />);
 
     const checkbox = screen.getByLabelText(/Line wrap/i) as HTMLInputElement;
     const initial = checkbox.checked;
 
-    fireEvent.keyDown(document, { key: 'w', code: 'KeyW', altKey: true });
+    fireEvent.keyDown(document, { key: 'w', code: 'KeyW' });
 
     expect(checkbox.checked).toBe(!initial);
   });
 
-  it('Option+p key toggles strip prefix', () => {
+  it('p key toggles strip prefix', () => {
     useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
     render(<LogDisplayView />);
 
     const checkbox = screen.getByLabelText(/Strip prefix/i) as HTMLInputElement;
     const initial = checkbox.checked;
 
-    fireEvent.keyDown(document, { key: 'p', code: 'KeyP', altKey: true });
+    fireEvent.keyDown(document, { key: 'p', code: 'KeyP' });
 
     expect(checkbox.checked).toBe(!initial);
   });
 
-  it('Option+w toggles line wrap even when an input element is focused', () => {
+  it('w key does NOT toggle line wrap when an input element is focused', () => {
     useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
     render(<LogDisplayView />);
 
@@ -1095,10 +1095,24 @@ describe('LogDisplayView shortcut registration', () => {
     const input = document.createElement('input');
     document.body.appendChild(input);
     input.focus();
-    fireEvent.keyDown(document, { key: 'w', code: 'KeyW', altKey: true });
+    fireEvent.keyDown(document, { key: 'w', code: 'KeyW' });
     document.body.removeChild(input);
 
-    expect(checkbox.checked).toBe(!initial);
+    expect(checkbox.checked).toBe(initial);
+  });
+
+  it('Cmd+s key opens export dialog', () => {
+    useLogStore.setState({ rawLogLines: createLogsWithMatches(5, [2]) });
+    render(<LogDisplayView />);
+
+    // Export dialog should not be visible initially
+    expect(screen.queryByRole('heading', { name: /Export Logs/i })).not.toBeInTheDocument();
+
+    // Trigger Cmd+S
+    fireEvent.keyDown(document, { key: 's', code: 'KeyS', metaKey: true });
+
+    // Export dialog should now be open
+    expect(screen.getByRole('heading', { name: /Export Logs/i })).toBeInTheDocument();
   });
 });
 
