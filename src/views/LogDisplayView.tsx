@@ -17,7 +17,6 @@ import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
 import { UnanonymizeDialog } from '../components/UnanonymizeDialog';
-import { AnonymizingProgressModal } from '../components/AnonymizingProgressModal';
 import type { ExportContext } from '../utils/logExportUtils';
 import { removeTabLog, storeTabLog } from '../utils/tabLogUtils';
 import { TAB_LOG_PARAM } from '../hooks/useTabLog';
@@ -994,8 +993,6 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
           onClose={() => setShowUnanonymizeDialog(false)}
         />
       )}
-
-      <AnonymizingProgressModal />
 
       {contextMenu && (
         <div

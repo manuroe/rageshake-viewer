@@ -168,6 +168,8 @@ export function buildExportText(
 ): string {
   const lines: string[] = [];
 
+  if (displayItems.length === 0) return '';
+
   if (context.isAnonymized) {
     lines.push(ANONYMIZED_LOG_MARKER);
   }

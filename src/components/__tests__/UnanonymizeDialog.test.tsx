@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { UnanonymizeDialog } from '../UnanonymizeDialog';
 import { useLogStore } from '../../stores/logStore';
@@ -32,9 +32,15 @@ async function loadFile(file: File) {
 // ---------------------------------------------------------------------------
 
 describe('UnanonymizeDialog', () => {
+  const OriginalFileReader = global.FileReader;
+
   beforeEach(() => {
     onClose.mockReset();
     useLogStore.getState().clearData();
+  });
+
+  afterEach(() => {
+    global.FileReader = OriginalFileReader;
   });
 
   it('renders the dialog with title and close button', () => {
@@ -114,7 +120,6 @@ describe('UnanonymizeDialog', () => {
 
   it('shows an error when ev.target.result is not a string', async () => {
     // Patch FileReader so onload receives a non-string result
-    const OriginalFileReader = global.FileReader;
     class FakeFileReader extends EventTarget {
       result: string | null = null;
       onload: ((ev: ProgressEvent<FileReader>) => void) | null = null;
@@ -136,12 +141,9 @@ describe('UnanonymizeDialog', () => {
     const file = new File(['ignored'], 'dict.json', { type: 'application/json' });
     await loadFile(file);
     expect(screen.getByText(/could not read file/i)).toBeInTheDocument();
-
-    global.FileReader = OriginalFileReader;
   });
 
   it('shows an error when FileReader.onerror fires', async () => {
-    const OriginalFileReader = global.FileReader;
     class FakeFileReader extends EventTarget {
       result: string | null = null;
       onload: ((ev: ProgressEvent<FileReader>) => void) | null = null;
@@ -162,8 +164,6 @@ describe('UnanonymizeDialog', () => {
     const file = new File(['ignored'], 'dict.json', { type: 'application/json' });
     await loadFile(file);
     expect(screen.getByText(/failed to read file/i)).toBeInTheDocument();
-
-    global.FileReader = OriginalFileReader;
   });
 
   it('closes with Escape when no keyboard shortcut context is present', () => {

@@ -141,6 +141,10 @@ describe('buildExportText', () => {
     expect(buildExportText([], BASE_OPTIONS, BASE_CONTEXT)).toBe('');
   });
 
+  it('returns empty string for empty displayItems even when isAnonymized is true', () => {
+    expect(buildExportText([], BASE_OPTIONS, { ...BASE_CONTEXT, isAnonymized: true })).toBe('');
+  });
+
   it('prepends ANONYMIZED_LOG_MARKER when context.isAnonymized is true', () => {
     const raw = makeRaw(1);
     const items = makeDisplayItems(raw, [0]);

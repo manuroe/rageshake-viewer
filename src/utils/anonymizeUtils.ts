@@ -418,11 +418,17 @@ export function unanonymizeLogLine(line: ParsedLogLine, dict: AnonymizationDicti
  * ```
  */
 export function detectAnonymizedLog(rawContent: string): boolean {
-  for (const line of rawContent.split('\n')) {
+  let lineStart = 0;
+  while (lineStart <= rawContent.length) {
+    let lineEnd = rawContent.indexOf('\n', lineStart);
+    if (lineEnd === -1) lineEnd = rawContent.length;
+    const line = rawContent.slice(lineStart, lineEnd).replace(/\r$/, '');
     const trimmed = line.trim();
     if (trimmed.length > 0) {
       return trimmed === ANONYMIZED_LOG_MARKER;
     }
+    if (lineEnd === rawContent.length) break;
+    lineStart = lineEnd + 1;
   }
   return false;
 }

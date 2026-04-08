@@ -21,6 +21,7 @@ import { KeyboardShortcutProvider } from './components/KeyboardShortcutProvider'
 import { ShortcutHelpOverlay, ChordToast } from './components/ShortcutHelpOverlay';
 import { useExtensionFile } from './hooks/useExtensionFile';
 import { useTabLog, TAB_LOG_PARAM } from './hooks/useTabLog';
+import { AnonymizingProgressModal } from './components/AnonymizingProgressModal';
 
 function AppContent() {
   const [searchParams] = useSearchParams();
@@ -107,6 +108,8 @@ function AppContent() {
       </Routes>
       <ShortcutHelpOverlay />
       <ChordToast />
+      {/* Rendered here so it persists across route changes during async anonymisation */}
+      <AnonymizingProgressModal />
     </KeyboardShortcutProvider>
   );
 }
