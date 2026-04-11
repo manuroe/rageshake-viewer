@@ -274,12 +274,13 @@ export function applyAnonymization(text: string, dict: AnonymizationDictionary):
 export function applyUnanonymization(text: string, dict: AnonymizationDictionary): string {
   const { reverse } = dict;
   if (Object.keys(reverse).length === 0) return text;
-  // Phase 1: sigil-prefixed aliases. Stops at `/` (like buildCompiledUnanonymizer)
-  // so identifiers embedded in URIs (e.g. `!room0:domain0.org/messages`) are
-  // matched as `!room0:domain0.org` rather than consuming the path suffix.
-  // Also stops before common trailing punctuation so tokens like
-  // `@user0:domain0.org,` are matched as `@user0:domain0.org`.
-  const candidateRe = /[@#!$][^\s:]+(?::[^\s/),.;\]]+)?/g;
+  // Phase 1: sigil-prefixed aliases. Stops at `/` so identifiers embedded in
+  // URIs (e.g. `!room0:domain0.org/messages`) are matched as `!room0:domain0.org`
+  // rather than consuming the path suffix. Also stops before common trailing
+  // punctuation (`,;)\]>"'?`) so tokens like `@user0:domain0.org,` are matched
+  // as `@user0:domain0.org`. Dots and colons are intentionally allowed so that
+  // domain names (`domain0.org`) and port suffixes (`:8448`) are included.
+  const candidateRe = /[@#!$][^\s:]+(?::[^\s/,;)\]>"'?]+)?/g;
   let result = text.replace(candidateRe, (m) => reverse[m] ?? m);
   // Phase 2: bare domain alias names.
   for (const [key, val] of Object.entries(reverse)
@@ -351,7 +352,11 @@ export function buildCompiledUnanonymizer(dict: AnonymizationDictionary): (text:
   // short ones like !room0 and $event0 that have no domain component.
   // Stops at `/` so that URIs like `/_matrix/...rooms/!room0:domain0.org/messages`
   // are matched as `!room0:domain0.org`, not `!room0:domain0.org/messages`.
-  const candidateRe = new RegExp('[@#!$][^\\s:]+(?::[^\\s/]+)?', 'g');
+  // Also stops before common trailing punctuation (`,;)\]>"'?`) so tokens like
+  // `@user0:domain0.org,` or `!room0:domain0.org)` are matched cleanly and found
+  // in the reverse dict. Dots and colons are intentionally allowed so that domain
+  // names (`domain0.org`) and port suffixes (`:8448`) are fully included.
+  const candidateRe = new RegExp("[@#!$][^\\s:]+(?::[^\\s/,;)\\]>\"'?]+)?", 'g');
   return (text: string): string => {
     let result = text.replace(candidateRe, (m) => reverse[m] ?? m);
     for (const [key, val] of domainAliasPairs) {

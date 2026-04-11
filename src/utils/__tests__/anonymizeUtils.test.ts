@@ -8,6 +8,7 @@ import {
   unanonymizeLogLine,
   detectAnonymizedLog,
   stripAnonymizedMarker,
+  buildCompiledUnanonymizer,
 } from '../anonymizeUtils';
 import { createParsedLogLine } from '../../test/fixtures';
 
@@ -208,6 +209,50 @@ describe('applyUnanonymization', () => {
     const anonymized = applyAnonymization(text, dict);
     const restored = applyUnanonymization(anonymized, dict);
     expect(restored).toBe(text);
+  });
+
+  it('restores identifiers followed by common trailing punctuation', () => {
+    // Regression: the old regex excluded `.` from the server suffix, so
+    // `@user0:domain0.org` was matched as only `@user0:domain0` and the reverse
+    // lookup failed, leaving the token partially un-restored.
+    const dict = buildAnonymizationDictionary([
+      makeLine(0, '@alice:example.org joined !room1:example.org'),
+    ]);
+    const anonymized = applyAnonymization('@alice:example.org, !room1:example.org)', dict);
+    const restored = applyUnanonymization(anonymized, dict);
+    expect(restored).toBe('@alice:example.org, !room1:example.org)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildCompiledUnanonymizer
+// ---------------------------------------------------------------------------
+
+describe('buildCompiledUnanonymizer', () => {
+  it('restores identifiers in plain text', () => {
+    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+    const restore = buildCompiledUnanonymizer(dict);
+    const anonymized = applyAnonymization('@alice:example.org', dict);
+    expect(restore(anonymized)).toBe('@alice:example.org');
+  });
+
+  it('does not consume URI path when restoring identifiers embedded in URLs', () => {
+    const dict = buildAnonymizationDictionary([makeLine(0, '!room1:example.org')]);
+    const restore = buildCompiledUnanonymizer(dict);
+    const anonymized = applyAnonymization('/_matrix/rooms/!room1:example.org/messages', dict);
+    expect(restore(anonymized)).toBe('/_matrix/rooms/!room1:example.org/messages');
+  });
+
+  it('restores identifiers followed by common trailing punctuation', () => {
+    // Regression: `candidateRe` used `[^\s/]+` which included trailing `,` or `)`
+    // in the match, so `@user0:domain0.org,` was not found in reverse[] and the
+    // identifier was left un-restored.
+    const dict = buildAnonymizationDictionary([
+      makeLine(0, '@alice:example.org joined !room1:example.org'),
+    ]);
+    const restore = buildCompiledUnanonymizer(dict);
+    const anonymized = applyAnonymization('@alice:example.org, !room1:example.org)', dict);
+    expect(restore(anonymized)).toBe('@alice:example.org, !room1:example.org)');
   });
 });
 
