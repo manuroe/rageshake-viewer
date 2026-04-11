@@ -277,7 +277,9 @@ export function applyUnanonymization(text: string, dict: AnonymizationDictionary
   // Phase 1: sigil-prefixed aliases. Stops at `/` (like buildCompiledUnanonymizer)
   // so identifiers embedded in URIs (e.g. `!room0:domain0.org/messages`) are
   // matched as `!room0:domain0.org` rather than consuming the path suffix.
-  const candidateRe = /[@#!$][^\s:]+(?::[^\s/]+)?/g;
+  // Also stops before common trailing punctuation so tokens like
+  // `@user0:domain0.org,` are matched as `@user0:domain0.org`.
+  const candidateRe = /[@#!$][^\s:]+(?::[^\s/),.;\]]+)?/g;
   let result = text.replace(candidateRe, (m) => reverse[m] ?? m);
   // Phase 2: bare domain alias names.
   for (const [key, val] of Object.entries(reverse)
