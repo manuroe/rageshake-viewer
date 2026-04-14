@@ -1,0 +1,335 @@
+/* ArchiveView Module — file listing for a loaded .tar.gz rageshake archive */
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.header {
+    margin-bottom: 20px;
+}
+
+.archiveName {
+    font-size: var(--font-size-2xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+    word-break: break-all;
+}
+
+.entryCount {
+    font-size: var(--font-size-base);
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.tableWrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+}
+
+/* ── details.json user text card ────────────────────────────────────────── */
+
+.profileHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.avatarCircle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.avatarImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatarInitial {
+    color: #fff;
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    line-height: 1;
+    user-select: none;
+}
+
+.profileDisplayName {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.detailsCard {
+    flex: 1;
+    min-width: 280px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    background: var(--bg-primary);
+}
+
+.detailsList {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    margin: 0;
+    align-items: baseline;
+}
+
+.detailsList dt {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.detailsList dd {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    min-width: 0;
+}
+
+.detailsList code {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    word-break: break-all;
+}
+
+.detailsLink {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.detailsLink:hover {
+    color: var(--color-primary-hover);
+}
+
+.deviceKeys {
+    word-break: break-all;
+}
+
+.userText {
+    margin: 0 0 14px 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+/* Clickable filename button — looks like a link */
+.fileLink {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    cursor: pointer;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.fileLink:hover {
+    color: var(--color-primary-hover);
+}
+
+/* Inline "(raw)" button — muted secondary action next to the filename */
+.rawLink {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-left: 6px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.rawLink:hover {
+    color: var(--text-secondary);
+    text-decoration: underline;
+}
+
+/* Non-log files (e.g. details.json) — same link appearance but muted to signal external open */
+.fileLinkOther {
+    color: var(--text-muted);
+}
+
+.fileLinkOther:hover {
+    color: var(--text-primary);
+}
+
+/* Mirrors the browser's :visited link colour for buttons that have been opened. */
+.fileLinkVisited {
+    color: var(--color-visited);
+}
+
+.fileLinkVisited:hover {
+    color: var(--color-visited);
+    opacity: 0.8;
+}
+
+.nonLogName {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+/* Count color classes */
+.errorCount {
+    color: var(--color-error);
+    font-weight: 500;
+}
+
+.warnCount {
+    color: var(--color-warning);
+    font-weight: 500;
+}
+
+.sentryCount {
+    color: var(--color-sentry);
+    font-weight: 500;
+}
+
+.zeroCount {
+    color: var(--text-muted);
+}
+
+.loadingCell {
+    color: var(--text-muted);
+}
+
+/* ── Status code chips ──────────────────────────────────────────────────── */
+
+.statusChips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.chipCode {
+    /* intentionally inherits chip font */
+}
+
+.chipCount {
+    opacity: 0.75;
+    font-weight: 400;
+}
+
+/* Colour variants matching HTTP response code families */
+.chip2xx {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+}
+
+.chip3xx {
+    background: var(--color-info-bg);
+    color: var(--color-info-text);
+}
+
+.chip4xx {
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+}
+
+.chip5xx {
+    background: var(--color-error-bg);
+    color: var(--color-error-text);
+}
+
+.chipOther {
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+}
+
+/* Numeric codes get a slightly different layout (code is bold) */
+.chipNumeric .chipCode {
+    font-weight: 600;
+}
+
+/* ── PNG gallery card ───────────────────────────────────────────────────── */
+
+/* Side-by-side row: screenshots on the left, details card on the right */
+.bottomRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+    padding-top: 20px;
+}
+
+.pngGallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.pngCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 8px;
+    background: var(--bg-primary);
+    max-width: 760px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.pngCard:hover {
+    border-color: var(--color-primary);
+}
+
+.pngThumb {
+    max-width: 720px;
+    max-height: 720px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    display: block;
+}
+
+.pngName {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    text-align: center;
+    word-break: break-all;
+}
