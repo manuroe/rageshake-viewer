@@ -13,6 +13,7 @@ export function LandingPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
+  const setLogFileName = useLogStore((state) => state.setLogFileName);
   const [demoError, setDemoError] = useState<AppError | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
 
@@ -68,6 +69,7 @@ export function LandingPage() {
       const content = await response.text();
       const result = parseLogFile(content);
       loadLogParserResult(result);
+      setLogFileName('demo.log');
       void navigate('/summary');
     } catch (error) {
       setDemoError(wrapError(error, 'Failed to load demo. Please try again.'));

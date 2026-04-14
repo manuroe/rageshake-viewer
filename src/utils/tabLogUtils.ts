@@ -7,6 +7,7 @@ const MAX_AGE_MS = 10 * 60 * 1000;
 interface TabLogEntry {
   readonly text: string;
   readonly createdAt: number;
+  readonly fileName?: string;
 }
 
 /**
@@ -21,18 +22,18 @@ interface TabLogEntry {
  *          failed (e.g. `QuotaExceededError`).
  *
  * @example
- * const uuid = storeTabLog(rawLogText);
+ * const uuid = storeTabLog(rawLogText, 'my-log.log');
  * if (uuid) {
  *   const url = new URL(window.location.href);
  *   url.hash = `/logs?tabLog=${uuid}`;
  *   window.open(url.toString(), '_blank');
  * }
  */
-export function storeTabLog(text: string): string | null {
+export function storeTabLog(text: string, fileName?: string | null): string | null {
   try {
     const uuid = crypto.randomUUID();
     const key = `${KEY_PREFIX}${uuid}`;
-    const entry: TabLogEntry = { text, createdAt: Date.now() };
+    const entry: TabLogEntry = { text, createdAt: Date.now(), ...(fileName ? { fileName } : {}) };
     localStorage.setItem(key, JSON.stringify(entry));
     return uuid;
   } catch {
@@ -58,20 +59,21 @@ export function removeTabLog(uuid: string): void {
 }
 
 /**
- * Reads and immediately removes the log text stored under the given UUID.
+ * Reads and immediately removes the log entry stored under the given UUID.
  *
  * Returns `null` when the entry is missing (never written or tab crashed) or
  * when it is older than 10 minutes. In both cases the localStorage key is
  * deleted (if present) to prevent orphaned entries from accumulating.
  *
  * @example
- * const text = loadAndClearTabLog(uuid);
- * if (text) {
- *   const result = parseLogFile(text);
+ * const entry = loadAndClearTabLog(uuid);
+ * if (entry) {
+ *   const result = parseLogFile(entry.text);
  *   loadLogParserResult(result);
+ *   setLogFileName(entry.fileName ?? null);
  * }
  */
-export function loadAndClearTabLog(uuid: string): string | null {
+export function loadAndClearTabLog(uuid: string): { text: string; fileName: string | null } | null {
   const key = `${KEY_PREFIX}${uuid}`;
   let raw: string | null;
   try {
@@ -93,5 +95,7 @@ export function loadAndClearTabLog(uuid: string): string | null {
   if (typeof entry.text !== 'string' || typeof entry.createdAt !== 'number') return null;
   if (Date.now() - entry.createdAt > MAX_AGE_MS) return null;
 
-  return entry.text;
+  const fileName = typeof entry.fileName === 'string' ? entry.fileName : null;
+
+  return { text: entry.text, fileName };
 }

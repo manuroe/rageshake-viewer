@@ -96,7 +96,7 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false }: LogDisplayViewProps) {
-  const { rawLogLines, lineNumberIndex, sentryEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs } = useLogStore();
+  const { rawLogLines, lineNumberIndex, sentryEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs, logFileName } = useLogStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
@@ -315,7 +315,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     }
     const croppedText = croppedParts.join('\n');
 
-    const tabLogId = storeTabLog(croppedText);
+    const tabLogId = storeTabLog(croppedText, logFileName);
     if (!tabLogId) {
       setNewTabError('The log is too large to open in a new tab.');
       return;
@@ -340,7 +340,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     }
     newWindow.opener = null;
     newWindow.location.href = url.toString();
-  }, [displayItems, lineNumberIndex, filterQuery, startTime, endTime]);
+  }, [displayItems, lineNumberIndex, filterQuery, startTime, endTime, logFileName]);
 
   // Search determines highlighting within all currently rendered lines (including
   // lines expanded from collapsed groups via forcedRanges).

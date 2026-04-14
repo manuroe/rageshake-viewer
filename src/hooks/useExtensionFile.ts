@@ -33,6 +33,7 @@ export function useExtensionFile(): void {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
+  const setLogFileName = useLogStore((state) => state.setLogFileName);
 
   const fileUrl = searchParams.get(EXTENSION_FILE_URL_PARAM);
   let fileNameFromUrl: string | undefined;
@@ -111,6 +112,7 @@ export function useExtensionFile(): void {
 
         const result = parseLogFile(text);
         loadLogParserResult(result);
+        setLogFileName(fileName);
 
         // Remove the extension params from the URL so a refresh doesn't re-trigger.
         const nextParams = new URLSearchParams(searchParams);

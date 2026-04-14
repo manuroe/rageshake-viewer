@@ -16,6 +16,7 @@ const {
   mockDecodeTextBytes,
   mockParseLogFile,
   mockLoadLogParserResult,
+  mockSetLogFileName,
   mockNavigate,
 } = vi.hoisted(() => ({
   mockGunzipSync: vi.fn(),
@@ -23,6 +24,7 @@ const {
   mockDecodeTextBytes: vi.fn(),
   mockParseLogFile: vi.fn(),
   mockLoadLogParserResult: vi.fn(),
+  mockSetLogFileName: vi.fn(),
   mockNavigate: vi.fn(),
 }));
 
@@ -34,9 +36,9 @@ vi.mock('../../utils/fileValidator', () => ({
 vi.mock('../../utils/logParser', () => ({ parseLogFile: mockParseLogFile }));
 vi.mock('../../stores/logStore', () => ({
   useLogStore: Object.assign(
-    (selector: (state: { loadLogParserResult: typeof mockLoadLogParserResult }) => unknown) =>
-      selector({ loadLogParserResult: mockLoadLogParserResult }),
-    { getState: () => ({ clearData: vi.fn(), loadLogParserResult: mockLoadLogParserResult }) }
+    (selector: (state: { loadLogParserResult: typeof mockLoadLogParserResult; setLogFileName: typeof mockSetLogFileName }) => unknown) =>
+      selector({ loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }),
+    { getState: () => ({ clearData: vi.fn(), loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }) }
   ),
 }));
 vi.mock('react-router-dom', () => ({
@@ -185,6 +187,7 @@ describe('useExtensionFile', () => {
     expect(mockParseLogFile).toHaveBeenCalledWith('log text');
     // loadLogParserResult was called with the parsed result
     expect(mockLoadLogParserResult).toHaveBeenCalledWith({ logs: [], requests: [] });
+    expect(mockSetLogFileName).toHaveBeenCalledWith(TEST_FILE_NAME);
     // navigate was called to remove the params and go to /summary
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/summary' }),

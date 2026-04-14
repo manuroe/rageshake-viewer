@@ -13,11 +13,13 @@ const {
   mockLoadAndClearTabLog,
   mockParseLogFile,
   mockLoadLogParserResult,
+  mockSetLogFileName,
   mockSetSearchParams,
 } = vi.hoisted(() => ({
-  mockLoadAndClearTabLog: vi.fn<(uuid: string) => string | null>(),
+  mockLoadAndClearTabLog: vi.fn<(uuid: string) => { text: string; fileName: string | null } | null>(),
   mockParseLogFile: vi.fn(),
   mockLoadLogParserResult: vi.fn(),
+  mockSetLogFileName: vi.fn(),
   mockSetSearchParams: vi.fn(),
 }));
 
@@ -31,9 +33,9 @@ vi.mock('../../utils/logParser', () => ({
 
 vi.mock('../../stores/logStore', () => ({
   useLogStore: Object.assign(
-    (selector: (state: { loadLogParserResult: typeof mockLoadLogParserResult }) => unknown) =>
-      selector({ loadLogParserResult: mockLoadLogParserResult }),
-    { getState: () => ({ clearData: vi.fn(), loadLogParserResult: mockLoadLogParserResult }) },
+    (selector: (state: { loadLogParserResult: typeof mockLoadLogParserResult; setLogFileName: typeof mockSetLogFileName }) => unknown) =>
+      selector({ loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }),
+    { getState: () => ({ clearData: vi.fn(), loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }) },
   ),
 }));
 
@@ -71,7 +73,7 @@ describe('useTabLog', () => {
 
   it('loads and parses log text when tabLog param and localStorage entry are present', async () => {
     const logText = 'some log content';
-    mockLoadAndClearTabLog.mockReturnValue(logText);
+    mockLoadAndClearTabLog.mockReturnValue({ text: logText, fileName: null });
     mockSearchParams = new URLSearchParams(`?${TAB_LOG_PARAM}=${FAKE_UUID_A}`);
 
     renderHook(() => useTabLog());
@@ -108,7 +110,7 @@ describe('useTabLog', () => {
 
   it('processes a second distinct UUID when tabLogId changes', async () => {
     const logText = 'log for A';
-    mockLoadAndClearTabLog.mockReturnValue(logText);
+    mockLoadAndClearTabLog.mockReturnValue({ text: logText, fileName: null });
     mockSearchParams = new URLSearchParams(`?${TAB_LOG_PARAM}=${FAKE_UUID_A}`);
 
     const { rerender } = renderHook(() => useTabLog());

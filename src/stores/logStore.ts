@@ -96,6 +96,9 @@ interface LogStore {
   // Detected platform from log content
   detectedPlatform: 'android' | 'ios' | null;
 
+  // Name of the currently loaded log file (null when none is loaded or source is unknown)
+  logFileName: string | null;
+
   // Sentry events detected during parsing
   sentryEvents: SentryEvent[];
 
@@ -176,6 +179,8 @@ interface LogStore {
   // Navigation memory
   setLastRoute: (route: string) => void;
   clearLastRoute: () => void;
+  /** Update the displayed log file name. Call after loadLogParserResult with the source file's name. */
+  setLogFileName: (name: string | null) => void;
   
   // Error handling
   setError: (error: AppError | null) => void;
@@ -254,6 +259,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
   openLogViewerIds: new Set(),
   lastRoute: null,
   detectedPlatform: null,
+  logFileName: null,
   sentryEvents: [],
   isAnonymized: false,
   isAnonymizing: false,
@@ -411,6 +417,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       lineNumberIndex: new Map(),
       openLogViewerIds: new Set(),
       detectedPlatform: null,
+      logFileName: null,
       sentryEvents: [],
       isAnonymized: false,
       isAnonymizing: false,
@@ -633,6 +640,10 @@ export const useLogStore = create<LogStore>((set, get) => ({
 
   clearLastRoute: () => {
     set({ lastRoute: null });
+  },
+
+  setLogFileName: (name) => {
+    set({ logFileName: name });
   },
   
   setError: (error) => {

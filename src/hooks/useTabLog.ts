@@ -19,6 +19,7 @@ export const TAB_LOG_PARAM = 'tabLog';
 export function useTabLog(): void {
   const [searchParams, setSearchParams] = useSearchParams();
   const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
+  const setLogFileName = useLogStore((state) => state.setLogFileName);
 
   // Track the last UUID processed so StrictMode double-effects are suppressed
   // while a *different* UUID later in the session is still handled correctly.
@@ -41,13 +42,14 @@ export function useTabLog(): void {
       { replace: true },
     );
 
-    const text = loadAndClearTabLog(tabLogId);
-    if (!text) {
+    const entry = loadAndClearTabLog(tabLogId);
+    if (!entry) {
       // Stale or missing entry — silently ignore; the empty-state UI will show.
       return;
     }
 
-    const result = parseLogFile(text);
+    const result = parseLogFile(entry.text);
     loadLogParserResult(result);
-  }, [tabLogId, loadLogParserResult, setSearchParams]);
+    setLogFileName(entry.fileName);
+  }, [tabLogId, loadLogParserResult, setLogFileName, setSearchParams]);
 }

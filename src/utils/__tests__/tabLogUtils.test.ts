@@ -63,24 +63,35 @@ describe('tabLogUtils', () => {
     it('returns the stored text and removes the key', () => {
       const uuid = storeTabLog('my log text');
       expect(uuid).not.toBeNull();
-      const text = loadAndClearTabLog(uuid!);
-      expect(text).toBe('my log text');
+      const entry = loadAndClearTabLog(uuid!);
+      expect(entry).not.toBeNull();
+      expect(entry!.text).toBe('my log text');
+      expect(entry!.fileName).toBeNull();
       // Key must be deleted after reading
       expect(localStorage.getItem(`rageshake-tablog-${uuid}`)).toBeNull();
+    });
+
+    it('returns the stored fileName when one was provided', () => {
+      const uuid = storeTabLog('log text', 'my-log.log');
+      expect(uuid).not.toBeNull();
+      const entry = loadAndClearTabLog(uuid!);
+      expect(entry).not.toBeNull();
+      expect(entry!.text).toBe('log text');
+      expect(entry!.fileName).toBe('my-log.log');
     });
 
     it('returns null and deletes the key when the entry is older than 10 minutes', () => {
       const uuid = storeTabLog('old log');
       // Advance time beyond the 10-minute expiry
       vi.advanceTimersByTime(10 * 60 * 1000 + 1);
-      const text = loadAndClearTabLog(uuid!);
-      expect(text).toBeNull();
+      const entry = loadAndClearTabLog(uuid!);
+      expect(entry).toBeNull();
       expect(localStorage.getItem(`rageshake-tablog-${uuid}`)).toBeNull();
     });
 
     it('returns null for an unknown UUID', () => {
-      const text = loadAndClearTabLog('00000000-0000-0000-0000-000000000000');
-      expect(text).toBeNull();
+      const entry = loadAndClearTabLog('00000000-0000-0000-0000-000000000000');
+      expect(entry).toBeNull();
     });
 
     it('returns null when localStorage throws a SecurityError', () => {
@@ -93,8 +104,8 @@ describe('tabLogUtils', () => {
     it('returns null and deletes the key when the stored JSON is malformed', () => {
       const uuid = '11111111-1111-1111-1111-111111111111';
       localStorage.setItem(`rageshake-tablog-${uuid}`, '{not valid json}');
-      const text = loadAndClearTabLog(uuid);
-      expect(text).toBeNull();
+      const entry = loadAndClearTabLog(uuid);
+      expect(entry).toBeNull();
       expect(localStorage.getItem(`rageshake-tablog-${uuid}`)).toBeNull();
     });
   });

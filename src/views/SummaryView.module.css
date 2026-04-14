@@ -1,6 +1,23 @@
 /* Summary View Module */
+.headerLeft {
+    flex-shrink: 1;
+    min-width: 0;
+}
+
 .summarySection {
     composes: section from '../components/Card.module.css';
+}
+
+.fileName {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin: 0;
+    align-self: center;
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .summarySection h2 {
