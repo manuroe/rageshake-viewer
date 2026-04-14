@@ -10,7 +10,7 @@ import {
   validateGzipFile,
   decodeTextBytes,
 } from '../utils/fileValidator';
-import { wrapError, FileError, type AppError } from '../utils/errorHandling';
+import { wrapError, FileError, formatFileSize, type AppError } from '../utils/errorHandling';
 import ErrorDisplay from './ErrorDisplay';
 import styles from './FileUpload.module.css';
 
@@ -73,17 +73,17 @@ export function FileUpload() {
 
   const handleTarGzFile = useCallback(
     async (file: File) => {
+      // Guard against very large files that would lock the main thread when
+      // synchronously decompressed. Limits mirror the gzip path in fileValidator.ts.
+      const MAX_TAR_GZ_SIZE = 500 * 1024 * 1024; // 500 MB hard limit
+      if (file.size > MAX_TAR_GZ_SIZE) {
+        setValidationError(
+          new FileError(`Archive is too large (${formatFileSize(file.size)}). Maximum supported size is ${formatFileSize(MAX_TAR_GZ_SIZE)}.`)
+        );
+        return;
+      }
       try {
-        const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const result = e.target?.result;
-            if (result instanceof ArrayBuffer) resolve(result);
-            else reject(new Error('Failed to read file'));
-          };
-          reader.onerror = () => reject(new Error('Failed to read file'));
-          reader.readAsArrayBuffer(file);
-        });
+        const buffer = await readFileAsArrayBuffer(file);
         const tarBytes = decompressSync(new Uint8Array(buffer));
         const tarEntries = parseTar(tarBytes);
         if (tarEntries.length === 0) {
@@ -97,7 +97,7 @@ export function FileUpload() {
         setValidationError(appError);
       }
     },
-    [loadArchive, navigate]
+    [loadArchive, navigate, readFileAsArrayBuffer]
   );
 
   const handleFile = useCallback(

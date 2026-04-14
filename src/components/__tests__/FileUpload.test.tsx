@@ -371,14 +371,7 @@ describe('FileUpload — .tar.gz archive handling', () => {
     header[135] = 0x20; // trailing space
     // Type flag byte 156 = '0' (regular file)
     header[156] = 0x30;
-    // Minimal checksum (just enough that the parser accepts it)
-    let checksum = 0;
-    for (let i = 0; i < 512; i++) {
-      checksum += (i >= 148 && i < 156) ? 0x20 : header[i];
-    }
-    const checksumOctal = checksum.toString(8).padStart(6, '0');
-    for (let i = 0; i < 6; i++) header[148 + i] = checksumOctal.charCodeAt(i);
-    header[154] = 0; header[155] = 0x20;
+    // parseTar does not validate tar checksums — leave the checksum field at zero.
 
     // Content block (padded to 512 bytes)
     const contentBlock = new Uint8Array(512);
@@ -417,5 +410,22 @@ describe('FileUpload — .tar.gz archive handling', () => {
       rerender(<FileUpload />);
       expect(mockNavigate).not.toHaveBeenCalled();
     }, { timeout: 1000 });
+  });
+
+  it('shows an error when the .tar.gz file exceeds the 500 MB size limit', async () => {
+    // jsdom's File.size is a prototype getter that cannot be shadowed on an instance
+    // via Object.defineProperty. Use a plain object with the required File shape instead.
+    const oversizedFile = {
+      name: 'huge.tar.gz',
+      size: 501 * 1024 * 1024,
+      type: 'application/gzip',
+    } as unknown as File;
+
+    const { container, findByText } = render(<FileUpload />);
+    const input = container.querySelector('#file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [oversizedFile] } });
+
+    await findByText(/too large/i);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

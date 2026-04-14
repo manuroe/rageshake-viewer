@@ -197,7 +197,7 @@ function mxcToThumbnailUrl(homeserver: string, mxcUrl: string): string | null {
   if (slash < 0) return null;
   const mediaServer = path.slice(0, slash);
   const mediaId = path.slice(slash + 1);
-  return `https://${homeserver}/_matrix/media/v3/thumbnail/${mediaServer}/${mediaId}?width=96&height=96&method=crop`;
+  return `https://${homeserver}/_matrix/media/v3/thumbnail/${encodeURIComponent(mediaServer)}/${encodeURIComponent(mediaId)}?width=96&height=96&method=crop`;
 }
 
 /** Returns the first letter of a Matrix username (the part between @ and :). */
@@ -278,6 +278,9 @@ export function ArchiveView() {
       setMatrixProfile(null);
       return;
     }
+    // Clear any previous archive's profile immediately so the UI never shows
+    // stale data while the new fetch is in flight.
+    setMatrixProfile(null);
     // Extract homeserver from @user:homeserver.tld
     const colonIdx = userId.indexOf(':', 1);
     if (colonIdx < 0) return;
@@ -318,8 +321,7 @@ export function ArchiveView() {
   const pngUrls = useMemo(() => {
     return new Map(
       pngEntries.map((e) => {
-        const ab = e.data.buffer.slice(e.data.byteOffset, e.data.byteOffset + e.data.byteLength) as ArrayBuffer;
-        return [e.name, URL.createObjectURL(new Blob([ab], { type: 'image/png' }))];
+        return [e.name, URL.createObjectURL(new Blob([e.data as Uint8Array<ArrayBuffer>], { type: 'image/png' }))];
       })
     );
   }, [pngEntries]);
@@ -402,10 +404,10 @@ export function ArchiveView() {
             blob = new Blob([formatted], { type: 'text/plain;charset=utf-8' });
           } catch {
             // Malformed JSON — fall back to raw bytes
-            blob = new Blob([entry.data.buffer.slice(entry.data.byteOffset, entry.data.byteOffset + entry.data.byteLength) as ArrayBuffer], { type: 'text/plain;charset=utf-8' });
+            blob = new Blob([entry.data as Uint8Array<ArrayBuffer>], { type: 'text/plain;charset=utf-8' });
           }
         } else {
-          blob = new Blob([entry.data.buffer.slice(entry.data.byteOffset, entry.data.byteOffset + entry.data.byteLength) as ArrayBuffer], { type: getMimeType(entryName) });
+          blob = new Blob([entry.data as Uint8Array<ArrayBuffer>], { type: getMimeType(entryName) });
         }
         const url = URL.createObjectURL(blob);
         window.location.href = url;
