@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, waitFor } from '@testing-library/react';
 import { compressSync } from 'fflate';
 import { FileUpload } from '../FileUpload';
 import { useLogStore } from '../../stores/logStore';
+import { useArchiveStore } from '../../stores/archiveStore';
 
 const mockNavigate = vi.fn();
 
@@ -339,5 +340,82 @@ describe('FileUpload - error handling and warnings', () => {
         resolve();
       }, 300);
     });
+  });
+});
+
+describe('FileUpload — .tar.gz archive handling', () => {
+  beforeEach(() => {
+    useLogStore.getState().clearData();
+    useLogStore.getState().clearLastRoute();
+    useArchiveStore.getState().clearArchive();
+    useArchiveStore.setState({ allVisited: {}, visitedEntries: new Set() });
+    mockNavigate.mockReset();
+    mockParseLogFile.mockReset();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('loads a valid .tar.gz archive and navigates to /archive', async () => {
+    // Build a minimal POSIX tar with one entry: "a/details.json"
+    // A tar header is 512 bytes; file content is padded to 512-byte blocks.
+    const filename = 'a/details.json';
+    const content = new TextEncoder().encode('{}');
+    const header = new Uint8Array(512);
+    // Name field (bytes 0-99)
+    for (let i = 0; i < filename.length; i++) header[i] = filename.charCodeAt(i);
+    // File size (bytes 124-135, octal)
+    const sizeOctal = content.length.toString(8).padStart(11, '0');
+    for (let i = 0; i < 11; i++) header[124 + i] = sizeOctal.charCodeAt(i);
+    header[135] = 0x20; // trailing space
+    // Type flag byte 156 = '0' (regular file)
+    header[156] = 0x30;
+    // Minimal checksum (just enough that the parser accepts it)
+    let checksum = 0;
+    for (let i = 0; i < 512; i++) {
+      checksum += (i >= 148 && i < 156) ? 0x20 : header[i];
+    }
+    const checksumOctal = checksum.toString(8).padStart(6, '0');
+    for (let i = 0; i < 6; i++) header[148 + i] = checksumOctal.charCodeAt(i);
+    header[154] = 0; header[155] = 0x20;
+
+    // Content block (padded to 512 bytes)
+    const contentBlock = new Uint8Array(512);
+    contentBlock.set(content);
+
+    // End-of-archive: two zero 512-byte blocks
+    const eof = new Uint8Array(1024);
+
+    const tarBytes = new Uint8Array([...header, ...contentBlock, ...eof]);
+    const gzBytes = compressSync(tarBytes);
+    const file = new File([gzBytes], 'rageshake.tar.gz', { type: 'application/gzip' });
+
+    const { container } = render(<FileUpload />);
+    const input = container.querySelector('#file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/archive');
+    }, { timeout: 1000 });
+
+    expect(useArchiveStore.getState().archiveName).toBe('rageshake.tar.gz');
+    expect(useArchiveStore.getState().archiveEntries.length).toBeGreaterThan(0);
+  });
+
+  it('shows an error when the .tar.gz archive is empty', async () => {
+    // A tar with only end-of-archive blocks — parseTar returns []
+    const eof = new Uint8Array(1024);
+    const gzBytes = compressSync(eof);
+    const file = new File([gzBytes], 'empty.tar.gz', { type: 'application/gzip' });
+
+    const { container, rerender } = render(<FileUpload />);
+    const input = container.querySelector('#file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      rerender(<FileUpload />);
+      expect(mockNavigate).not.toHaveBeenCalled();
+    }, { timeout: 1000 });
   });
 });
