@@ -20,6 +20,7 @@
   --color-primary-hover: #0052a3;
   --color-primary-light: #e8f4ff;
   --color-primary-muted: rgba(0, 102, 204, 0.1);
+  --color-visited: #6b21a8;
 
   /* -------------------------------------------------------------------------
      Semantic Colors
@@ -244,6 +245,7 @@
   --color-primary-hover: #6bb3ff;
   --color-primary-light: #1a3a5c;
   --color-primary-muted: rgba(77, 163, 255, 0.15);
+  --color-visited: #c084fc;
 
   /* Semantic Colors */
   --color-success: #4caf50;
@@ -354,6 +356,7 @@
     --color-primary-hover: #6bb3ff;
     --color-primary-light: #1a3a5c;
     --color-primary-muted: rgba(77, 163, 255, 0.15);
+    --color-visited: #c084fc;
 
     /* Semantic Colors */
     --color-success: #4caf50;

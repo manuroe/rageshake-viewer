@@ -12,7 +12,9 @@ import { SummaryView } from './views/SummaryView';
 import { SyncView } from './views/SyncView';
 import { HttpRequestsView } from './views/HttpRequestsView';
 import { LogsView } from './views/LogsView';
+import { ArchiveView } from './views/ArchiveView';
 import { useLogStore } from './stores/logStore';
+import { useArchiveStore } from './stores/archiveStore';
 import { urlToTimeFormat } from './utils/timeUtils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_MS_PER_PIXEL } from './utils/timelineUtils';
@@ -28,6 +30,7 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { rawLogLines, setLastRoute } = useLogStore();
+  const archiveEntries = useArchiveStore((state) => state.archiveEntries);
   
   // Ref to prevent redirect loops
   const isRedirecting = useRef(false);
@@ -88,19 +91,21 @@ function AppContent() {
   // Redirect to landing if no data
   useEffect(() => {
     const hasData = rawLogLines.length > 0;
+    const hasArchive = archiveEntries.length > 0;
     // Suppress redirect when a tab-log handoff is pending — useTabLog will
     // populate the store in its own effect and the redirect would race it.
     const tabLogPending = searchParams.get(TAB_LOG_PARAM) !== null;
-    if (!hasData && !tabLogPending && location.pathname !== '/' && !isRedirecting.current) {
+    if (!hasData && !hasArchive && !tabLogPending && location.pathname !== '/' && !isRedirecting.current) {
       isRedirecting.current = true;
       void navigate('/', { replace: true });
     }
-  }, [rawLogLines.length, location.pathname, navigate, searchParams]);
+  }, [rawLogLines.length, archiveEntries.length, location.pathname, navigate, searchParams]);
 
   return (
     <KeyboardShortcutProvider>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/archive" element={<ArchiveView />} />
         <Route path="/summary" element={<SummaryView />} />
         <Route path="/logs" element={<LogsView />} />
         <Route path="/http_requests" element={<HttpRequestsView />} />

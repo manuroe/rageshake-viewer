@@ -3,31 +3,40 @@ import { useNavigate } from 'react-router-dom';
 import { decompressSync } from 'fflate';
 import { parseLogFile } from '../utils/logParser';
 import { useLogStore } from '../stores/logStore';
+import { useArchiveStore } from '../stores/archiveStore';
+import { parseTar } from '../utils/tarParser';
 import {
   validateTextFile,
   validateGzipFile,
   decodeTextBytes,
 } from '../utils/fileValidator';
-import { wrapError, FileError, type AppError } from '../utils/errorHandling';
+import { wrapError, FileError, formatFileSize, type AppError } from '../utils/errorHandling';
 import ErrorDisplay from './ErrorDisplay';
 import styles from './FileUpload.module.css';
+
+function isTarGzFile(file: File): boolean {
+  return file.name.toLowerCase().endsWith('.tar.gz');
+}
+
+function isGzipFile(file: File): boolean {
+  // .tar.gz files are handled separately — exclude them from single-file gzip path
+  if (isTarGzFile(file)) return false;
+  // Prefer MIME type when provided, but fall back to filename extension for robustness
+  if (file.type === 'application/gzip' || file.type === 'application/x-gzip') {
+    return true;
+  }
+
+  const fileName = file.name.toLowerCase();
+  return fileName.endsWith('.gz') || fileName.endsWith('.log.gz');
+}
 
 export function FileUpload() {
   const navigate = useNavigate();
   const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
   const lastRoute = useLogStore((state) => state.lastRoute);
+  const loadArchive = useArchiveStore((state) => state.loadArchive);
   const [validationError, setValidationError] = useState<AppError | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<AppError[]>([]);
-
-  const isGzipFile = (file: File): boolean => {
-    // Prefer MIME type when provided, but fall back to filename extension for robustness
-    if (file.type === 'application/gzip' || file.type === 'application/x-gzip') {
-      return true;
-    }
-
-    const fileName = file.name.toLowerCase();
-    return fileName.endsWith('.gz') || fileName.endsWith('.log.gz');
-  };
 
   // Helper functions defined before use
   const readFileAsText = useCallback((file: File): Promise<string> => {
@@ -62,10 +71,44 @@ export function FileUpload() {
     });
   }, []);
 
+  const handleTarGzFile = useCallback(
+    async (file: File) => {
+      // Guard against very large files that would lock the main thread when
+      // synchronously decompressed. Limits mirror the gzip path in fileValidator.ts.
+      const MAX_TAR_GZ_SIZE = 500 * 1024 * 1024; // 500 MB hard limit
+      if (file.size > MAX_TAR_GZ_SIZE) {
+        setValidationError(
+          new FileError(`Archive is too large (${formatFileSize(file.size)}). Maximum supported size is ${formatFileSize(MAX_TAR_GZ_SIZE)}.`)
+        );
+        return;
+      }
+      try {
+        const buffer = await readFileAsArrayBuffer(file);
+        const tarBytes = decompressSync(new Uint8Array(buffer));
+        const tarEntries = parseTar(tarBytes);
+        if (tarEntries.length === 0) {
+          setValidationError(new FileError('The archive contains no files.'));
+          return;
+        }
+        loadArchive(file.name, tarEntries);
+        void navigate('/archive');
+      } catch (error) {
+        const appError = wrapError(error, 'Failed to open archive. Make sure it is a valid .tar.gz file.');
+        setValidationError(appError);
+      }
+    },
+    [loadArchive, navigate, readFileAsArrayBuffer]
+  );
+
   const handleFile = useCallback(
     async (file: File) => {
       setValidationError(null);
       setValidationWarnings([]);
+
+      if (isTarGzFile(file)) {
+        await handleTarGzFile(file);
+        return;
+      }
 
       try {
         let logContent: string;
@@ -118,7 +161,7 @@ export function FileUpload() {
         setValidationError(appError);
       }
     },
-    [loadLogParserResult, navigate, lastRoute, readFileAsText, readFileAsArrayBuffer]
+    [loadLogParserResult, navigate, lastRoute, readFileAsText, readFileAsArrayBuffer, handleTarGzFile]
   );
 
   const handleDrop = useCallback(
@@ -174,7 +217,7 @@ export function FileUpload() {
         <h2>Drop Rageshake Here</h2>
         <p>or click to browse</p>
         <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-          Supports .log or .log.gz files
+          Supports .log, .log.gz or .tar.gz archive files
         </p>
         <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
           All log data is processed locally in your browser. No server interaction
@@ -200,7 +243,7 @@ export function FileUpload() {
         <input
           type="file"
           id="file-input"
-          accept=".log,.txt,.log.gz,.gz"
+          accept=".log,.txt,.log.gz,.gz,.tar.gz"
           onChange={handleFileInput}
           style={{ display: 'none' }}
         />

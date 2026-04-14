@@ -39,6 +39,7 @@ export function BurgerMenu() {
   };
 
   const isActive = (path: string) => location.pathname === path;
+  const isArchiveView = location.pathname === '/archive';
 
   return (
     <div className={styles.burgerMenu} ref={menuRef}>
@@ -55,6 +56,8 @@ export function BurgerMenu() {
           <button className={styles.burgerItem} onClick={handleNewSession}>
             New Session
           </button>
+          {!isArchiveView && (
+            <>
           <div className={styles.burgerDivider} />
           <div className={styles.burgerSectionTitle}>Views</div>
           <button 
@@ -88,6 +91,8 @@ export function BurgerMenu() {
           >
             Keyboard Shortcuts
           </button>
+            </>
+          )}
           <div className={styles.burgerDivider} />
           <div className={styles.themeButtons}>
             <button 
