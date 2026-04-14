@@ -14,7 +14,6 @@ import { isInputFocused, metaKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
-import { stripLogPrefix } from '../utils/logMessageUtils';
 import { LogExportDialog } from '../components/LogExportDialog';
 import { UnanonymizeDialog } from '../components/UnanonymizeDialog';
 import type { ExportContext } from '../utils/logExportUtils';
@@ -539,8 +538,9 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     if (!stripPrefix) {
       return line.message;
     }
-    // Strip ISO timestamp and log level from display (they're already shown in columns)
-    return stripLogPrefix(line.message);
+    // strippedMessage is pre-computed by the parser for each log format
+    // (ISO rageshake prefix for rageshake logs, "TAG: message" for logcat logs).
+    return line.strippedMessage;
   };
 
   const handleSourceLinkClick = async (

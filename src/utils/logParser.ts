@@ -6,6 +6,7 @@ import { ParsingError } from './errorHandling';
 import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
 import { ISO_TIMESTAMP_RE, stripLogPrefix } from './logMessageUtils';
 import { detectAnonymizedLog, stripAnonymizedMarker } from './anonymizeUtils';
+import { isLogcatFormat, parseLogcatContent } from './logcatParser';
 
 /**
  * Mutable builder record used during log parsing before all fields have been
@@ -592,6 +593,15 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
 export function parseLogFile(logContent: string): LogParserResult {
   const isAnonymized = detectAnonymizedLog(logContent);
   const contentToParse = isAnonymized ? stripAnonymizedMarker(logContent) : logContent;
+
+  // Short-circuit for Android logcat files before the rageshake-specific HTTP
+  // span parser runs. Logcat lines use a MM-DD timestamp prefix that never
+  // matches the ISO 8601 format expected by parseAllHttpRequests, so they
+  // would otherwise fail the timestamp-density validation and throw a
+  // ParsingError.
+  if (isLogcatFormat(contentToParse)) {
+    return { ...parseLogcatContent(contentToParse), isAnonymized };
+  }
 
   // First parse all HTTP requests
   const { httpRequests, rawLogLines, sentryEvents } = parseAllHttpRequests(contentToParse);
