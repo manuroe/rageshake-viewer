@@ -53,4 +53,33 @@ describe('parseListingHtml', () => {
       },
     ]);
   });
+
+  it('filters out non-https and cross-origin links', () => {
+    const html = `
+      <pre>
+        <a href="javascript:alert(1)">xss</a>
+        <a href="data:text/html,hello">data</a>
+        <a href="https://evil.example.com/secret.log">cross-origin</a>
+        <a href="logs.log.gz">logs.log.gz</a>
+      </pre>
+    `;
+
+    const result = parseListingHtml(
+      html,
+      'https://rageshakes.example.com/api/listing/demo/'
+    );
+
+    expect(result.entries).toEqual([
+      {
+        name: 'logs.log.gz',
+        url: 'https://rageshakes.example.com/api/listing/demo/logs.log.gz',
+      },
+    ]);
+  });
+
+  it('returns empty entries for an unparseable listingUrl', () => {
+    const result = parseListingHtml('<a href="logs.log.gz">logs.log.gz</a>', 'not-a-url');
+    expect(result.entries).toHaveLength(0);
+    expect(result.detailsUrl).toBeNull();
+  });
 });

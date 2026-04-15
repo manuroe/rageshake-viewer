@@ -29,11 +29,30 @@ export function parseListingHtml(
   const entries: ListingEntry[] = [];
   let detailsUrl: string | null = null;
 
+  let listingOrigin: string;
+  try {
+    listingOrigin = new URL(listingUrl).origin;
+  } catch {
+    // listingUrl is unparseable — return empty results
+    return { entries, detailsUrl };
+  }
+
   for (const match of html.matchAll(ANCHOR_PATTERN)) {
     const href = match[1] ?? match[2];
     if (!href) continue;
 
-    const resolvedUrl = new URL(href, listingUrl).toString();
+    let resolvedUrl: string;
+    try {
+      const resolved = new URL(href, listingUrl);
+      // Only allow https: URLs that belong to the same origin as the listing page.
+      // This drops javascript:, data:, and any cross-origin links that a compromised
+      // listing page might inject.
+      if (resolved.protocol !== 'https:' || resolved.origin !== listingOrigin) continue;
+      resolvedUrl = resolved.toString();
+    } catch {
+      continue;
+    }
+
     const label = stripTags(match[3] ?? '');
     const name = label.length > 0 ? label : entryNameFromUrl(resolvedUrl);
     if (!name || name === '../') continue;

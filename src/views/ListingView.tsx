@@ -333,6 +333,14 @@ export function ListingView() {
 
       const kind = getEntryKind(entryName);
       if (kind === 'other') {
+        // Validate URL scheme before opening — guard against javascript: or data:
+        // URIs that a malformed or compromised listing page might inject.
+        try {
+          const url = new URL(entry.url);
+          if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+        } catch {
+          return;
+        }
         window.open(entry.url, '_blank', 'noopener,noreferrer');
         return;
       }

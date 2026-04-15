@@ -64,7 +64,7 @@ function makeSummary(totalLines = 5) {
   };
 }
 
-function makeChrome(handler: (message: RuntimeMessage) => Promise<unknown>): typeof chrome {
+function makeExtensionRuntime(handler: (message: RuntimeMessage) => Promise<unknown>): typeof chrome {
   return {
     runtime: {
       sendMessage: handler,
@@ -72,7 +72,7 @@ function makeChrome(handler: (message: RuntimeMessage) => Promise<unknown>): typ
   } as unknown as typeof chrome;
 }
 
-function installChrome(options?: {
+function installExtensionRuntime(options?: {
   readonly entries?: readonly ListingEntryFixture[];
   readonly detailsText?: string;
   readonly summary?: ReturnType<typeof makeSummary>;
@@ -114,20 +114,22 @@ function installChrome(options?: {
             },
           }),
       };
-        if (options?.rejectSummaryUrls?.includes(message.url)) {
-          throw new Error('summary rejected');
-        }
     }
-    if (options?.failSummaryUrls?.includes(message.url)) {
-      return { ok: false, error: 'summary failed' };
+    if (message.type === 'fetchAndSummarize') {
+      if (options?.rejectSummaryUrls?.includes(message.url)) {
+        throw new Error('summary rejected');
+      }
+      if (options?.failSummaryUrls?.includes(message.url)) {
+        return { ok: false, error: 'summary failed' };
+      }
+      return {
+        ok: true,
+        summary: options?.summary ?? makeSummary(),
+      };
     }
-    return {
-      ok: true,
-      summary: options?.summary ?? makeSummary(),
-    };
   });
 
-  globalThis.chrome = makeChrome(sendMessage);
+  globalThis.chrome = makeExtensionRuntime(sendMessage);
   return sendMessage;
 }
 
@@ -202,7 +204,7 @@ describe('ListingView', () => {
   });
 
   it('loads the listing, renders the archive-style table, and shows the details panel', async () => {
-    installChrome();
+    installExtensionRuntime();
 
     renderListingView();
 
@@ -237,7 +239,7 @@ describe('ListingView', () => {
   });
 
   it('sorts dated logs before undated entries', async () => {
-    installChrome({
+    installExtensionRuntime({
       entries: [
         { name: 'details.json', url: DETAILS_URL },
         { name: 'console.2026-03-04-09.log.gz', url: `${LISTING_URL}console.2026-03-04-09.log.gz` },
@@ -278,7 +280,7 @@ describe('ListingView', () => {
   });
 
   it('opens dated logs inside the viewer summary route and marks them visited', async () => {
-    installChrome();
+    installExtensionRuntime();
     mockLoadFromExtensionUrl.mockResolvedValue('/summary');
 
     renderListingView();
@@ -297,7 +299,7 @@ describe('ListingView', () => {
   });
 
   it('opens undated logs inside the viewer logs route', async () => {
-    installChrome();
+    installExtensionRuntime();
     mockLoadFromExtensionUrl.mockResolvedValue('/logs');
 
     renderListingView();
@@ -311,7 +313,7 @@ describe('ListingView', () => {
   });
 
   it('opens non-log entries directly in the browser', async () => {
-    installChrome();
+    installExtensionRuntime();
 
     renderListingView();
 
@@ -324,7 +326,7 @@ describe('ListingView', () => {
   });
 
   it('opens raw log text in a blob URL', async () => {
-    installChrome();
+    installExtensionRuntime();
 
     renderListingView();
 
@@ -341,7 +343,7 @@ describe('ListingView', () => {
   });
 
   it('revokes the raw blob immediately when the popup is blocked', async () => {
-    installChrome();
+    installExtensionRuntime();
     window.open = vi.fn().mockReturnValue(null);
 
     renderListingView();
@@ -355,7 +357,7 @@ describe('ListingView', () => {
   });
 
   it('renders PNG gallery cards and opens PNG files directly', async () => {
-    installChrome();
+    installExtensionRuntime();
 
     renderListingView();
 
@@ -375,7 +377,7 @@ describe('ListingView', () => {
   });
 
   it('navigates back to landing when fetchListing fails', async () => {
-    installChrome({ failListing: true });
+    installExtensionRuntime({ failListing: true });
 
     renderListingView();
 
@@ -385,7 +387,7 @@ describe('ListingView', () => {
   });
 
   it('navigates back to landing when fetchListing rejects', async () => {
-    installChrome({ rejectListing: true });
+    installExtensionRuntime({ rejectListing: true });
 
     renderListingView();
 
@@ -395,7 +397,7 @@ describe('ListingView', () => {
   });
 
   it('does not render the details panel when fetchDetails fails', async () => {
-    installChrome({ failDetails: true });
+    installExtensionRuntime({ failDetails: true });
 
     renderListingView();
 
@@ -407,7 +409,7 @@ describe('ListingView', () => {
   });
 
   it('clears parsed details when fetchDetails rejects', async () => {
-    installChrome({ rejectDetails: true });
+    installExtensionRuntime({ rejectDetails: true });
 
     renderListingView();
 
@@ -419,7 +421,7 @@ describe('ListingView', () => {
   });
 
   it('does not fetch a Matrix profile for invalid homeserver values', async () => {
-    installChrome({
+    installExtensionRuntime({
       detailsText: JSON.stringify({
         data: {
           user_id: '@alice:localhost',
@@ -438,7 +440,7 @@ describe('ListingView', () => {
 
   it('preserves cached summaries when revisiting the same listing', async () => {
     const sendMessageCalls: RuntimeMessage[] = [];
-    installChrome({ onMessage: (message) => sendMessageCalls.push(message) });
+    installExtensionRuntime({ onMessage: (message) => sendMessageCalls.push(message) });
     useListingStore.getState().loadListing(LISTING_URL, DEFAULT_ENTRIES);
     useListingStore.getState().setListingSummary('console.2026-03-04-10.log.gz', makeSummary(99));
 
@@ -452,7 +454,7 @@ describe('ListingView', () => {
   });
 
   it('stores a zero summary when the background summarize request fails', async () => {
-    installChrome({ failSummaryUrls: [`${LISTING_URL}console.2026-03-04-10.log.gz`] });
+    installExtensionRuntime({ failSummaryUrls: [`${LISTING_URL}console.2026-03-04-10.log.gz`] });
 
     renderListingView();
 
@@ -462,7 +464,7 @@ describe('ListingView', () => {
   });
 
   it('stores a zero summary when the background summarize request rejects', async () => {
-    globalThis.chrome = makeChrome(async (message) => {
+    globalThis.chrome = makeExtensionRuntime(async (message) => {
       if (message.type === 'fetchListing') {
         return { ok: true, entries: DEFAULT_ENTRIES, detailsUrl: DETAILS_URL };
       }

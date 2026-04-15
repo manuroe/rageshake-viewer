@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLogStore } from '../stores/logStore';
 import { loadFromExtensionUrl } from '../utils/extensionFileLoader';
 
 /** URL search-param key carrying the `.log.gz` file URL set by the extension content script. */
@@ -76,6 +77,9 @@ export function useExtensionFile(): void {
           }
           return;
         }
+
+        // Store the file name so the log viewer can display it as the tab title.
+        useLogStore.getState().setLogFileName(fileName);
 
         // Remove the extension params from the URL so a refresh doesn't re-trigger.
         const nextParams = new URLSearchParams(searchParams);

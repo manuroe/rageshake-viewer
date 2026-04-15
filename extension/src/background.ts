@@ -210,14 +210,16 @@ function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
  * Validate that `rawUrl` is a same-origin HTTPS log URL relative to the
  * sender origin, and return a normalised absolute URL string.
  *
- * Rejects non-https protocols, cross-origin requests, and paths that do not
- * end with `.log` or `.log.gz`. This prevents a compromised listing page from coercing
- * the service worker into making credentialled requests to arbitrary origins.
+ * Rejects non-https protocols, cross-origin requests, paths outside
+ * `/api/listing/`, and paths that do not end with `.log` or `.log.gz`.
+ * The `/api/listing/` constraint prevents a compromised listing page from
+ * coercing the service worker into fetching and summarizing arbitrary
+ * same-origin paths (e.g. `/admin/secret.log`) with credentials.
  *
  * @example
  * // Given: sender.tab.url === 'https://rageshakes.example.com/api/listing/2024/abc'
- * validateAndNormalizeUrl('logs/console.log', sender);
- * // => 'https://rageshakes.example.com/logs/console.log'
+ * validateAndNormalizeUrl('console.log.gz', sender);
+ * // => 'https://rageshakes.example.com/api/listing/console.log.gz'
  */
 function validateAndNormalizeUrl(
   rawUrl: string,
@@ -239,6 +241,9 @@ function validateAndNormalizeUrl(
   }
   if (url.origin !== senderOrigin) {
     throw new Error('Cross-origin URL is not allowed');
+  }
+  if (!url.pathname.startsWith('/api/listing/')) {
+    throw new Error('URL must be under /api/listing/');
   }
   if (!url.pathname.endsWith('.log.gz') && !url.pathname.endsWith('.log')) {
     throw new Error('Only .log and .log.gz log URLs are allowed');
