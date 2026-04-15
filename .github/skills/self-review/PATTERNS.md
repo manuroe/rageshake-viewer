@@ -178,7 +178,7 @@ Consult this file during the self-review pass before creating any PR.
 - Does `await navigator.clipboard.writeText(...)` have a `try/catch`? Clipboard access can be denied.
 - Does `await navigate(...)` appear? `navigate()` returns `void`, not a Promise — awaiting it trips `@typescript-eslint/await-thenable`.
 - Does a `download` flow `URL.revokeObjectURL(url)` synchronously after `a.click()`? (Some browsers need the URL to remain alive until after the download starts; revoke in a `setTimeout` instead.)
-- Are `localStorage.getItem` / `setItem` / `removeItem` calls in a `useEffect` or startup path wrapped in `try/catch`? They throw `SecurityError` in private-browsing mode with storage access blocked.
+- Are `localStorage.getItem` / `setItem` / `removeItem` calls in a `useEffect` or startup path wrapped in `try/catch`? They can throw a `DOMException` (for example `SecurityError` or `QuotaExceededError`) when storage access is blocked or quota is unavailable.
 - When adding a new file-processing path (e.g. `.tar.gz`), do all validation gates from existing paths (file-size limit, MIME type check) apply to the new path too?
 
 **Canonical fix**: Prefix floating promise chains with `void`; wrap fallible browser APIs in `try/catch` with user-visible error feedback; use `setTimeout(() => URL.revokeObjectURL(url), 0)`.
