@@ -32,8 +32,10 @@ export const TIMELINE_SCALE_OPTIONS = [
  * so the computed scale accounts for gap bands and allocates the remaining
  * container width to the actual request bars.
  *
- * The result is snapped to the nearest value from {@link TIMELINE_SCALE_OPTIONS}
- * so that the scale selector always shows a discrete, labelled option.
+ * The result is snapped upward to the smallest value from
+ * {@link TIMELINE_SCALE_OPTIONS} that is greater than or equal to the raw
+ * computed scale, so the scale selector always shows a discrete, labelled
+ * option while preserving the auto-fit guarantee for the selected requests.
  *
  * Returns `null` when the data is insufficient to compute a meaningful scale
  * (empty slice, zero active span, or zero effective container width).
