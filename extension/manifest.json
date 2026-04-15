@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Rageshake Viewer",
   "version": "1.0.0",
-  "description": "Enhances rageshake listing pages with parsed summaries and quick-view buttons for each log file.",
+  "description": "Redirects rageshake archive listing pages into the bundled viewer with archive-style summaries and details.",
   "permissions": [
     "storage"
   ],
@@ -17,7 +17,6 @@
     {
       "matches": ["https://*/api/listing/*"],
       "js": ["content.js"],
-      "css": ["content.css"],
       "run_at": "document_idle"
     }
   ],

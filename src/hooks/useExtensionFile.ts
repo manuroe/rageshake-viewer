@@ -1,9 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { gunzipSync } from 'fflate';
-import { parseLogFile } from '../utils/logParser';
-import { decodeTextBytes, isValidGzipHeader } from '../utils/fileValidator';
-import { useLogStore } from '../stores/logStore';
+import { loadFromExtensionUrl } from '../utils/extensionFileLoader';
 
 /** URL search-param key carrying the `.log.gz` file URL set by the extension content script. */
 export const EXTENSION_FILE_URL_PARAM = 'extensionFileUrl';
@@ -32,8 +29,6 @@ export const EXTENSION_FILE_NAME_PARAM = 'extensionFileName';
 export function useExtensionFile(): void {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
-  const setLogFileName = useLogStore((state) => state.setLogFileName);
 
   const fileUrl = searchParams.get(EXTENSION_FILE_URL_PARAM);
   let fileNameFromUrl: string | undefined;
@@ -63,16 +58,14 @@ export function useExtensionFile(): void {
 
     void (async () => {
       try {
-        const fetchResponse = (await chrome.runtime.sendMessage({
-          type: 'fetchForViewer',
-          url: fileUrl,
-          fileName,
-        })) as { ok: boolean; base64?: string; fileName?: string; error?: string } | undefined;
+        const route = await loadFromExtensionUrl(fileUrl, fileName, {
+          isCancelled: () => cancelled,
+        });
 
         if (cancelled) return;
 
-        if (!fetchResponse?.ok) {
-          console.error('[useExtensionFile] fetchForViewer failed:', fetchResponse?.error ?? 'no response');
+        if (!route) {
+          console.error('[useExtensionFile] loadFromExtensionUrl failed');
           // Clear the extension params so the landing page falls back to the
           // normal upload UI rather than staying stuck on "Loading…".
           if (!cancelled) {
@@ -84,42 +77,12 @@ export function useExtensionFile(): void {
           return;
         }
 
-        const base64 = fetchResponse.base64;
-        if (!base64) {
-          console.error('[useExtensionFile] fetchForViewer returned ok but without base64 content — bailing out');
-          // Mirror the !fetchResponse?.ok path: clear extension params so the
-          // landing page falls back to the normal upload UI instead of
-          // remaining stuck on "Loading…".
-          // Note: no cancelled check needed — we already returned at the
-          // `if (cancelled) return;` guard above, so cancelled is false here.
-          const fallbackParams = new URLSearchParams(searchParams);
-          fallbackParams.delete(EXTENSION_FILE_URL_PARAM);
-          fallbackParams.delete(EXTENSION_FILE_NAME_PARAM);
-          void navigate({ pathname: '/', search: fallbackParams.toString() }, { replace: true });
-          return;
-        }
-
-        // Decode base64 → raw bytes. If gzip-compressed, decompress with gunzipSync.
-        const binaryStr = atob(base64);
-        const rawBytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          rawBytes[i] = binaryStr.charCodeAt(i);
-        }
-        const decoded = isValidGzipHeader(rawBytes) ? gunzipSync(rawBytes) : rawBytes;
-        const text = decodeTextBytes(decoded);
-
-        if (cancelled) return;
-
-        const result = parseLogFile(text);
-        loadLogParserResult(result);
-        setLogFileName(fileName);
-
         // Remove the extension params from the URL so a refresh doesn't re-trigger.
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete(EXTENSION_FILE_URL_PARAM);
         nextParams.delete(EXTENSION_FILE_NAME_PARAM);
         void navigate(
-          { pathname: '/summary', search: nextParams.toString() },
+          { pathname: route, search: nextParams.toString() },
           { replace: true }
         );
       } catch (err) {

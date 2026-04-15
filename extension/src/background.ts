@@ -29,6 +29,8 @@
 
 import { summarizeLog } from './summarize';
 import type { LogSummary } from './summarize';
+import { parseListingHtml } from './listing';
+import type { ListingEntry } from '../../src/types/listing';
 
 // ── Message types ──────────────────────────────────────────────────────────
 
@@ -51,7 +53,25 @@ interface FetchForViewerMessage {
   readonly fileName: string;
 }
 
-type BackgroundMessage = FetchAndSummarizeMessage | FetchForViewerMessage;
+/** Request the parsed file list for a remote `/api/listing/*` page. */
+interface FetchListingMessage {
+  readonly type: 'fetchListing';
+  /** Absolute HTTPS URL of the listing page to fetch. */
+  readonly listingUrl: string;
+}
+
+/** Request the raw `details.json` text for a remote listing page. */
+interface FetchDetailsMessage {
+  readonly type: 'fetchDetails';
+  /** Absolute HTTPS URL of the `details.json` file to fetch. */
+  readonly detailsUrl: string;
+}
+
+type BackgroundMessage =
+  | FetchAndSummarizeMessage
+  | FetchForViewerMessage
+  | FetchListingMessage
+  | FetchDetailsMessage;
 
 /** Successful response for `fetchAndSummarize`. */
 interface SummarizeResponse {
@@ -66,13 +86,31 @@ interface ViewerFileResponse {
   readonly fileName: string;
 }
 
+/** Successful response for `fetchListing`. */
+interface ListingResponse {
+  readonly ok: true;
+  readonly entries: readonly ListingEntry[];
+  readonly detailsUrl: string | null;
+}
+
+/** Successful response for `fetchDetails`. */
+interface DetailsResponse {
+  readonly ok: true;
+  readonly text: string;
+}
+
 /** Error response for any message type. */
 interface ErrorResponse {
   readonly ok: false;
   readonly error: string;
 }
 
-type BackgroundResponse = SummarizeResponse | ViewerFileResponse | ErrorResponse;
+type BackgroundResponse =
+  | SummarizeResponse
+  | ViewerFileResponse
+  | ListingResponse
+  | DetailsResponse
+  | ErrorResponse;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -163,18 +201,30 @@ function getSenderOrigin(sender: chrome.runtime.MessageSender): string | null {
   }
 }
 
+function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
+  const extensionOrigin = chrome.runtime.getURL('');
+  return sender.id === chrome.runtime.id && Boolean(sender.url?.startsWith(extensionOrigin));
+}
+
 /**
- * Validate that `rawUrl` is a same-origin HTTPS `.log.gz` URL relative to the
- * sender origin, and return a normalised absolute URL string.
+ * Validate that `rawUrl` is a same-origin HTTPS log URL and return a
+ * normalised absolute URL string.
  *
- * Rejects non-https protocols, cross-origin requests, and paths that do not
- * end with `.log.gz`. This prevents a compromised listing page from coercing
- * the service worker into making credentialled requests to arbitrary origins.
+ * Relative URLs are resolved against the full sender tab URL (e.g.
+ * `https://rageshakes.example.com/api/listing/2024/abc`), so a relative href
+ * like `console.log.gz` correctly resolves to the same listing subdirectory
+ * instead of the origin root.
+ *
+ * Rejects non-https protocols, cross-origin requests, paths outside
+ * `/api/listing/`, and paths that do not end with `.log` or `.log.gz`.
+ * The `/api/listing/` constraint prevents a compromised listing page from
+ * coercing the service worker into fetching and summarizing arbitrary
+ * same-origin paths (e.g. `/admin/secret.log`) with credentials.
  *
  * @example
  * // Given: sender.tab.url === 'https://rageshakes.example.com/api/listing/2024/abc'
- * validateAndNormalizeUrl('logs/console.log.gz', sender);
- * // => 'https://rageshakes.example.com/logs/console.log.gz'
+ * validateAndNormalizeUrl('console.log.gz', sender);
+ * // => 'https://rageshakes.example.com/api/listing/2024/console.log.gz'
  */
 function validateAndNormalizeUrl(
   rawUrl: string,
@@ -183,10 +233,15 @@ function validateAndNormalizeUrl(
   const senderOrigin = getSenderOrigin(sender);
   if (!senderOrigin) throw new Error('Unable to determine sender origin');
 
+  // Resolve relative URLs against the full sender tab URL (not just the origin)
+  // so that a relative href like 'console.log.gz' on a listing page at
+  // '/api/listing/2024/abc' resolves to '/api/listing/2024/console.log.gz'
+  // rather than '/console.log.gz' (which would fail the /api/listing/ check).
+  const base = sender.tab?.url ?? senderOrigin;
+
   let url: URL;
   try {
-    // Allow relative URLs by resolving against the sender origin.
-    url = new URL(rawUrl, senderOrigin);
+    url = new URL(rawUrl, base);
   } catch {
     throw new Error('Invalid URL');
   }
@@ -197,8 +252,11 @@ function validateAndNormalizeUrl(
   if (url.origin !== senderOrigin) {
     throw new Error('Cross-origin URL is not allowed');
   }
-  if (!url.pathname.endsWith('.log.gz')) {
-    throw new Error('Only .log.gz log URLs are allowed');
+  if (!url.pathname.startsWith('/api/listing/')) {
+    throw new Error('URL must be under /api/listing/');
+  }
+  if (!url.pathname.endsWith('.log.gz') && !url.pathname.endsWith('.log')) {
+    throw new Error('Only .log and .log.gz log URLs are allowed');
   }
 
   return url.toString();
@@ -209,14 +267,14 @@ function validateAndNormalizeUrl(
  *
  * Less strict than `validateAndNormalizeUrl` (no same-origin requirement,
  * since the viewer doesn't have a tab origin to compare against), but still
- * constrains the URL to HTTPS rageshake listing paths ending in `.log.gz`.
+ * constrains the URL to HTTPS rageshake listing paths ending in `.log` or `.log.gz`.
  * This prevents a compromised listing page from opening the viewer with an
  * arbitrary URL and coercing the service worker into making credentialled
  * requests to third-party origins.
  *
  * @example
- * validateViewerFileUrl('https://rageshakes.example.com/api/listing/2024/abc/console.log.gz');
- * // => 'https://rageshakes.example.com/api/listing/2024/abc/console.log.gz'
+ * validateViewerFileUrl('https://rageshakes.example.com/api/listing/2024/abc/console.log');
+ * // => 'https://rageshakes.example.com/api/listing/2024/abc/console.log'
  */
 function validateViewerFileUrl(rawUrl: string): string {
   let url: URL;
@@ -228,13 +286,44 @@ function validateViewerFileUrl(rawUrl: string): string {
   if (url.protocol !== 'https:') {
     throw new Error('Only https: URLs are allowed');
   }
-  if (!url.pathname.endsWith('.log.gz')) {
-    throw new Error('Only .log.gz log URLs are allowed');
+  if (!url.pathname.endsWith('.log.gz') && !url.pathname.endsWith('.log')) {
+    throw new Error('Only .log and .log.gz log URLs are allowed');
   }
   if (!url.pathname.startsWith('/api/listing/')) {
     throw new Error('URL must be under /api/listing/');
   }
   return url.toString();
+}
+
+/**
+ * Validate a listing page URL supplied by the viewer extension page.
+ */
+function validateListingPageUrl(rawUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error('Invalid URL');
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error('Only https: URLs are allowed');
+  }
+  if (!url.pathname.startsWith('/api/listing/')) {
+    throw new Error('URL must be under /api/listing/');
+  }
+  return url.toString();
+}
+
+/**
+ * Validate a `details.json` URL supplied by the viewer extension page.
+ */
+function validateDetailsUrl(rawUrl: string): string {
+  const url = validateListingPageUrl(rawUrl);
+  const parsed = new URL(url);
+  if (!parsed.pathname.endsWith('/details.json')) {
+    throw new Error('URL must point to details.json');
+  }
+  return url;
 }
 
 // ── Message handler ────────────────────────────────────────────────────────
@@ -244,7 +333,9 @@ chrome.runtime.onMessage.addListener(
     if (message.type === 'fetchAndSummarize') {
       let validatedUrl: string;
       try {
-        validatedUrl = validateAndNormalizeUrl(message.url, sender);
+        validatedUrl = isExtensionPageSender(sender)
+          ? validateViewerFileUrl(message.url)
+          : validateAndNormalizeUrl(message.url, sender);
       } catch (err) {
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
         return false;
@@ -257,15 +348,7 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === 'fetchForViewer') {
-      // Only extension pages (not content scripts) may request file content.
-      // When viewer.html is open in a tab, Chrome/Firefox sets sender.tab — so
-      // we cannot use sender.tab === undefined to detect extension pages.
-      // Use chrome.runtime.getURL('') to get the correct extension origin:
-      //   Chrome/Edge → 'chrome-extension://<id>/'
-      //   Firefox     → 'moz-extension://<id>/'
-      // Content scripts have the https:// URL of the page they run in.
-      const extensionOrigin = chrome.runtime.getURL('');
-      if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(extensionOrigin)) {
+      if (!isExtensionPageSender(sender)) {
         sendResponse({ ok: false, error: 'fetchForViewer is only available from extension pages' });
         return false;
       }
@@ -277,6 +360,42 @@ chrome.runtime.onMessage.addListener(
         return false;
       }
       void handleFetchForViewer(validatedUrl, message.fileName).then(sendResponse).catch((err: unknown) => {
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+      });
+      return true;
+    }
+
+    if (message.type === 'fetchListing') {
+      if (!isExtensionPageSender(sender)) {
+        sendResponse({ ok: false, error: 'fetchListing is only available from extension pages' });
+        return false;
+      }
+      let validatedUrl: string;
+      try {
+        validatedUrl = validateListingPageUrl(message.listingUrl);
+      } catch (err) {
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+        return false;
+      }
+      void handleFetchListing(validatedUrl).then(sendResponse).catch((err: unknown) => {
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+      });
+      return true;
+    }
+
+    if (message.type === 'fetchDetails') {
+      if (!isExtensionPageSender(sender)) {
+        sendResponse({ ok: false, error: 'fetchDetails is only available from extension pages' });
+        return false;
+      }
+      let validatedUrl: string;
+      try {
+        validatedUrl = validateDetailsUrl(message.detailsUrl);
+      } catch (err) {
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+        return false;
+      }
+      void handleFetchDetails(validatedUrl).then(sendResponse).catch((err: unknown) => {
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
       });
       return true;
@@ -312,4 +431,29 @@ async function handleFetchForViewer(url: string, fileName: string): Promise<View
   const buffer = await response.arrayBuffer();
   const base64 = arrayBufferToBase64(buffer);
   return { ok: true, base64, fileName };
+}
+
+/**
+ * Fetch the listing page HTML and parse its anchors into file entries.
+ */
+async function handleFetchListing(url: string): Promise<ListingResponse | ErrorResponse> {
+  const response = await fetch(url, { credentials: 'include' });
+  if (!response.ok) {
+    return { ok: false, error: `HTTP ${response.status} fetching ${url}` };
+  }
+  const html = await response.text();
+  const { entries, detailsUrl } = parseListingHtml(html, url);
+  return { ok: true, entries, detailsUrl };
+}
+
+/**
+ * Fetch the raw `details.json` text for a remote listing page.
+ */
+async function handleFetchDetails(url: string): Promise<DetailsResponse | ErrorResponse> {
+  const response = await fetch(url, { credentials: 'include' });
+  if (!response.ok) {
+    return { ok: false, error: `HTTP ${response.status} fetching ${url}` };
+  }
+  const text = await response.text();
+  return { ok: true, text };
 }

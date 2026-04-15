@@ -13,8 +13,10 @@ import { SyncView } from './views/SyncView';
 import { HttpRequestsView } from './views/HttpRequestsView';
 import { LogsView } from './views/LogsView';
 import { ArchiveView } from './views/ArchiveView';
+import { ListingView, LISTING_URL_PARAM } from './views/ListingView';
 import { useLogStore } from './stores/logStore';
 import { useArchiveStore } from './stores/archiveStore';
+import { useListingStore } from './stores/listingStore';
 import { urlToTimeFormat } from './utils/timeUtils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_MS_PER_PIXEL } from './utils/timelineUtils';
@@ -31,6 +33,7 @@ function AppContent() {
   const navigate = useNavigate();
   const { rawLogLines, setLastRoute } = useLogStore();
   const archiveEntries = useArchiveStore((state) => state.archiveEntries);
+  const listingEntries = useListingStore((state) => state.listingEntries);
   
   // Ref to prevent redirect loops
   const isRedirecting = useRef(false);
@@ -92,20 +95,23 @@ function AppContent() {
   useEffect(() => {
     const hasData = rawLogLines.length > 0;
     const hasArchive = archiveEntries.length > 0;
+    const hasListing = listingEntries.length > 0;
     // Suppress redirect when a tab-log handoff is pending — useTabLog will
     // populate the store in its own effect and the redirect would race it.
     const tabLogPending = searchParams.get(TAB_LOG_PARAM) !== null;
-    if (!hasData && !hasArchive && !tabLogPending && location.pathname !== '/' && !isRedirecting.current) {
+    const listingPending = searchParams.get(LISTING_URL_PARAM) !== null;
+    if (!hasData && !hasArchive && !hasListing && !tabLogPending && !listingPending && location.pathname !== '/' && !isRedirecting.current) {
       isRedirecting.current = true;
       void navigate('/', { replace: true });
     }
-  }, [rawLogLines.length, archiveEntries.length, location.pathname, navigate, searchParams]);
+  }, [rawLogLines.length, archiveEntries.length, listingEntries.length, location.pathname, navigate, searchParams]);
 
   return (
     <KeyboardShortcutProvider>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/archive" element={<ArchiveView />} />
+        <Route path="/listing" element={<ListingView />} />
         <Route path="/summary" element={<SummaryView />} />
         <Route path="/logs" element={<LogsView />} />
         <Route path="/http_requests" element={<HttpRequestsView />} />

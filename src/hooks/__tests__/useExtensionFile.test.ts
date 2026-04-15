@@ -52,8 +52,8 @@ let mockSearchParams: URLSearchParams;
 import { useExtensionFile } from '../useExtensionFile';
 
 /** Representative rageshake log URL used across tests. */
-const TEST_FILE_URL = 'https://rageshakes.example.com/api/listing/2024/abc/console.log.gz';
-const TEST_FILE_NAME = 'console.log.gz';
+const TEST_FILE_URL = 'https://rageshakes.example.com/api/listing/2024/abc/console.2024-01-02-03.log.gz';
+const TEST_FILE_NAME = 'console.2024-01-02-03.log.gz';
 
 /**
  * Build a minimal fake `chrome` global with a stubbed `runtime.sendMessage`.

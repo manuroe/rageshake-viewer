@@ -30,7 +30,7 @@ Open http://localhost:5173
 
 ## Browser extension
 
-The extension enhances listing pages of any [rageshake](https://github.com/matrix-org/rageshake) server deployment by replacing each log-file row with a parsed summary card and an "Open in Visualizer" button. It auto-detects rageshake listing pages using the standard `/api/listing/*` path — no configuration needed.
+The extension enhances listing pages of any [rageshake](https://github.com/matrix-org/rageshake) server deployment by redirecting `/api/listing/*` pages into the bundled viewer and rendering them with the same archive-style screen used by the web app. It auto-detects rageshake archive pages using the standard `/api/listing/*` path — no configuration needed.
 
 <table>
 	<tr>
@@ -94,7 +94,7 @@ This builds the Firefox bundle and launches a dedicated Firefox profile with the
 
 ### Usage
 
-Navigate to any rageshake listing URL (e.g. `https://<your-rageshake-server>/api/listing/<id>/`). The content script runs automatically and replaces each `.log.gz` row with a summary card.
+Navigate to any rageshake listing URL (e.g. `https://<your-rageshake-server>/api/listing/<id>/`). The content script runs automatically and opens the bundled archive-style viewer for that listing, including per-file summaries, `details.json` metadata, and screenshot thumbnails when present.
 
 ## Contributing
 
