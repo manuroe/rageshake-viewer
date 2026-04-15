@@ -55,7 +55,7 @@ Read the stat output to understand which file types changed.
 - No `.find()` / `.filter()` inside an outer loop over requests or log lines (pre-build a Map).
 - No Map or index rebuilt on every call that could be computed once.
 - Binary search used where available; linear scan only for small inputs.
-- `Math.max(...array)` / `Math.min(...array)` on large arrays → use `for` loop or `.reduce()`; spreads exceeding ~65k elements throw.
+- `Math.max(...array)` / `Math.min(...array)` on large arrays → use `for` loop or `.reduce()`; large spreads can hit engine-specific maximum argument limits.
 - New `Uint8Array` copies via `.buffer.slice()` → prefer `.subarray()` (zero-copy) or pass `Uint8Array` directly to `Blob`.
 
 **P11 — State Update / Close-Handler Edge Cases**
