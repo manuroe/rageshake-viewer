@@ -223,7 +223,7 @@ Consult this file during the self-review pass before creating any PR.
 - Is a Map or index rebuilt on every call instead of being computed once and cached?
 - Is a binary search available but a linear scan used instead?
 - Does a `useMemo` dependency correctly gate an expensive computation, or does it recompute more often than needed?
-- Does `Math.max(...array)` or `Math.min(...array)` spread an array that could exceed ~65k elements? At that size the spread hits the JS call-stack argument limit and throws — use a `for` loop or `.reduce()` instead.
+- Does `Math.max(...array)` or `Math.min(...array)` spread an array that could exceed ~65k elements? At that size the spread can exceed the JavaScript engine's argument limit for a single call and throw — use a `for` loop or `.reduce()` instead.
 - Does new code copy a `Uint8Array` via `.buffer.slice()` when a zero-copy `.subarray()` view would suffice? `Blob` constructors accept `Uint8Array` directly without an intermediate copy.
 
 **Canonical fix**: Hoist invariants outside loops; use pre-built Maps/indices; replace linear scans with binary search; use `useMemo` with tight dependency arrays.
