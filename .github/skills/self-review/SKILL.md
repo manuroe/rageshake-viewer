@@ -82,7 +82,7 @@ Read the stat output to understand which file types changed.
 **P17 — useCallback / useMemo Stale Dependency Array**
 - Every `useCallback` and `useMemo` dep array includes all closed-over state, props, and store-selector results.
 - Check for `// eslint-disable-next-line react-hooks/exhaustive-deps` suppressions that could be hiding a stale dep.
-- For stable callbacks that intentionally omit deps, ensure the omitted value is read via `useRef` or `useStore.getState()` at call time.
+- For stable callbacks that intentionally omit deps, ensure the omitted value is read via `useRef` or `useLogStore.getState()` at call time.
 
 **P18 — Keyboard Event `code` vs `key` for Character Shortcuts**
 - `e.code === 'KeyX'` for character-intention shortcuts (wrap, print, save) → replace with `e.key.toLowerCase() === 'x'`.
