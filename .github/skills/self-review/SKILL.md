@@ -31,7 +31,6 @@ Read the stat output to understand which file types changed.
 - Every JSDoc `@param` / `@returns` / field description matches the current implementation.
 - Test `it(...)` / `describe(...)` descriptions accurately reflect what is being asserted.
 - After a rename, search for the old name in comments (for example, `git grep -n '<old_identifier>'`).
-- CSS block comments (e.g. "No absolute positioning") remain accurate under all variant rules in the same file.
 - JSDoc `@returns` precision: qualitative terms like "snapped to nearest" or column names like "URI column" match the actual implementation semantics.
 
 **P5 — Wrong Variable / Wrong Denominator**
