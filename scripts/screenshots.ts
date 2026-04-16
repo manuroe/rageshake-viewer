@@ -223,12 +223,10 @@ async function main(): Promise<void> {
     'utf-8',
   );
   // Parse the demo listing page using the same function the extension uses.
-  // background.ts separates details.json into detailsUrl and excludes it from entries.
-  const { entries: allDemoEntries } = parseListingHtml(
+  const { entries: demoListingEntries, detailsUrl: demoDetailsUrl } = parseListingHtml(
     demoListingHtml,
     'https://rageshakes.example.com/api/listing/2026-03-04/DEMO0001/',
   );
-  const demoListingEntries = allDemoEntries.filter((e) => e.name !== 'details.json');
 
   const extensionPage = await context.newPage();
   // Inject the chrome shim before the page loads so it is available during React's init.
@@ -238,9 +236,13 @@ async function main(): Promise<void> {
       runtime: {
         sendMessage: function(msg) {
           var entries = ${JSON.stringify(demoListingEntries)};
+          var detailsUrl = ${JSON.stringify(demoDetailsUrl)};
           var summary = ${JSON.stringify(demoSummary)};
           if (msg && msg.type === 'fetchListing') {
-            return Promise.resolve({ ok: true, entries: entries, detailsUrl: null });
+            return Promise.resolve({ ok: true, entries: entries, detailsUrl: detailsUrl });
+          }
+          if (msg && msg.type === 'fetchDetails') {
+            return Promise.resolve({ ok: true, text: '{"data":{}}' });
           }
           if (msg && msg.type === 'fetchAndSummarize') {
             return Promise.resolve({ ok: true, summary: summary });
@@ -250,9 +252,11 @@ async function main(): Promise<void> {
       }
     };
   `);
-  const encodedListingUrl = encodeURIComponent(
-    `http://localhost:${PORT}/demo/api/listing/demo/`,
-  );
+  // Use the canonical rageshake-style listing URL as the listingUrl param (not a localhost
+  // URL) so the page header label matches the real extension flow. Because fetchListing is
+  // fully mocked, this URL is never actually fetched.
+  const canonicalListingUrl = 'https://rageshakes.example.com/api/listing/2026-03-04/DEMO0001/';
+  const encodedListingUrl = encodeURIComponent(canonicalListingUrl);
   await extensionPage.goto(
     `${BASE_URL}/#/listing?listingUrl=${encodedListingUrl}`,
     { waitUntil: 'networkidle' },
