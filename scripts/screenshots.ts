@@ -5,7 +5,7 @@
  *
  * Usage: npm run screenshots
  */
-import { chromium } from '@playwright/test';
+import { chromium, type Page } from '@playwright/test';
 import { spawnSync, spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
@@ -14,6 +14,7 @@ import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import { parseLogFile } from '../src/utils/logParser.ts';
 import { summarizeLogResult } from '../extension/src/summarize.ts';
+import { parseListingHtml } from '../extension/src/listing.ts';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = dirname(currentFilePath);
@@ -22,12 +23,22 @@ const OUT_DIR = resolve(ROOT, 'public', 'demo');
 const PORT = 4173;
 const BASE_URL = `http://localhost:${PORT}`;
 const VITE_BIN = resolve(ROOT, 'node_modules', '.bin', 'vite');
-const EXTENSION_DIST = resolve(ROOT, 'extension-dist');
 const EXTENSION_LISTING_SCREENSHOT_CLIP = {
   x: 0,
   y: 0,
   width: 1280,
   height: 320,
+} as const;
+
+/**
+ * Clip for the viewer's /listing route — taller to show the enriched table header
+ * and several data rows.
+ */
+const EXTENSION_VIEWER_SCREENSHOT_CLIP = {
+  x: 0,
+  y: 0,
+  width: 1280,
+  height: 480,
 } as const;
 
 // Build the app with VITE_BASE=/ so assets resolve correctly on localhost
@@ -40,18 +51,6 @@ const buildResult = spawnSync(VITE_BIN, ['build'], {
 });
 if (buildResult.status !== 0) {
   console.error('Build failed.');
-  process.exit(1);
-}
-
-// Build the extension so content.js and content.css are up to date.
-console.warn('Building extension...');
-const extensionBuildResult = spawnSync('npm', ['run', 'build:extension'], {
-  cwd: ROOT,
-  stdio: 'inherit',
-  shell: true,
-});
-if (extensionBuildResult.status !== 0) {
-  console.error('Extension build failed.');
   process.exit(1);
 }
 
@@ -116,10 +115,15 @@ async function main(): Promise<void> {
 
   async function shot(
     name: string,
-    options?: { readonly clip?: { x: number; y: number; width: number; height: number } },
+    options?: {
+      readonly clip?: { x: number; y: number; width: number; height: number };
+      /** Override the default page for this screenshot. Defaults to the main `page`. */
+      readonly targetPage?: Page;
+    },
   ): Promise<void> {
+    const activePage = options?.targetPage ?? page;
     const outputPath = resolve(OUT_DIR, `screenshot-${name}.png`);
-    const nextPng = await page.screenshot({ type: 'png', clip: options?.clip });
+    const nextPng = await activePage.screenshot({ type: 'png', clip: options?.clip });
 
     try {
       const existingPng = await readFile(outputPath);
@@ -193,9 +197,8 @@ async function main(): Promise<void> {
   await setTheme('dark');
   await shot('sync-dark');
 
-  // Extension listing page — navigate to the demo rageshake-style HTML, inject
-  // a chrome API shim returning real parsed data from the demo log, then run
-  // the actual content script IIFE so the DOM transformation is the real thing.
+  // Extension listing page — navigate to the demo rageshake-style HTML and capture
+  // the native view before the extension takes over.
   const demoLogText = await readFile(resolve(ROOT, 'public', 'demo', 'demo.log'), 'utf-8');
   const demoSummary = summarizeLogResult(parseLogFile(demoLogText));
 
@@ -210,38 +213,70 @@ async function main(): Promise<void> {
   await page.waitForTimeout(300);
   await shot('extension-before-dark', { clip: EXTENSION_LISTING_SCREENSHOT_CLIP });
 
-  // Set up chrome global before the content script runs so chrome.storage and
-  // chrome.runtime.sendMessage resolve with the real demo summary instead of
-  // requiring an actual extension context.
-  // Pass as a string (not a function) so that tsx/esbuild does not transform
-  // the code — transformed output references __name which is undefined in the
-  // browser when Playwright serialises the function via .toString().
-  await page.evaluate(`
+  // Extension listing view (after) — the content script now redirects the native listing
+  // page to the viewer's /listing route. Capture that viewer route directly by loading it
+  // in a fresh page with a chrome shim injected via addInitScript (before React's first
+  // render) so that sendMessage returns mock entries and per-file summaries without
+  // needing a real extension context.
+  const demoListingHtml = await readFile(
+    resolve(ROOT, 'public', 'demo', 'api', 'listing', 'demo', 'index.html'),
+    'utf-8',
+  );
+  // Parse the demo listing page using the same function the extension uses.
+  const { entries: demoListingEntries, detailsUrl: demoDetailsUrl } = parseListingHtml(
+    demoListingHtml,
+    'https://rageshakes.example.com/api/listing/2026-03-04/DEMO0001/',
+  );
+
+  const extensionPage = await context.newPage();
+  // Inject the chrome shim before the page loads so it is available during React's init.
+  // Serialised as a string (not a function reference) to avoid esbuild name mangling.
+  await extensionPage.addInitScript(`
     window.chrome = {
-      storage: { local: { get: function() { return Promise.resolve({}); } } },
       runtime: {
-        sendMessage: function() {
-          return Promise.resolve({ ok: true, summary: ${JSON.stringify(demoSummary)} });
+        sendMessage: function(msg) {
+          var entries = ${JSON.stringify(demoListingEntries)};
+          var detailsUrl = ${JSON.stringify(demoDetailsUrl)};
+          var summary = ${JSON.stringify(demoSummary)};
+          if (msg && msg.type === 'fetchListing') {
+            return Promise.resolve({ ok: true, entries: entries, detailsUrl: detailsUrl });
+          }
+          if (msg && msg.type === 'fetchDetails') {
+            return Promise.resolve({ ok: true, text: '{"data":{}}' });
+          }
+          if (msg && msg.type === 'fetchAndSummarize') {
+            return Promise.resolve({ ok: true, summary: summary });
+          }
+          return Promise.resolve({ ok: false });
         }
       }
     };
   `);
-
-  await page.addStyleTag({ path: resolve(EXTENSION_DIST, 'content.css') });
-  await page.addScriptTag({ path: resolve(EXTENSION_DIST, 'content.js') });
-
-  // Wait until all loading placeholders have been replaced with real data.
-  await page.waitForFunction(
-    () => document.querySelectorAll('.rs-loading').length === 0,
-    { timeout: 15_000 },
+  // Use the canonical rageshake-style listing URL as the listingUrl param (not a localhost
+  // URL) so the page header label matches the real extension flow. Because fetchListing is
+  // fully mocked, this URL is never actually fetched.
+  const canonicalListingUrl = 'https://rageshakes.example.com/api/listing/2026-03-04/DEMO0001/';
+  const encodedListingUrl = encodeURIComponent(canonicalListingUrl);
+  await extensionPage.goto(
+    `${BASE_URL}/#/listing?listingUrl=${encodedListingUrl}`,
+    { waitUntil: 'networkidle' },
   );
+  // Wait for the table to appear, then allow time for all per-file summaries to populate.
+  await extensionPage.waitForSelector('table tbody tr', { timeout: 15_000 });
+  await extensionPage.waitForTimeout(1500);
 
-  // Extension uses data-rs-theme (not data-theme like the main app).
-  await page.evaluate(() => { document.documentElement.removeAttribute('data-rs-theme'); });
-  await shot('extension-light', { clip: EXTENSION_LISTING_SCREENSHOT_CLIP });
-  await page.evaluate(() => { document.documentElement.setAttribute('data-rs-theme', 'dark'); });
-  await page.waitForTimeout(300);
-  await shot('extension-dark', { clip: EXTENSION_LISTING_SCREENSHOT_CLIP });
+  await extensionPage.evaluate(() => {
+    document.documentElement.setAttribute('data-theme', 'light');
+  });
+  await extensionPage.waitForTimeout(300);
+  await shot('extension-light', { clip: EXTENSION_VIEWER_SCREENSHOT_CLIP, targetPage: extensionPage });
+  await extensionPage.evaluate(() => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  });
+  await extensionPage.waitForTimeout(300);
+  await shot('extension-dark', { clip: EXTENSION_VIEWER_SCREENSHOT_CLIP, targetPage: extensionPage });
+
+  await extensionPage.close();
 
   await browser.close();
   console.warn('All screenshots captured.');
