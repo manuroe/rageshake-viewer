@@ -97,6 +97,8 @@
   --log-search-highlight-text: #000;        /* High-contrast text on the yellow highlight */
   --log-match-bg: rgba(255, 255, 0, 0.1);
   --log-current-match-bg: rgba(255, 165, 0, 0.2);
+  --log-pattern: #26c6da;                   /* Teal border on the visible pattern template lines */
+  --log-pattern-bg: rgba(38, 198, 218, 0.06);
 
   /* Log gap-arrow controls (always rendered on the dark log background) */
   --log-gap-arrow-bg: rgba(80, 80, 80, 0.5);

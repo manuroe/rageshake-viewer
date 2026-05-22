@@ -270,6 +270,25 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     return buildDisplayItems(visibleLines, displayLogLines, forcedRanges);
   }, [visibleLines, displayLogLines, forcedRanges]);
 
+  // Build the set of raw log-line indices that form the visible template block of
+  // a collapsed pattern. These lines get a teal left-border highlight so users can
+  // see exactly which lines are the repeating unit.
+  const patternTemplateIndices = useMemo(() => {
+    const s = new Set<number>();
+    for (const info of collapseGroupsMap.values()) {
+      if (
+        info.type === 'pattern' &&
+        info.patternLength !== undefined &&
+        info.patternFirstLineIndex !== undefined
+      ) {
+        for (let m = 0; m < info.patternLength; m++) {
+          s.add(info.patternFirstLineIndex + m);
+        }
+      }
+    }
+    return s;
+  }, [collapseGroupsMap]);
+
   const displayIndices = useMemo(() => {
     return displayItems.map((item) => item.data.index);
   }, [displayItems]);
@@ -861,7 +880,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 ref={(el) => {
                   if (el) rowVirtualizer.measureElement(el);
                 }}
-                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${lineWrap ? styles.wrap : styles.nowrap} ${hoveredLineIndex === index ? 'log-row-hovered' : ''}`}
+                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${patternTemplateIndices.has(index) ? styles.patternTemplateLine : ''} ${lineWrap ? styles.wrap : styles.nowrap} ${hoveredLineIndex === index ? 'log-row-hovered' : ''}`}
                 onMouseEnter={() => setHoveredLineIndex(index)}
                 onMouseLeave={() => setHoveredLineIndex(null)}
                 onFocus={() => setHoveredLineIndex(index)}
@@ -939,10 +958,14 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                     <span className={styles.logLineNumber} aria-hidden="true" />
                     <span className={styles.logLineTimestamp} aria-hidden="true" />
                     <span className={styles.logLineLevel}>
-                      {collapseInfo.type === 'exact' ? '=' : '≈'}
+                      {collapseInfo.type === 'exact' ? '=' : collapseInfo.type === 'similar' ? '≈' : '↻'}
                     </span>
                     <span className={styles.collapseSummaryText}>
-                      {collapsedCount.toLocaleString()} {collapseInfo.type === 'exact' ? 'identical' : 'similar'} {collapsedCount === 1 ? 'line' : 'lines'} collapsed
+                      {collapseInfo.type === 'pattern' && collapseInfo.patternLength
+                        ? collapsedCount % collapseInfo.patternLength === 0
+                          ? `${(collapsedCount / collapseInfo.patternLength).toLocaleString()} repetitions of the highlighted ${collapseInfo.patternLength}-line pattern collapsed`
+                          : `${collapsedCount.toLocaleString()} lines of the highlighted ${collapseInfo.patternLength}-line pattern collapsed`
+                        : `${collapsedCount.toLocaleString()} ${collapseInfo.type === 'exact' ? 'identical' : 'similar'} ${collapsedCount === 1 ? 'line' : 'lines'} collapsed`}
                       <span className={styles.collapseSummaryActions}>
                         {collapsedCount > 10 && (
                           <>

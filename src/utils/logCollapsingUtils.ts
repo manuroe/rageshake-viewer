@@ -21,11 +21,29 @@ export const COLLAPSE_IGNORE_SOURCES: readonly string[] = [
 /** Minimum total group size (including the representative line) to trigger collapsing. */
 export const MIN_COLLAPSE_COUNT = 4;
 
-export type CollapseType = 'exact' | 'similar';
+/**
+ * Maximum period (number of distinct lines) to search for when detecting repeating
+ * multi-line patterns. Larger values are rarely seen in practice and add cost.
+ */
+export const MAX_PATTERN_PERIOD = 8;
+
+export type CollapseType = 'exact' | 'similar' | 'pattern';
 
 export interface CollapseGroupInfo {
-  type: CollapseType;
-  count: number;
+  readonly type: CollapseType;
+  readonly count: number;
+  /**
+   * For `type === 'pattern'`: the period (number of lines per repetition).
+   * The UI uses this to display "N repetitions of P-line pattern" instead of a raw line count.
+   */
+  readonly patternLength?: number;
+  /**
+   * For `type === 'pattern'` primary entries only: the raw log-line index of the first
+   * (topmost) visible line that forms the template. Combined with `patternLength`, the view
+   * can identify indices `[patternFirstLineIndex .. patternFirstLineIndex + patternLength - 1]`
+   * as the template block and apply a visual highlight to them.
+   */
+  readonly patternFirstLineIndex?: number;
 }
 
 export interface CollapseResult {
@@ -49,15 +67,16 @@ export function stripTimestamp(rawText: string): string {
 }
 
 /**
- * Determine the collapse relation between two log lines.
- * Returns 'exact' if lines are identical except for timestamp,
- * 'similar' if they come from the same source file:line,
- * or null if unrelated.
+ * Core relation check using pre-computed stripped texts.
+ * Called from the hot path to avoid redundant regex replacements per comparison.
  */
-function getLineRelation(a: ParsedLogLine, b: ParsedLogLine): CollapseType | null {
-  if (stripTimestamp(a.rawText) === stripTimestamp(b.rawText)) {
-    return 'exact';
-  }
+function lineRelation(
+  a: ParsedLogLine,
+  aStripped: string,
+  b: ParsedLogLine,
+  bStripped: string,
+): 'exact' | 'similar' | null {
+  if (aStripped === bStripped) return 'exact';
   if (
     a.filePath !== undefined &&
     b.filePath !== undefined &&
@@ -76,6 +95,106 @@ function getLineRelation(a: ParsedLogLine, b: ParsedLogLine): CollapseType | nul
  */
 function isIgnoredSource(line: ParsedLogLine): boolean {
   return !!line.filePath && COLLAPSE_IGNORE_SOURCES.includes(line.filePath);
+}
+
+/**
+ * Try to detect a repeating multi-line pattern starting at `startIdx`.
+ *
+ * Iterates over period lengths P = 2..MAX_PATTERN_PERIOD. For each P the first
+ * P lines form the "template"; subsequent segments of P lines are compared
+ * using `lineRelation()` with pre-computed stripped texts (handles both exact and similar matches per position).
+ * Returns the smallest P whose
+ * hidden line count (`P * (repetitions - 1)`) meets MIN_COLLAPSE_COUNT, or
+ * `null` if no such pattern exists.
+ *
+ * @example
+ * // Lines: A, B, A, B, A, B, A, B  →  { period: 2, repetitions: 4 }
+ * detectPatternAt(lines, 0);
+ */
+function detectPatternAt(
+  filteredLines: FilteredLine[],
+  startIdx: number,
+  stripped: readonly string[],
+): { period: number; repetitions: number } | null {
+  const remaining = filteredLines.length - startIdx;
+  if (remaining < MIN_COLLAPSE_COUNT) return null; // need at least MIN_COLLAPSE_COUNT lines
+
+  for (let p = 2; p <= MAX_PATTERN_PERIOD; p++) {
+    // Need the template (P lines) plus at least one full segment (P lines) within bounds.
+    if (startIdx + 2 * p > filteredLines.length) break;
+
+    // Verify the template itself is adjacent in the raw log array, and that none
+    // of the template lines are ignored sources (which must never participate in collapsing).
+    let templateOk = true;
+    for (let m = 1; m < p; m++) {
+      if (filteredLines[startIdx + m].index !== filteredLines[startIdx + m - 1].index + 1) {
+        templateOk = false;
+        break;
+      }
+      if (isIgnoredSource(filteredLines[startIdx + m].line)) {
+        templateOk = false;
+        break;
+      }
+    }
+    if (!templateOk) break; // non-adjacent or ignored template; larger P won't help
+
+    // Quick probe: check only template[0] vs segment[0][0] before the more expensive
+    // templateAllRelated scan. For non-repetitive logs this short-circuits with a single
+    // string comparison instead of P-1 lineRelation calls, reducing per-position cost
+    // from O(P) to O(1) for the common case.
+    const tmpl0Line = filteredLines[startIdx].line;
+    const tmpl0Stripped = stripped[startIdx];
+    const quickProbeIdx = startIdx + p;
+    if (!lineRelation(tmpl0Line, tmpl0Stripped, filteredLines[quickProbeIdx].line, stripped[quickProbeIdx])) {
+      continue;
+    }
+
+    // Guard: if all template lines are related (exact or similar) to template[0],
+    // the sequence degenerates to a single-line duplicate group — let that path handle it.
+    // Uses a plain for-loop with early break to avoid allocating a temporary array per probe.
+    let templateAllRelated = true;
+    for (let m = 1; m < p; m++) {
+      if (!lineRelation(tmpl0Line, tmpl0Stripped, filteredLines[startIdx + m].line, stripped[startIdx + m])) {
+        templateAllRelated = false;
+        break;
+      }
+    }
+    if (templateAllRelated) continue;
+
+    // Count consecutive repetitions using exact or similar matching per position.
+    let reps = 1;
+    let segStart = startIdx + p;
+    while (segStart + p - 1 < filteredLines.length) {
+      let segOk = true;
+      for (let m = 0; m < p; m++) {
+        const j = segStart + m;
+        // Must be adjacent to the previous line in the raw log array
+        if (filteredLines[j].index !== filteredLines[j - 1].index + 1) {
+          segOk = false;
+          break;
+        }
+        // Ignored sources must never participate in collapsing.
+        if (isIgnoredSource(filteredLines[j].line)) {
+          segOk = false;
+          break;
+        }
+        // Must match the corresponding template line (exact or similar)
+        if (!lineRelation(filteredLines[startIdx + m].line, stripped[startIdx + m], filteredLines[j].line, stripped[j])) {
+          segOk = false;
+          break;
+        }
+      }
+      if (!segOk) break;
+      reps++;
+      segStart += p;
+    }
+
+    const hiddenLines = p * (reps - 1);
+    if (hiddenLines >= MIN_COLLAPSE_COUNT) {
+      return { period: p, repetitions: reps };
+    }
+  }
+  return null;
 }
 
 /**
@@ -101,6 +220,14 @@ export function detectCollapseGroups(filteredLines: FilteredLine[]): CollapseRes
     return { collapsedIndices, collapseGroups };
   }
 
+  // Precompute stripped texts once — avoids O(N × P_max) regex replacements in the hot path.
+  // detectPatternAt calls lineRelation up to 35 times per position (sum P=2..8) and
+  // stripTimestamp was previously called twice per lineRelation call.
+  const stripped: string[] = new Array(filteredLines.length);
+  for (let k = 0; k < filteredLines.length; k++) {
+    stripped[k] = stripTimestamp(filteredLines[k].line.rawText);
+  }
+
   let i = 0;
   while (i < filteredLines.length) {
     const representative = filteredLines[i];
@@ -110,6 +237,41 @@ export function detectCollapseGroups(filteredLines: FilteredLine[]): CollapseRes
       continue;
     }
 
+    // ── Multi-line pattern detection (runs before single-line check) ────────
+    const patternMatch = detectPatternAt(filteredLines, i, stripped);
+    if (patternMatch) {
+      const { period, repetitions } = patternMatch;
+      const hiddenCount = period * (repetitions - 1);
+      // The representative (visible) block is the first repetition.
+      const lastRepLine = filteredLines[i + period - 1];
+
+      for (let k = i + period; k < i + period * repetitions; k++) {
+        collapsedIndices.add(filteredLines[k].index);
+      }
+
+      // Primary gap entry: below the last line of the first (visible) repetition.
+      // patternFirstLineIndex lets the view highlight the template lines above this bar.
+      collapseGroups.set(`down-${lastRepLine.index}`, {
+        type: 'pattern',
+        count: hiddenCount,
+        patternLength: period,
+        patternFirstLineIndex: filteredLines[i].index,
+      });
+      // Continuation entries so the summary bar stays visible after each
+      // +10-line expansion (same convention as single-line groups).
+      for (let k = i + period; k < i + period * repetitions - 1; k++) {
+        collapseGroups.set(`down-${filteredLines[k].index}`, {
+          type: 'pattern',
+          count: i + period * repetitions - 1 - k,
+          patternLength: period,
+        });
+      }
+
+      i += period * repetitions; // advance past ALL repetitions (template + hidden)
+      continue;
+    }
+
+    // ── Single-line deduplication (unchanged) ──────────────────────────────
     let groupEnd = i;
     let groupType: CollapseType | null = null;
 
@@ -122,7 +284,7 @@ export function detectCollapseGroups(filteredLines: FilteredLine[]): CollapseRes
       // Ignored sources break the group
       if (isIgnoredSource(candidate.line)) break;
 
-      const relation = getLineRelation(representative.line, candidate.line);
+      const relation = lineRelation(representative.line, stripped[i], candidate.line, stripped[j]);
       if (!relation) break;
 
       // Track weakest relation: demote 'exact' → 'similar' if any member is just similar

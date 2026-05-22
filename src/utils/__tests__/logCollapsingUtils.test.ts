@@ -4,6 +4,7 @@ import {
   stripTimestamp,
   COLLAPSE_IGNORE_SOURCES,
   MIN_COLLAPSE_COUNT,
+  MAX_PATTERN_PERIOD,
   type CollapseGroupInfo,
 } from '../logCollapsingUtils';
 import { createParsedLogLine } from '../../test/fixtures';
@@ -346,6 +347,218 @@ describe('detectCollapseGroups', () => {
     ];
 
     const result = detectCollapseGroups(lines);
+    expect(result.collapsedIndices.size).toBe(0);
+  });
+});
+
+// ─── Multi-line pattern collapsing ──────────────────────────────────────────
+
+/**
+ * Build FilteredLine entries for a repeating multi-line pattern.
+ * `template` is an array of rawText bodies (everything after the timestamp).
+ * `repetitions` controls how many full copies are generated.
+ * Line indices are contiguous starting from 0.
+ */
+function makePatternLines(template: string[], repetitions: number): FilteredLine[] {
+  const lines: FilteredLine[] = [];
+  for (let r = 0; r < repetitions; r++) {
+    for (let m = 0; m < template.length; m++) {
+      const idx = r * template.length + m;
+      const rawText = `2024-01-15T10:${String(idx).padStart(2, '0')}:00.000000Z ${template[m]}`;
+      lines.push({
+        line: createParsedLogLine({ lineNumber: idx, rawText }),
+        index: idx,
+      });
+    }
+  }
+  return lines;
+}
+
+describe('detectCollapseGroups – multi-line patterns', () => {
+  it('collapses a 2-line pattern repeated 4 times (8 lines total)', () => {
+    const lines = makePatternLines(
+      [
+        'WARN send_queue: error loading request | crates/send_queue.rs:709 | spans: root',
+        'WARN send_queue: error applying deps   | crates/send_queue.rs:684 | spans: root',
+      ],
+      4,
+    );
+
+    const result = detectCollapseGroups(lines);
+
+    // Lines 2-7 (indices 2..7) are hidden; lines 0-1 are the visible template.
+    expect(result.collapsedIndices).toEqual(new Set([2, 3, 4, 5, 6, 7]));
+    // Primary gap below last line of first rep (index 1).
+    expect(result.collapseGroups.get('down-1')).toEqual({
+      type: 'pattern',
+      count: 6,
+      patternLength: 2,
+      patternFirstLineIndex: 0,
+    });
+  });
+
+  it(`does not collapse when hidden lines < MIN_COLLAPSE_COUNT (${MIN_COLLAPSE_COUNT})`, () => {
+    // 2-line pattern × 2 reps → hidden = 2 < 4
+    const lines = makePatternLines(
+      [
+        'WARN queue: error A | queue.rs:10 | spans: root',
+        'WARN queue: error B | queue.rs:20 | spans: root',
+      ],
+      2,
+    );
+
+    const result = detectCollapseGroups(lines);
+
+    expect(result.collapsedIndices.size).toBe(0);
+    expect(result.collapseGroups.size).toBe(0);
+  });
+
+  it('collapses a 3-line pattern repeated 3 times (9 lines total)', () => {
+    const lines = makePatternLines(
+      [
+        'WARN mod_a: event A | mod_a.rs:1 | spans: root',
+        'WARN mod_b: event B | mod_b.rs:2 | spans: root',
+        'WARN mod_c: event C | mod_c.rs:3 | spans: root',
+      ],
+      3,
+    );
+
+    const result = detectCollapseGroups(lines);
+
+    // First rep visible (0-2); reps 2-3 hidden (3-8).
+    expect(result.collapsedIndices).toEqual(new Set([3, 4, 5, 6, 7, 8]));
+    expect(result.collapseGroups.get('down-2')).toEqual({
+      type: 'pattern',
+      count: 6,
+      patternLength: 3,
+      patternFirstLineIndex: 0,
+    });
+  });
+
+  it('generates correct continuation entries for a 2-line × 4-rep pattern', () => {
+    const lines = makePatternLines(
+      [
+        'WARN queue: error A | queue.rs:10 | spans: root',
+        'WARN queue: error B | queue.rs:20 | spans: root',
+      ],
+      4, // 8 total lines, 6 hidden
+    );
+
+    const result = detectCollapseGroups(lines);
+
+    // Primary + 5 continuation entries for indices 2..6
+    expect(result.collapseGroups.get('down-1')).toEqual({ type: 'pattern', count: 6, patternLength: 2, patternFirstLineIndex: 0 });
+    expect(result.collapseGroups.get('down-2')).toEqual({ type: 'pattern', count: 5, patternLength: 2 });
+    expect(result.collapseGroups.get('down-3')).toEqual({ type: 'pattern', count: 4, patternLength: 2 });
+    expect(result.collapseGroups.get('down-4')).toEqual({ type: 'pattern', count: 3, patternLength: 2 });
+    expect(result.collapseGroups.get('down-5')).toEqual({ type: 'pattern', count: 2, patternLength: 2 });
+    expect(result.collapseGroups.get('down-6')).toEqual({ type: 'pattern', count: 1, patternLength: 2 });
+    expect(result.collapseGroups.size).toBe(6);
+  });
+
+  it('collapses a 2-line similar pattern (different room_id per rep, same source file:line)', () => {
+    // Mirrors the real-world account_data/global.rs pattern:
+    //   TRACE @:113  "Marking room as direct room room_id=!abc"
+    //   DEBUG @:176  "couldn't find room … room=!abc"
+    //   TRACE @:113  "Marking room as direct room room_id=!def"
+    //   DEBUG @:176  "couldn't find room … room=!def"
+    //   ... (many repetitions)
+    const makeRep = (idx: number, roomId: string): FilteredLine[] => [
+      {
+        line: createParsedLogLine({
+          lineNumber: idx * 2,
+          rawText: `2026-05-11T10:47:5${idx}.000Z TRACE account_data: Marking room as direct room room_id="${roomId}" | global.rs:113 | spans: root`,
+          filePath: 'crates/matrix-sdk-base/src/response_processors/account_data/global.rs',
+          sourceLineNumber: 113,
+        }),
+        index: idx * 2,
+      },
+      {
+        line: createParsedLogLine({
+          lineNumber: idx * 2 + 1,
+          rawText: `2026-05-11T10:47:5${idx}.001Z DEBUG account_data: couldn't find room room="${roomId}" | global.rs:176 | spans: root`,
+          filePath: 'crates/matrix-sdk-base/src/response_processors/account_data/global.rs',
+          sourceLineNumber: 176,
+        }),
+        index: idx * 2 + 1,
+      },
+    ];
+
+    const lines: FilteredLine[] = [
+      ...makeRep(0, '!room1:example.org'),
+      ...makeRep(1, '!room2:example.org'),
+      ...makeRep(2, '!room3:example.org'),
+      ...makeRep(3, '!room4:example.org'),
+    ];
+
+    const result = detectCollapseGroups(lines);
+
+    // First rep (indices 0-1) visible; reps 2-4 (indices 2-7) hidden
+    expect(result.collapsedIndices).toEqual(new Set([2, 3, 4, 5, 6, 7]));
+    expect(result.collapseGroups.get('down-1')).toEqual({
+      type: 'pattern',
+      count: 6,
+      patternLength: 2,
+      patternFirstLineIndex: 0,
+    });
+  });
+
+  it('does not collapse when the 2nd segment does not match the template', () => {
+    // Lines A B C D where C ≠ A → no 2-line pattern
+    const lines: FilteredLine[] = [
+      { line: createParsedLogLine({ lineNumber: 0, rawText: '2024-01-15T10:00:00.000000Z WARN queue: error A | queue.rs:10' }), index: 0 },
+      { line: createParsedLogLine({ lineNumber: 1, rawText: '2024-01-15T10:00:01.000000Z WARN queue: error B | queue.rs:20' }), index: 1 },
+      { line: createParsedLogLine({ lineNumber: 2, rawText: '2024-01-15T10:00:02.000000Z WARN queue: error X | queue.rs:99' }), index: 2 },
+      { line: createParsedLogLine({ lineNumber: 3, rawText: '2024-01-15T10:00:03.000000Z WARN queue: error Y | queue.rs:88' }), index: 3 },
+    ];
+
+    const result = detectCollapseGroups(lines);
+
+    expect(result.collapsedIndices.size).toBe(0);
+    expect(result.collapseGroups.size).toBe(0);
+  });
+
+  it('does not collapse a pattern with a gap in raw indices', () => {
+    // Simulate a filter that removed index 2, breaking adjacency
+    const lines: FilteredLine[] = [
+      { line: createParsedLogLine({ lineNumber: 0, rawText: '2024-01-15T10:00:00.000000Z WARN q: error A' }), index: 0 },
+      { line: createParsedLogLine({ lineNumber: 1, rawText: '2024-01-15T10:00:01.000000Z WARN q: error B' }), index: 1 },
+      // index 2 is filtered out → gap
+      { line: createParsedLogLine({ lineNumber: 3, rawText: '2024-01-15T10:00:03.000000Z WARN q: error A' }), index: 3 },
+      { line: createParsedLogLine({ lineNumber: 4, rawText: '2024-01-15T10:00:04.000000Z WARN q: error B' }), index: 4 },
+    ];
+
+    const result = detectCollapseGroups(lines);
+
+    expect(result.collapsedIndices.size).toBe(0);
+  });
+
+  it('pattern detection does not suppress single-line deduplication elsewhere', () => {
+    // 4 identical single lines preceded by 2 unrelated lines that form no pattern
+    const lines: FilteredLine[] = [
+      { line: createParsedLogLine({ lineNumber: 0, rawText: '2024-01-15T10:00:00.000000Z INFO alpha' }), index: 0 },
+      { line: createParsedLogLine({ lineNumber: 1, rawText: '2024-01-15T10:00:01.000000Z INFO beta' }), index: 1 },
+      { line: createParsedLogLine({ lineNumber: 2, rawText: '2024-01-15T10:00:02.000000Z INFO dup line' }), index: 2 },
+      { line: createParsedLogLine({ lineNumber: 3, rawText: '2024-01-15T10:00:03.000000Z INFO dup line' }), index: 3 },
+      { line: createParsedLogLine({ lineNumber: 4, rawText: '2024-01-15T10:00:04.000000Z INFO dup line' }), index: 4 },
+      { line: createParsedLogLine({ lineNumber: 5, rawText: '2024-01-15T10:00:05.000000Z INFO dup line' }), index: 5 },
+    ];
+
+    const result = detectCollapseGroups(lines);
+
+    // Single-line dedup should still collapse lines 3-5 under representative at index 2
+    expect(result.collapsedIndices).toEqual(new Set([3, 4, 5]));
+    expect(result.collapseGroups.get('down-2')).toEqual({ type: 'exact', count: 3 });
+  });
+
+  it(`respects MAX_PATTERN_PERIOD (${MAX_PATTERN_PERIOD}) – does not attempt larger periods`, () => {
+    // A period-(MAX_PATTERN_PERIOD + 1) pattern should NOT be collapsed
+    const periodTooLarge = MAX_PATTERN_PERIOD + 1;
+    const template = Array.from({ length: periodTooLarge }, (_, k) => `INFO line-${k} | mod.rs:${k}`);
+    const lines = makePatternLines(template, 3); // hidden = periodTooLarge*2 > 4, but period too large
+
+    const result = detectCollapseGroups(lines);
+
     expect(result.collapsedIndices.size).toBe(0);
   });
 });
