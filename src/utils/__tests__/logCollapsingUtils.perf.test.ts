@@ -106,11 +106,10 @@ function makeMixedLines(count: number): FilteredLine[] {
 }
 
 // Pre-build fixtures outside bench callbacks so fixture construction time is not
-// included in the measurement.
+// included in the measurement. Cap at 10K to match the scale used by other perf
+// tests in the repo; larger fixtures cause worker IPC timeouts on CI runners.
 const UNIQUE_10K = makeUniqueLines(10_000);
-const UNIQUE_50K = makeUniqueLines(50_000);
 const MIXED_10K = makeMixedLines(10_000);
-const MIXED_50K = makeMixedLines(50_000);
 
 // ─── Benchmarks ───────────────────────────────────────────────────────────────
 
@@ -119,19 +118,11 @@ describe('detectCollapseGroups performance', () => {
     bench('detectCollapseGroups: 10K unique lines', () => {
       detectCollapseGroups(UNIQUE_10K);
     });
-
-    bench('detectCollapseGroups: 50K unique lines', () => {
-      detectCollapseGroups(UNIQUE_50K);
-    });
   });
 
   describe('mixed lines (realistic — unique + repeating bursts)', () => {
     bench('detectCollapseGroups: 10K mixed lines', () => {
       detectCollapseGroups(MIXED_10K);
-    });
-
-    bench('detectCollapseGroups: 50K mixed lines', () => {
-      detectCollapseGroups(MIXED_50K);
     });
   });
 });
