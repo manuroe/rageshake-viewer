@@ -216,6 +216,10 @@
     border-left-color: var(--log-search-highlight);
 }
 
+.patternTemplateLine {
+    border-left-color: var(--log-pattern);
+}
+
 .currentMatch {
     background: var(--log-current-match-bg) !important;
     border-left-color: var(--color-warning) !important;
