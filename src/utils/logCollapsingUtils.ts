@@ -117,21 +117,26 @@ function detectPatternAt(
   stripped: readonly string[],
 ): { period: number; repetitions: number } | null {
   const remaining = filteredLines.length - startIdx;
-  if (remaining < 4) return null; // need at least MIN_COLLAPSE_COUNT lines
+  if (remaining < MIN_COLLAPSE_COUNT) return null; // need at least MIN_COLLAPSE_COUNT lines
 
   for (let p = 2; p <= MAX_PATTERN_PERIOD; p++) {
     // Need the template (P lines) plus at least one segment (P lines) within bounds.
     if (startIdx + p >= filteredLines.length) break;
 
-    // Verify the template itself is adjacent in the raw log array
+    // Verify the template itself is adjacent in the raw log array, and that none
+    // of the template lines are ignored sources (which must never participate in collapsing).
     let templateOk = true;
     for (let m = 1; m < p; m++) {
       if (filteredLines[startIdx + m].index !== filteredLines[startIdx + m - 1].index + 1) {
         templateOk = false;
         break;
       }
+      if (isIgnoredSource(filteredLines[startIdx + m].line)) {
+        templateOk = false;
+        break;
+      }
     }
-    if (!templateOk) break; // non-adjacent template; larger P won't help
+    if (!templateOk) break; // non-adjacent or ignored template; larger P won't help
 
     // Quick probe: check only template[0] vs segment[0][0] before the more expensive
     // templateAllRelated scan. For non-repetitive logs this short-circuits with a single
@@ -146,10 +151,14 @@ function detectPatternAt(
 
     // Guard: if all template lines are related (exact or similar) to template[0],
     // the sequence degenerates to a single-line duplicate group — let that path handle it.
-    const templateAllRelated = Array.from(
-      { length: p - 1 },
-      (_, k) => lineRelation(tmpl0Line, tmpl0Stripped, filteredLines[startIdx + k + 1].line, stripped[startIdx + k + 1]),
-    ).every(r => r !== null);
+    // Uses a plain for-loop with early break to avoid allocating a temporary array per probe.
+    let templateAllRelated = true;
+    for (let m = 1; m < p; m++) {
+      if (!lineRelation(tmpl0Line, tmpl0Stripped, filteredLines[startIdx + m].line, stripped[startIdx + m])) {
+        templateAllRelated = false;
+        break;
+      }
+    }
     if (templateAllRelated) continue;
 
     // Count consecutive repetitions using exact or similar matching per position.
@@ -161,6 +170,11 @@ function detectPatternAt(
         const j = segStart + m;
         // Must be adjacent to the previous line in the raw log array
         if (filteredLines[j].index !== filteredLines[j - 1].index + 1) {
+          segOk = false;
+          break;
+        }
+        // Ignored sources must never participate in collapsing.
+        if (isIgnoredSource(filteredLines[j].line)) {
           segOk = false;
           break;
         }

@@ -217,6 +217,7 @@
 }
 
 .patternTemplateLine {
+    background: var(--log-pattern-bg);
     border-left-color: var(--log-pattern);
 }
 

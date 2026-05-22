@@ -1,13 +1,13 @@
 /**
  * Performance benchmarks for detectCollapseGroups.
  *
- * The multi-line pattern detection path (detectPatternAt) calls getLineRelation
- * up to 35 times per position (sum of P=2..8 for templateAllRelated + first-segment
- * probe). Each getLineRelation call invokes stripTimestamp twice (two regex
- * replacements). On a large non-repetitive log file this regresses from O(N) to
- * O(35N) regex replacements vs. the old single-line-only path.
+ * The multi-line pattern detection path (detectPatternAt) was originally O(35N)
+ * because it called lineRelation up to 35 times per position (sum P=2..8) and
+ * each call invoked stripTimestamp twice. The fix precomputes a stripped[] array
+ * once (O(N) regex ops) and reorders a quick-probe check before templateAllRelated
+ * to short-circuit non-matching positions in O(1).
  *
- * This benchmark exposes that regression and guards against it re-appearing.
+ * This benchmark guards against that regression re-appearing.
  *
  * Run with: npm run bench
  */
