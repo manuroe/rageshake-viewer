@@ -286,3 +286,14 @@
 2026-01-15T10:07:05.200000Z DEBUG [matrix-rust-sdk] Timeline event received event_id=$VkdmKnrz9stD0mzv2QrS3sP sender=@bob:example.org room_id=!room1:example.org
 2026-01-15T10:07:05.350000Z DEBUG [matrix-rust-sdk] Redacting event $ev-redact-01:example.org in !room1:example.org on behalf of @alice:example.org
 2026-01-15T10:07:05.500000Z DEBUG [matrix-rust-sdk] Modern room !VkdmKnrz9stD0mzv2QrS3sP invited @carol:matrix.example.org; server matrix.example.org
+2026-01-15T10:07:06.100000Z  WARN matrix_sdk::send_queue: error when loading next request to send: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:709 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.101000Z  WARN matrix_sdk::send_queue: errors when applying dependent requests: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:684 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.102000Z  WARN matrix_sdk::send_queue: error when loading next request to send: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:709 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.103000Z  WARN matrix_sdk::send_queue: errors when applying dependent requests: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:684 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.104000Z  WARN matrix_sdk::send_queue: error when loading next request to send: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:709 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.105000Z  WARN matrix_sdk::send_queue: errors when applying dependent requests: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:684 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.106000Z  WARN matrix_sdk::send_queue: error when loading next request to send: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:709 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.107000Z  WARN matrix_sdk::send_queue: errors when applying dependent requests: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:684 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.108000Z  WARN matrix_sdk::send_queue: error when loading next request to send: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:709 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.109000Z  WARN matrix_sdk::send_queue: errors when applying dependent requests: The store is closed | crates/matrix-sdk/src/send_queue/mod.rs:684 | spans: root > sending_task{room_id=!room1:example.org}
+2026-01-15T10:07:06.110000Z  INFO [matrix-rust-sdk] Store closed; send queue suspended for all rooms
