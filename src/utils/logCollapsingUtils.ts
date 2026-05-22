@@ -21,11 +21,29 @@ export const COLLAPSE_IGNORE_SOURCES: readonly string[] = [
 /** Minimum total group size (including the representative line) to trigger collapsing. */
 export const MIN_COLLAPSE_COUNT = 4;
 
-export type CollapseType = 'exact' | 'similar';
+/**
+ * Maximum period (number of distinct lines) to search for when detecting repeating
+ * multi-line patterns. Larger values are rarely seen in practice and add cost.
+ */
+export const MAX_PATTERN_PERIOD = 8;
+
+export type CollapseType = 'exact' | 'similar' | 'pattern';
 
 export interface CollapseGroupInfo {
-  type: CollapseType;
-  count: number;
+  readonly type: CollapseType;
+  readonly count: number;
+  /**
+   * For `type === 'pattern'`: the period (number of lines per repetition).
+   * The UI uses this to display "N repetitions of P-line pattern" instead of a raw line count.
+   */
+  readonly patternLength?: number;
+  /**
+   * For `type === 'pattern'` primary entries only: the raw log-line index of the first
+   * (topmost) visible line that forms the template. Combined with `patternLength`, the view
+   * can identify indices `[patternFirstLineIndex .. patternFirstLineIndex + patternLength - 1]`
+   * as the template block and apply a visual highlight to them.
+   */
+  readonly patternFirstLineIndex?: number;
 }
 
 export interface CollapseResult {
@@ -79,6 +97,80 @@ function isIgnoredSource(line: ParsedLogLine): boolean {
 }
 
 /**
+ * Try to detect a repeating multi-line pattern starting at `startIdx`.
+ *
+ * Iterates over period lengths P = 2..MAX_PATTERN_PERIOD. For each P the first
+ * P lines form the "template"; subsequent segments of P lines are compared
+ * using `getLineRelation()` (handles both exact and similar matches per position).
+ * Returns the smallest P whose
+ * hidden line count (`P * (repetitions - 1)`) meets MIN_COLLAPSE_COUNT, or
+ * `null` if no such pattern exists.
+ *
+ * @example
+ * // Lines: A, B, A, B, A, B, A, B  →  { period: 2, repetitions: 4 }
+ * detectPatternAt(lines, 0);
+ */
+function detectPatternAt(
+  filteredLines: FilteredLine[],
+  startIdx: number,
+): { period: number; repetitions: number } | null {
+  const remaining = filteredLines.length - startIdx;
+  if (remaining < 4) return null; // need at least MIN_COLLAPSE_COUNT lines
+
+  for (let p = 2; p <= MAX_PATTERN_PERIOD; p++) {
+    if (startIdx + p > filteredLines.length) break;
+
+    // Verify the template itself is adjacent in the raw log array
+    let templateOk = true;
+    for (let m = 1; m < p; m++) {
+      if (filteredLines[startIdx + m].index !== filteredLines[startIdx + m - 1].index + 1) {
+        templateOk = false;
+        break;
+      }
+    }
+    if (!templateOk) break; // non-adjacent template; larger P won't help
+
+    // Guard: if all template lines are related (exact or similar) to template[0],
+    // the sequence degenerates to a single-line duplicate group — let that path handle it.
+    const templateLine0 = filteredLines[startIdx].line;
+    const templateAllRelated = Array.from(
+      { length: p - 1 },
+      (_, k) => getLineRelation(templateLine0, filteredLines[startIdx + k + 1].line),
+    ).every(r => r !== null);
+    if (templateAllRelated) continue;
+
+    // Count consecutive repetitions using exact or similar matching per position.
+    let reps = 1;
+    let segStart = startIdx + p;
+    while (segStart + p - 1 < filteredLines.length) {
+      let segOk = true;
+      for (let m = 0; m < p; m++) {
+        const j = segStart + m;
+        // Must be adjacent to the previous line in the raw log array
+        if (filteredLines[j].index !== filteredLines[j - 1].index + 1) {
+          segOk = false;
+          break;
+        }
+        // Must match the corresponding template line (exact or similar)
+        if (!getLineRelation(filteredLines[startIdx + m].line, filteredLines[j].line)) {
+          segOk = false;
+          break;
+        }
+      }
+      if (!segOk) break;
+      reps++;
+      segStart += p;
+    }
+
+    const hiddenLines = p * (reps - 1);
+    if (hiddenLines >= MIN_COLLAPSE_COUNT) {
+      return { period: p, repetitions: reps };
+    }
+  }
+  return null;
+}
+
+/**
  * Detect consecutive duplicate/similar lines in the filtered view and compute
  * collapse groups.
  *
@@ -110,6 +202,41 @@ export function detectCollapseGroups(filteredLines: FilteredLine[]): CollapseRes
       continue;
     }
 
+    // ── Multi-line pattern detection (runs before single-line check) ────────
+    const patternMatch = detectPatternAt(filteredLines, i);
+    if (patternMatch) {
+      const { period, repetitions } = patternMatch;
+      const hiddenCount = period * (repetitions - 1);
+      // The representative (visible) block is the first repetition.
+      const lastRepLine = filteredLines[i + period - 1];
+
+      for (let k = i + period; k < i + period * repetitions; k++) {
+        collapsedIndices.add(filteredLines[k].index);
+      }
+
+      // Primary gap entry: below the last line of the first (visible) repetition.
+      // patternFirstLineIndex lets the view highlight the template lines above this bar.
+      collapseGroups.set(`down-${lastRepLine.index}`, {
+        type: 'pattern',
+        count: hiddenCount,
+        patternLength: period,
+        patternFirstLineIndex: filteredLines[i].index,
+      });
+      // Continuation entries so the summary bar stays visible after each
+      // +10-line expansion (same convention as single-line groups).
+      for (let k = i + period; k < i + period * repetitions - 1; k++) {
+        collapseGroups.set(`down-${filteredLines[k].index}`, {
+          type: 'pattern',
+          count: i + period * repetitions - 1 - k,
+          patternLength: period,
+        });
+      }
+
+      i += period * repetitions; // advance past ALL repetitions (template + hidden)
+      continue;
+    }
+
+    // ── Single-line deduplication (unchanged) ──────────────────────────────
     let groupEnd = i;
     let groupType: CollapseType | null = null;
 
