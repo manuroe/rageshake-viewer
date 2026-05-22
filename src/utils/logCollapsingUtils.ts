@@ -67,15 +67,16 @@ export function stripTimestamp(rawText: string): string {
 }
 
 /**
- * Determine the collapse relation between two log lines.
- * Returns 'exact' if lines are identical except for timestamp,
- * 'similar' if they come from the same source file:line,
- * or null if unrelated.
+ * Core relation check using pre-computed stripped texts.
+ * Called from the hot path to avoid redundant regex replacements per comparison.
  */
-function getLineRelation(a: ParsedLogLine, b: ParsedLogLine): CollapseType | null {
-  if (stripTimestamp(a.rawText) === stripTimestamp(b.rawText)) {
-    return 'exact';
-  }
+function lineRelation(
+  a: ParsedLogLine,
+  aStripped: string,
+  b: ParsedLogLine,
+  bStripped: string,
+): CollapseType | null {
+  if (aStripped === bStripped) return 'exact';
   if (
     a.filePath !== undefined &&
     b.filePath !== undefined &&
@@ -101,7 +102,7 @@ function isIgnoredSource(line: ParsedLogLine): boolean {
  *
  * Iterates over period lengths P = 2..MAX_PATTERN_PERIOD. For each P the first
  * P lines form the "template"; subsequent segments of P lines are compared
- * using `getLineRelation()` (handles both exact and similar matches per position).
+ * using `lineRelation()` with pre-computed stripped texts (handles both exact and similar matches per position).
  * Returns the smallest P whose
  * hidden line count (`P * (repetitions - 1)`) meets MIN_COLLAPSE_COUNT, or
  * `null` if no such pattern exists.
@@ -113,12 +114,14 @@ function isIgnoredSource(line: ParsedLogLine): boolean {
 function detectPatternAt(
   filteredLines: FilteredLine[],
   startIdx: number,
+  stripped: readonly string[],
 ): { period: number; repetitions: number } | null {
   const remaining = filteredLines.length - startIdx;
   if (remaining < 4) return null; // need at least MIN_COLLAPSE_COUNT lines
 
   for (let p = 2; p <= MAX_PATTERN_PERIOD; p++) {
-    if (startIdx + p > filteredLines.length) break;
+    // Need the template (P lines) plus at least one segment (P lines) within bounds.
+    if (startIdx + p >= filteredLines.length) break;
 
     // Verify the template itself is adjacent in the raw log array
     let templateOk = true;
@@ -130,12 +133,22 @@ function detectPatternAt(
     }
     if (!templateOk) break; // non-adjacent template; larger P won't help
 
+    // Quick probe: check only template[0] vs segment[0][0] before the more expensive
+    // templateAllRelated scan. For non-repetitive logs this short-circuits with a single
+    // string comparison instead of P-1 lineRelation calls, reducing per-position cost
+    // from O(P) to O(1) for the common case.
+    const tmpl0Line = filteredLines[startIdx].line;
+    const tmpl0Stripped = stripped[startIdx];
+    const quickProbeIdx = startIdx + p;
+    if (!lineRelation(tmpl0Line, tmpl0Stripped, filteredLines[quickProbeIdx].line, stripped[quickProbeIdx])) {
+      continue;
+    }
+
     // Guard: if all template lines are related (exact or similar) to template[0],
     // the sequence degenerates to a single-line duplicate group — let that path handle it.
-    const templateLine0 = filteredLines[startIdx].line;
     const templateAllRelated = Array.from(
       { length: p - 1 },
-      (_, k) => getLineRelation(templateLine0, filteredLines[startIdx + k + 1].line),
+      (_, k) => lineRelation(tmpl0Line, tmpl0Stripped, filteredLines[startIdx + k + 1].line, stripped[startIdx + k + 1]),
     ).every(r => r !== null);
     if (templateAllRelated) continue;
 
@@ -152,7 +165,7 @@ function detectPatternAt(
           break;
         }
         // Must match the corresponding template line (exact or similar)
-        if (!getLineRelation(filteredLines[startIdx + m].line, filteredLines[j].line)) {
+        if (!lineRelation(filteredLines[startIdx + m].line, stripped[startIdx + m], filteredLines[j].line, stripped[j])) {
           segOk = false;
           break;
         }
@@ -193,6 +206,14 @@ export function detectCollapseGroups(filteredLines: FilteredLine[]): CollapseRes
     return { collapsedIndices, collapseGroups };
   }
 
+  // Precompute stripped texts once — avoids O(N × P_max) regex replacements in the hot path.
+  // detectPatternAt calls lineRelation up to 35 times per position (sum P=2..8) and
+  // stripTimestamp was previously called twice per lineRelation call.
+  const stripped: string[] = new Array(filteredLines.length);
+  for (let k = 0; k < filteredLines.length; k++) {
+    stripped[k] = stripTimestamp(filteredLines[k].line.rawText);
+  }
+
   let i = 0;
   while (i < filteredLines.length) {
     const representative = filteredLines[i];
@@ -203,7 +224,7 @@ export function detectCollapseGroups(filteredLines: FilteredLine[]): CollapseRes
     }
 
     // ── Multi-line pattern detection (runs before single-line check) ────────
-    const patternMatch = detectPatternAt(filteredLines, i);
+    const patternMatch = detectPatternAt(filteredLines, i, stripped);
     if (patternMatch) {
       const { period, repetitions } = patternMatch;
       const hiddenCount = period * (repetitions - 1);
@@ -249,7 +270,7 @@ export function detectCollapseGroups(filteredLines: FilteredLine[]): CollapseRes
       // Ignored sources break the group
       if (isIgnoredSource(candidate.line)) break;
 
-      const relation = getLineRelation(representative.line, candidate.line);
+      const relation = lineRelation(representative.line, stripped[i], candidate.line, stripped[j]);
       if (!relation) break;
 
       // Track weakest relation: demote 'exact' → 'similar' if any member is just similar
