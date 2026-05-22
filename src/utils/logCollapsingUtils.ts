@@ -75,7 +75,7 @@ function lineRelation(
   aStripped: string,
   b: ParsedLogLine,
   bStripped: string,
-): CollapseType | null {
+): 'exact' | 'similar' | null {
   if (aStripped === bStripped) return 'exact';
   if (
     a.filePath !== undefined &&
@@ -120,8 +120,8 @@ function detectPatternAt(
   if (remaining < MIN_COLLAPSE_COUNT) return null; // need at least MIN_COLLAPSE_COUNT lines
 
   for (let p = 2; p <= MAX_PATTERN_PERIOD; p++) {
-    // Need the template (P lines) plus at least one segment (P lines) within bounds.
-    if (startIdx + p >= filteredLines.length) break;
+    // Need the template (P lines) plus at least one full segment (P lines) within bounds.
+    if (startIdx + 2 * p > filteredLines.length) break;
 
     // Verify the template itself is adjacent in the raw log array, and that none
     // of the template lines are ignored sources (which must never participate in collapsing).

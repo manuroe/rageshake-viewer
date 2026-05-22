@@ -963,8 +963,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                     <span className={styles.collapseSummaryText}>
                       {collapseInfo.type === 'pattern' && collapseInfo.patternLength
                         ? collapsedCount % collapseInfo.patternLength === 0
-                          ? `${(collapsedCount / collapseInfo.patternLength).toLocaleString()} repetitions of the highlighted ${collapseInfo.patternLength}-line pattern`
-                          : `${collapsedCount.toLocaleString()} lines of the highlighted ${collapseInfo.patternLength}-line pattern`
+                          ? `${(collapsedCount / collapseInfo.patternLength).toLocaleString()} repetitions of the highlighted ${collapseInfo.patternLength}-line pattern collapsed`
+                          : `${collapsedCount.toLocaleString()} lines of the highlighted ${collapseInfo.patternLength}-line pattern collapsed`
                         : `${collapsedCount.toLocaleString()} ${collapseInfo.type === 'exact' ? 'identical' : 'similar'} ${collapsedCount === 1 ? 'line' : 'lines'} collapsed`}
                       <span className={styles.collapseSummaryActions}>
                         {collapsedCount > 10 && (

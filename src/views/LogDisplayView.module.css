@@ -221,6 +221,11 @@
     border-left-color: var(--log-pattern);
 }
 
+/* When a line is both a search match and a pattern template, search match wins. */
+.matchLine.patternTemplateLine {
+    background: var(--log-match-bg);
+}
+
 .currentMatch {
     background: var(--log-current-match-bg) !important;
     border-left-color: var(--color-warning) !important;
