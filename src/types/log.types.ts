@@ -199,6 +199,11 @@ export interface ParsedLogLine {
   readonly strippedMessage: string;
   /** Source file path extracted from log (e.g., "ClientProxy.swift" or "crates/matrix-sdk/src/http_client/native.rs") */
   readonly filePath?: string;
+  /**
+   * Name of the rotated log file this line was loaded from, set only when
+   * several files are merged into one view. Absent for single-file loads.
+   */
+  readonly sourceFile?: string;
   /** Source file line number extracted from log */
   readonly sourceLineNumber?: number;
   /**
