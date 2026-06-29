@@ -4,6 +4,7 @@ import { useLogStore } from '../stores/logStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { LogSelectionDialog } from './LogSelectionDialog';
 import styles from './BurgerMenu.module.css';
 
 export function BurgerMenu() {
@@ -13,8 +14,10 @@ export function BurgerMenu() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { clearData, clearLastRoute } = useLogStore();
+  const loadedEntryNames = useLogStore((state) => state.loadedEntryNames);
   const { theme, setTheme } = useThemeStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
+  const [showLogSelection, setShowLogSelection] = useState(false);
 
   useClickOutside(menuRef, () => setIsOpen(false), isOpen);
 
@@ -84,6 +87,17 @@ export function BurgerMenu() {
           >
             Sync Requests
           </button>
+          {loadedEntryNames.length > 0 && (
+            <>
+              <div className={styles.burgerDivider} />
+              <button
+                className={styles.burgerItem}
+                onClick={() => { setShowLogSelection(true); setIsOpen(false); }}
+              >
+                Select logs…
+              </button>
+            </>
+          )}
           <div className={styles.burgerDivider} />
           <button
             className={styles.burgerItem}
@@ -122,6 +136,7 @@ export function BurgerMenu() {
           </div>
         </div>
       )}
+      {showLogSelection && <LogSelectionDialog onClose={() => setShowLogSelection(false)} />}
     </div>
   );
 }

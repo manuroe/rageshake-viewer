@@ -24,6 +24,8 @@ import { formatBytes } from '../utils/sizeUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { buildAttemptSegments, buildRetryTooltip, computeHasSegments } from '../utils/requestBarUtils';
 import { INCOMPLETE_STATUS_KEY } from '../utils/statusCodeUtils';
+import { buildProcessColorMap, processOf } from '../utils/processColors';
+import { ProcessLegend } from './ProcessLegend';
 import type { HttpRequest } from '../types/log.types';
 import { RowTimeAction } from './RowTimeAction';
 import styles from './RequestTable.module.css';
@@ -147,7 +149,12 @@ export function RequestTable({
     closeLogViewer,
     setActiveRequest,
     logFilter,
+    loadedEntryNames,
   } = useLogStore();
+  // Colour request rows by originating process when several are merged
+  // (e.g. console + nse); a single process needs no differentiation.
+  const processColorMap = useMemo(() => buildProcessColorMap(loadedEntryNames), [loadedEntryNames]);
+  const showProcessColors = processColorMap.size > 1;
   const navigate = useNavigate();
   const { setLogFilter, setScale, hasExplicitScale } = useURLParams();
 
@@ -580,6 +587,8 @@ export function RequestTable({
         </div>
       </div>
 
+      {showProcessColors && <ProcessLegend colorMap={processColorMap} />}
+
       <div
         className={`${styles.timelineContainer}${(waterfallFocus && focusModeColumnIds) ? ` ${styles.waterfallFocusMode}` : ''}`}
         // eslint-disable-next-line @typescript-eslint/naming-convention -- CSS custom property name
@@ -649,6 +658,8 @@ export function RequestTable({
                     {virtualRows.map((vRow) => {
                       const req = displayedRequests[vRow.index];
                       const rowKey = getRowKey(req);
+                      const sourceFile = lineNumberIndex.get(req.sendLineNumber)?.sourceFile;
+                      const processColor = showProcessColors && sourceFile ? processColorMap.get(processOf(sourceFile)) : undefined;
                       return (
                       <div
                         key={`sticky-${rowKey}`}
@@ -663,7 +674,13 @@ export function RequestTable({
                         onMouseLeave={() => handleRowMouseLeave(rowKey)}
                         onClick={() => handleWaterfallRowClick(req)}
                       >
-                        <div className={styles.requestRowSticky}>
+                        {/* Stripe lives on the sticky row (above its own opaque
+                            background) so it shows on every row, not just the
+                            translucent selected one. */}
+                        <div
+                          className={styles.requestRowSticky}
+                          style={processColor ? { boxShadow: `inset 3px 0 0 0 ${processColor}` } : undefined}
+                        >
                           {/* Leading actions column */}
                           <RowTimeAction
                             timestampUs={lineNumberIndex.get(req.sendLineNumber)?.timestampUs}
