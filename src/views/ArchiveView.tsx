@@ -24,12 +24,11 @@ import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { decompressSync } from 'fflate';
 import { useArchiveStore } from '../stores/archiveStore';
-import { useLogStore } from '../stores/logStore';
 import { isAnalyzableEntry, computeArchiveSummary, type ArchiveSummary } from '../utils/archiveSummary';
 import { parseDetailsJson } from '../utils/detailsJson';
 import { decodeTextBytes } from '../utils/fileValidator';
-import { parseLogFile } from '../utils/logParser';
 import { getEntryKind, getMimeType, sortEntries, stripEntryPrefix } from '../utils/listingEntries';
+import { openMergedEntries } from '../utils/openMergedLogs';
 import { isValidPublicHomeserver, mxcToThumbnailUrl, userInitial } from '../utils/matrixProfile';
 import { formatBytes } from '../utils/sizeUtils';
 import { isNumericStatus } from '../utils/statusCodeUtils';
@@ -91,9 +90,10 @@ function DataCell({
 
 export function ArchiveView() {
   const navigate = useNavigate();
-  const { archiveName, archiveEntries, archiveSummaries, setArchiveSummary, visitedEntries, markVisited } = useArchiveStore();
-  const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
-  const setLogFileName = useLogStore((state) => state.setLogFileName);
+  const { archiveName, archiveEntries, archiveSummaries, setArchiveSummary, visitedEntries } = useArchiveStore();
+
+  /** Entry names ticked for opening together as one merged timeline. */
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   /** Set to true on unmount to stop the background summary loop. */
   const cancelRef = useRef(false);
@@ -245,6 +245,16 @@ export function ArchiveView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedEntries, setArchiveSummary]);
 
+  const openEntries = useCallback(
+    (entryNames: readonly string[]) => {
+      void (async () => {
+        const route = await openMergedEntries(entryNames);
+        if (route) void navigate(route);
+      })();
+    },
+    [navigate]
+  );
+
   const handleOpen = useCallback(
     (entryName: string) => {
       const entry = archiveEntries.find((e) => e.name === entryName);
@@ -284,20 +294,9 @@ export function ArchiveView() {
       }
 
       // Log files: parse and navigate to the appropriate view
-      try {
-        const isGz = entry.name.toLowerCase().endsWith('.gz');
-        const bytes = isGz ? decompressSync(entry.data) : entry.data;
-        const text = decodeTextBytes(bytes);
-        const result = parseLogFile(text);
-        loadLogParserResult(result);
-        setLogFileName(stripEntryPrefix(entryName));
-        markVisited(entryName);
-        void navigate(kind === 'dated-log' ? '/summary' : '/logs');
-      } catch (err) {
-        console.error('Failed to open archive entry:', err);
-      }
+      openEntries([entryName]);
     },
-    [archiveEntries, loadLogParserResult, setLogFileName, markVisited, navigate]
+    [archiveEntries, openEntries]
   );
 
   const handleOpenRaw = useCallback(
@@ -323,6 +322,28 @@ export function ArchiveView() {
     [archiveEntries]
   );
 
+  // Log entries that can be ticked for opening together.
+  const selectableNames = useMemo(
+    () => sortedEntries.filter((e) => isAnalyzableEntry(e.name)).map((e) => e.name),
+    [sortedEntries]
+  );
+  const allSelected = selectableNames.length > 0 && selectableNames.every((n) => selected.has(n));
+
+  const toggleSelected = useCallback((name: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) =>
+      prev.size > 0 && selectableNames.every((n) => prev.has(n)) ? new Set() : new Set(selectableNames)
+    );
+  }, [selectableNames]);
+
   // Don't render until redirect effect has had a chance to fire
   if (archiveEntries.length === 0) {
     return null;
@@ -336,6 +357,16 @@ export function ArchiveView() {
           <h1 className="header-title">{archiveName}</h1>
         </div>
         <div className="header-right">
+          {selected.size > 0 && (
+            <>
+              <button className={styles.openSelectedButton} onClick={() => openEntries([...selected])}>
+                Open {selected.size} files together
+              </button>
+              <button className={styles.clearSelectedButton} onClick={() => setSelected(new Set())}>
+                Clear
+              </button>
+            </>
+          )}
           <span className={styles.entryCount}>{archiveEntries.length} files</span>
         </div>
       </div>
@@ -346,6 +377,15 @@ export function ArchiveView() {
         <table className={tableStyles.table}>
           <thead className={tableStyles.tableHead}>
             <tr>
+              <th className={tableStyles.tableHeadCell}>
+                <input
+                  type="checkbox"
+                  className={styles.selectCheckbox}
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all log files"
+                />
+              </th>
               <th className={tableStyles.tableHeadCell}>File</th>
               <th className={`${tableStyles.tableHeadCell} ${tableStyles.alignRight}`}>Lines</th>
               <th className={`${tableStyles.tableHeadCell} ${tableStyles.alignRight}`}>Sentry</th>
@@ -365,6 +405,17 @@ export function ArchiveView() {
               const kind = getEntryKind(entry.name);
               return (
                 <tr key={entry.name} className={tableStyles.tableRowHover}>
+                  <td className={tableStyles.tableCell}>
+                    {analyzable && (
+                      <input
+                        type="checkbox"
+                        className={styles.selectCheckbox}
+                        checked={selected.has(entry.name)}
+                        onChange={() => toggleSelected(entry.name)}
+                        aria-label={`Select ${displayName}`}
+                      />
+                    )}
+                  </td>
                   <td className={tableStyles.tableCell}>
                     <button
                       className={`${styles.fileLink} ${(kind !== 'other' && visitedEntries.has(entry.name)) ? styles.fileLinkVisited : ''} ${kind === 'other' ? styles.fileLinkOther : ''}`}

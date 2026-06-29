@@ -300,7 +300,7 @@ export function SummaryView() {
           
           {/* Activity Chart */}
           <div className={styles.activityChartContainer}>
-            <LogActivityChart 
+            <LogActivityChart
               logLines={stats.filteredLogLines}
               sentryEvents={stats.sentryEvents}
               onTimeRangeSelected={handleTimeRangeSelected}
