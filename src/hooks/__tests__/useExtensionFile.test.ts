@@ -15,16 +15,14 @@ const {
   mockIsValidGzipHeader,
   mockDecodeTextBytes,
   mockParseLogFile,
-  mockLoadLogParserResult,
-  mockSetLogFileName,
+  mockLoadMergedLogParserResults,
   mockNavigate,
 } = vi.hoisted(() => ({
   mockGunzipSync: vi.fn(),
   mockIsValidGzipHeader: vi.fn(),
   mockDecodeTextBytes: vi.fn(),
   mockParseLogFile: vi.fn(),
-  mockLoadLogParserResult: vi.fn(),
-  mockSetLogFileName: vi.fn(),
+  mockLoadMergedLogParserResults: vi.fn(),
   mockNavigate: vi.fn(),
 }));
 
@@ -36,9 +34,8 @@ vi.mock('../../utils/fileValidator', () => ({
 vi.mock('../../utils/logParser', () => ({ parseLogFile: mockParseLogFile }));
 vi.mock('../../stores/logStore', () => ({
   useLogStore: Object.assign(
-    (selector: (state: { loadLogParserResult: typeof mockLoadLogParserResult; setLogFileName: typeof mockSetLogFileName }) => unknown) =>
-      selector({ loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }),
-    { getState: () => ({ clearData: vi.fn(), loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }) }
+    vi.fn(),
+    { getState: () => ({ clearData: vi.fn(), loadMergedLogParserResults: mockLoadMergedLogParserResults }) }
   ),
 }));
 vi.mock('react-router-dom', () => ({
@@ -91,7 +88,7 @@ describe('useExtensionFile', () => {
     // No ?extensionFileUrl in URL, chrome not defined
     renderHook(() => useExtensionFile());
     await Promise.resolve(); // flush microtasks
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
@@ -100,7 +97,7 @@ describe('useExtensionFile', () => {
     // chrome is deliberately absent from globalThis (cleared in afterEach)
     renderHook(() => useExtensionFile());
     await Promise.resolve();
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
   });
 
   it('is a no-op when chrome.runtime.sendMessage is undefined', async () => {
@@ -109,7 +106,7 @@ describe('useExtensionFile', () => {
     globalThis.chrome = {};
     renderHook(() => useExtensionFile());
     await Promise.resolve();
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
   });
 
   it('derives fileName using split fallback when URL constructor throws', async () => {
@@ -129,7 +126,7 @@ describe('useExtensionFile', () => {
     expect(mockSendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'fetchForViewer' })
     );
-    expect(mockLoadLogParserResult).toHaveBeenCalledTimes(1);
+    expect(mockLoadMergedLogParserResults).toHaveBeenCalledTimes(1);
   });
 
   it('is a no-op when fetchForViewer returns ok: false', async () => {
@@ -139,7 +136,7 @@ describe('useExtensionFile', () => {
     );
     renderHook(() => useExtensionFile());
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
   });
 
   it('navigates back to "/" when fetchForViewer returns ok: true but no base64', async () => {
@@ -151,7 +148,7 @@ describe('useExtensionFile', () => {
     );
     renderHook(() => useExtensionFile());
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/' }),
       { replace: true }
@@ -177,7 +174,7 @@ describe('useExtensionFile', () => {
     expect(mockGunzipSync).toHaveBeenCalledTimes(1);
     expect(mockDecodeTextBytes).toHaveBeenCalledTimes(1);
     expect(mockParseLogFile).toHaveBeenCalledTimes(1);
-    expect(mockLoadLogParserResult).toHaveBeenCalledTimes(1);
+    expect(mockLoadMergedLogParserResults).toHaveBeenCalledTimes(1);
 
     // gunzipSync was called with the decoded bytes
     expect(mockGunzipSync).toHaveBeenCalledWith(expect.any(Uint8Array));
@@ -185,9 +182,10 @@ describe('useExtensionFile', () => {
     expect(mockDecodeTextBytes).toHaveBeenCalledWith(expect.any(Uint8Array));
     // parseLogFile was called with the decoded text
     expect(mockParseLogFile).toHaveBeenCalledWith('log text');
-    // loadLogParserResult was called with the parsed result
-    expect(mockLoadLogParserResult).toHaveBeenCalledWith({ logs: [], requests: [] });
-    expect(mockSetLogFileName).toHaveBeenCalledWith(TEST_FILE_NAME);
+    // loadMergedLogParserResults was called with the parsed result wrapped in a named entry
+    expect(mockLoadMergedLogParserResults).toHaveBeenCalledWith([
+      { name: TEST_FILE_NAME, result: { logs: [], requests: [] } },
+    ]);
     // navigate was called to remove the params and go to /summary
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/summary' }),
@@ -214,7 +212,7 @@ describe('useExtensionFile', () => {
     expect(mockSendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'fetchForViewer', fileName: TEST_FILE_NAME })
     );
-    expect(mockLoadLogParserResult).toHaveBeenCalledTimes(1);
+    expect(mockLoadMergedLogParserResults).toHaveBeenCalledTimes(1);
   });
 
   it('skips gunzip and decodes directly when bytes are plain text (server already decompressed)', async () => {
@@ -236,7 +234,7 @@ describe('useExtensionFile', () => {
     // decodeTextBytes called with the raw decoded bytes
     expect(mockDecodeTextBytes).toHaveBeenCalledTimes(1);
     expect(mockParseLogFile).toHaveBeenCalledTimes(1);
-    expect(mockLoadLogParserResult).toHaveBeenCalledTimes(1);
+    expect(mockLoadMergedLogParserResults).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/summary' }),
       { replace: true }
@@ -252,7 +250,7 @@ describe('useExtensionFile', () => {
     // Should not throw
     renderHook(() => useExtensionFile());
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/' }),
       { replace: true }
@@ -272,7 +270,7 @@ describe('useExtensionFile', () => {
 
     renderHook(() => useExtensionFile());
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/' }),
       { replace: true }
@@ -299,7 +297,7 @@ describe('useExtensionFile', () => {
     await new Promise((r) => setTimeout(r, 0));
 
     // cancelled was true, so nothing should have been called
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
@@ -324,7 +322,7 @@ describe('useExtensionFile', () => {
     await new Promise((r) => setTimeout(r, 0));
 
     // cancelled was true when catch fired, so navigate should NOT have been called
-    expect(mockLoadLogParserResult).not.toHaveBeenCalled();
+    expect(mockLoadMergedLogParserResults).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

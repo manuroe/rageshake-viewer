@@ -6,6 +6,14 @@ import { useLogStore } from '../../stores/logStore';
 import { KeyboardShortcutContext } from '../KeyboardShortcutContext';
 import type { KeyboardShortcutContextValue } from '../KeyboardShortcutContext';
 
+vi.mock('../LogSelectionDialog', () => ({
+  LogSelectionDialog: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="log-selection-dialog">
+      <button onClick={onClose}>close-mock</button>
+    </div>
+  ),
+}));
+
 // Bypass zustand persist middleware to avoid localStorage issues in tests
 vi.mock('zustand/middleware', async (importOriginal) => {
   const original = await importOriginal<typeof import('zustand/middleware')>();
@@ -320,6 +328,36 @@ describe('BurgerMenu', () => {
       fireEvent.click(screen.getByText('Keyboard Shortcuts'));
       expect(toggleHelp).toHaveBeenCalledTimes(1);
       expect(screen.queryByText('Keyboard Shortcuts')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Select logs', () => {
+    it('opens and closes the log selection dialog', () => {
+      useLogStore.setState({ loadedEntryNames: ['logs.2026-04-14-08.log.gz'] });
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByText(/select logs/i));
+
+      expect(screen.getByTestId('log-selection-dialog')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('close-mock'));
+      expect(screen.queryByTestId('log-selection-dialog')).not.toBeInTheDocument();
+    });
+
+    it('hides "Select logs" when no log is loaded', () => {
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      expect(screen.queryByText(/select logs/i)).not.toBeInTheDocument();
     });
   });
 });

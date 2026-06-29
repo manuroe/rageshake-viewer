@@ -556,7 +556,7 @@ describe('ArchiveView', () => {
         fireEvent.click(screen.getByRole('button', { name: /open logs\.2026/i }));
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to open archive entry:', expect.any(Error));
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to open log entry:', expect.any(String), expect.any(Error));
       consoleSpy.mockRestore();
     });
 
@@ -609,6 +609,55 @@ describe('ArchiveView', () => {
 
       // PNG opens as a blob URL via handleOpen 'other' path
       expect(URL.createObjectURL).toHaveBeenCalled();
+    });
+  });
+
+  describe('multi-select open', () => {
+    const entries = [
+      makeEntry('dir/logs.2026-04-14-08.log.gz'),
+      makeEntry('dir/logs.2026-04-14-09.log.gz'),
+      makeEntry('dir/details.json', '{}'),
+    ];
+
+    it('shows the action bar only after a file is ticked', () => {
+      useArchiveStore.getState().loadArchive('test.tar.gz', entries);
+      renderArchiveView();
+
+      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /select logs\.2026-04-14-08/i }));
+
+      expect(screen.getByRole('button', { name: /open 1 files together/i })).toBeInTheDocument();
+    });
+
+    it('opens the ticked files merged and navigates to the summary', async () => {
+      useArchiveStore.getState().loadArchive('test.tar.gz', entries);
+      renderArchiveView();
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /select logs\.2026-04-14-08/i }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /select logs\.2026-04-14-09/i }));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /open 2 files together/i }));
+      });
+
+      expect(useLogStore.getState().loadedEntryNames).toEqual([
+        'dir/logs.2026-04-14-08.log.gz',
+        'dir/logs.2026-04-14-09.log.gz',
+      ]);
+      expect(mockNavigate).toHaveBeenCalledWith('/summary');
+    });
+
+    it('select-all ticks every analyzable entry; Clear unticks them', () => {
+      useArchiveStore.getState().loadArchive('test.tar.gz', entries);
+      renderArchiveView();
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /select all log files/i }));
+      // 2 log files selected (details.json excluded)
+      expect(screen.getByRole('button', { name: /open 2 files together/i })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^clear$/i }));
+      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
     });
   });
 });

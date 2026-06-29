@@ -1,0 +1,112 @@
+import { describe, it, expect } from 'vitest';
+import { mergeLogParserResults, type NamedLogParserResult } from '../mergeLogParserResults';
+import type { LogParserResult, ParsedLogLine, HttpRequest } from '../../types/log.types';
+
+function line(n: number): ParsedLogLine {
+  return {
+    lineNumber: n,
+    rawText: `line ${n}`,
+    isoTimestamp: '2026-04-14T08:00:00.000000Z' as ParsedLogLine['isoTimestamp'],
+    timestampUs: 0 as ParsedLogLine['timestampUs'],
+    displayTime: '08:00:00',
+    level: 'INFO',
+    message: `line ${n}`,
+    strippedMessage: `line ${n}`,
+  };
+}
+
+function http(send: number, resp: number): HttpRequest {
+  return {
+    requestId: `r${send}`, method: 'GET', uri: '/x', status: '200',
+    requestSizeString: '', responseSizeString: '', requestSize: 0, responseSize: 0,
+    requestDurationMs: 0, sendLineNumber: send, responseLineNumber: resp,
+  };
+}
+
+function file(name: string, lines: number, reqs: HttpRequest[], connIds: string[]): NamedLogParserResult {
+  const result: LogParserResult = {
+    requests: [], httpRequests: reqs, connectionIds: connIds,
+    rawLogLines: Array.from({ length: lines }, (_, i) => line(i + 1)),
+    sentryEvents: [{ platform: 'android', lineNumber: 2, message: 'boom' }],
+  };
+  return { name, result };
+}
+
+describe('mergeLogParserResults', () => {
+  it('rebases line numbers and keeps request refs consistent', () => {
+    const merged = mergeLogParserResults([
+      file('08.log', 3, [http(1, 2)], ['room-list']),
+      file('09.log', 2, [http(1, 2)], ['sliding']),
+    ]);
+
+    // 3 + 2 lines, globally unique and contiguous
+    expect(merged.rawLogLines.map((l) => l.lineNumber)).toEqual([1, 2, 3, 4, 5]);
+    // second file's request refs shifted by 3
+    expect(merged.httpRequests.map((r) => [r.sendLineNumber, r.responseLineNumber])).toEqual([[1, 2], [4, 5]]);
+    // sentry line of second file shifted by 3
+    expect(merged.sentryEvents.map((e) => e.lineNumber)).toEqual([2, 5]);
+    // connection ids unioned
+    expect(merged.connectionIds.sort()).toEqual(['room-list', 'sliding']);
+    // provenance tagged
+    expect(merged.rawLogLines[0].sourceFile).toBe('08.log');
+    expect(merged.rawLogLines[4].sourceFile).toBe('09.log');
+  });
+
+  it('tags the single-file case and leaves numbers untouched', () => {
+    const merged = mergeLogParserResults([file('only.log', 2, [http(1, 2)], [])]);
+    expect(merged.rawLogLines.map((l) => l.lineNumber)).toEqual([1, 2]);
+    expect(merged.rawLogLines.every((l) => l.sourceFile === 'only.log')).toBe(true);
+  });
+
+  it('returns an empty result for an empty file list', () => {
+    const merged = mergeLogParserResults([]);
+    expect(merged.rawLogLines).toEqual([]);
+    expect(merged.httpRequests).toEqual([]);
+    expect(merged.connectionIds).toEqual([]);
+  });
+
+  it('interleaves lines from different processes by timestamp', () => {
+    const at = (n: number, ts: number): ParsedLogLine => ({
+      ...line(n),
+      timestampUs: ts as ParsedLogLine['timestampUs'],
+    });
+    // Two processes covering the same hour; console at 100/300µs, nse at 200/400µs.
+    const consoleResult: LogParserResult = {
+      requests: [], httpRequests: [http(1, 2)], connectionIds: [],
+      rawLogLines: [at(1, 100), at(2, 300)], sentryEvents: [],
+    };
+    const nseResult: LogParserResult = {
+      requests: [], httpRequests: [http(1, 2)], connectionIds: [],
+      rawLogLines: [at(1, 200), at(2, 400)], sentryEvents: [],
+    };
+
+    const merged = mergeLogParserResults([
+      { name: 'console.2026-04-14-08.log.gz', result: consoleResult },
+      { name: 'nse.2026-04-14-08.log.gz', result: nseResult },
+    ]);
+
+    // Lines interleaved by time, not grouped by file.
+    expect(merged.rawLogLines.map((l) => l.timestampUs)).toEqual([100, 200, 300, 400]);
+    expect(merged.rawLogLines.map((l) => l.sourceFile)).toEqual([
+      'console.2026-04-14-08.log.gz',
+      'nse.2026-04-14-08.log.gz',
+      'console.2026-04-14-08.log.gz',
+      'nse.2026-04-14-08.log.gz',
+    ]);
+    // Requests sorted by send time: console send (line 1, 100µs) before nse send (line 3, 200µs).
+    expect(merged.httpRequests.map((r) => r.sendLineNumber)).toEqual([1, 3]);
+  });
+
+  it('leaves a 0 line reference (incomplete request) un-offset', () => {
+    // sendLineNumber/responseLineNumber of 0 means "no line" — must stay 0, not
+    // become the file offset, or it would point at an unrelated line.
+    const merged = mergeLogParserResults([
+      file('08.log', 3, [http(1, 0)], []),
+      file('09.log', 2, [http(0, 2)], []),
+    ]);
+    expect(merged.httpRequests.map((r) => [r.sendLineNumber, r.responseLineNumber])).toEqual([
+      [1, 0],
+      [0, 5],
+    ]);
+  });
+});

@@ -1826,3 +1826,35 @@ describe('LogDisplayView anonymize button', () => {
   });
 });
 
+describe('LogDisplayView process colours (merged multi-process logs)', () => {
+  it('shows a process legend and tints lines when several processes are merged', () => {
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({ lineNumber: 1, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        createParsedLogLine({ lineNumber: 2, sourceFile: 'nse.2026-04-14-08.log.gz' }),
+      ],
+      loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'],
+    });
+
+    render(<LogDisplayView />);
+
+    const legend = screen.getByLabelText('Process colour legend');
+    expect(legend).toHaveTextContent('console');
+    expect(legend).toHaveTextContent('nse');
+    // Each line carries the inline process-colour stripe.
+    expect(getLineContainer(1).style.boxShadow).toContain('inset');
+  });
+
+  it('shows no legend or stripe for a single process', () => {
+    useLogStore.setState({
+      rawLogLines: [createParsedLogLine({ lineNumber: 1, sourceFile: 'console.2026-04-14-08.log.gz' })],
+      loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+    });
+
+    render(<LogDisplayView />);
+
+    expect(screen.queryByLabelText('Process colour legend')).not.toBeInTheDocument();
+    expect(getLineContainer(1).style.boxShadow).toBe('');
+  });
+});
+
