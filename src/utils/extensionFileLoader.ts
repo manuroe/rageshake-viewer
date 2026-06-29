@@ -70,8 +70,6 @@ export async function loadFromExtensionUrl(
   const text = decodeTextBytes(decoded);
   const result = parseLogFile(text);
   if (options.isCancelled?.()) return null;
-  const store = useLogStore.getState();
-  store.loadLogParserResult(result);
-  store.setLogFileName(fileName);
+  useLogStore.getState().loadMergedLogParserResults([{ name: fileName, result }]);
   return kind === 'dated-log' ? '/summary' : '/logs';
 }
