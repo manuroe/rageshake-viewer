@@ -330,20 +330,32 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const handleOpenInNewTab = useCallback(() => {
     if (displayItems.length === 0) return;
 
-    const firstUs = displayItems[0].data.line.timestampUs;
-    const lastUs = displayItems[displayItems.length - 1].data.line.timestampUs;
-    // Fallback to line numbers for zero-timestamp orphan lines: a `firstUs === 0`
-    // guard would otherwise pass every non-negative timestamp in rawLogLines,
-    // pulling the entire log into the crop instead of just the visible window.
+    // Bound the crop by the first/last *positive* visible timestamps. Using the
+    // raw first/last items would break when an endpoint is a zero-timestamp
+    // orphan line: a 0 bound either passes the whole log (firstUs === 0) or
+    // excludes every timestamped line (lastUs === 0). Line numbers bound the
+    // orphan lines (and the whole crop when nothing visible is timestamped).
+    let firstUs = 0;
+    let lastUs = 0;
+    for (const item of displayItems) {
+      const ts = item.data.line.timestampUs;
+      if (ts > 0) {
+        if (firstUs === 0) firstUs = ts;
+        lastUs = ts;
+      }
+    }
+    const hasTimeBounds = firstUs > 0;
     const firstLineNum = displayItems[0].data.line.lineNumber;
     const lastLineNum = displayItems[displayItems.length - 1].data.line.lineNumber;
+    const inLineRange = (line: ParsedLogLine) =>
+      line.lineNumber >= firstLineNum && line.lineNumber <= lastLineNum;
 
     const croppedParts: string[] = [];
     for (const line of rawLogLines) {
       const ts = line.timestampUs;
-      const inRange = ts > 0
+      const inRange = hasTimeBounds && ts > 0
         ? ts >= firstUs && ts <= lastUs
-        : line.lineNumber >= firstLineNum && line.lineNumber <= lastLineNum;
+        : inLineRange(line);
       if (inRange) croppedParts.push(line.rawText);
     }
     const croppedText = croppedParts.join('\n');
