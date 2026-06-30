@@ -64,5 +64,8 @@ export async function openMergedEntries(names: readonly string[]): Promise<'/sum
   }
   if (files.length === 0) return null;
   useLogStore.getState().loadMergedLogParserResults(files);
-  return getEntryKind(ordered[0]) === 'dated-log' ? '/summary' : '/logs';
+  // Choose the route from the first file that actually loaded (files preserves
+  // chronological order), not ordered[0] — the earliest requested name may have
+  // failed to resolve/parse, leaving a later file as the first loaded one.
+  return getEntryKind(files[0].name) === 'dated-log' ? '/summary' : '/logs';
 }
