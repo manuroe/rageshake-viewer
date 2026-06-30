@@ -19,7 +19,12 @@ import type { NamedLogParserResult } from './mergeLogParserResults';
 
 /** Order entries oldest → newest so the merged timeline reads chronologically. */
 export function orderChronologically(names: readonly string[]): string[] {
-  return [...names].sort((a, b) => (extractDateKey(a) ?? a).localeCompare(extractDateKey(b) ?? b));
+  // Tie-break on the full name so same-hour entries from different processes
+  // (e.g. console.*-08 and nse.*-08) keep a deterministic order regardless of
+  // the caller's input order (often Set insertion order).
+  return [...names].sort(
+    (a, b) => (extractDateKey(a) ?? a).localeCompare(extractDateKey(b) ?? b) || a.localeCompare(b),
+  );
 }
 
 /** Parse a single entry from whichever source holds it, marking it visited. */
@@ -28,8 +33,11 @@ async function parseNamedEntry(name: string): Promise<NamedLogParserResult | nul
   const archiveEntry = archiveStore.archiveEntries.find((e) => e.name === name);
   if (archiveEntry) {
     const bytes = name.toLowerCase().endsWith('.gz') ? decompressSync(archiveEntry.data) : archiveEntry.data;
+    // Mark visited only after a successful parse, so a decode/parse failure
+    // doesn't record an entry that never actually opened.
+    const result = parseLogFile(decodeTextBytes(bytes));
     archiveStore.markVisited(name);
-    return { name, result: parseLogFile(decodeTextBytes(bytes)) };
+    return { name, result };
   }
 
   // ponytail: re-fetches even already-loaded listing files on each "add"; fine
@@ -40,8 +48,9 @@ async function parseNamedEntry(name: string): Promise<NamedLogParserResult | nul
     const bytes = await fetchExtensionFileBytes(listingEntry.url, name);
     if (!bytes) return null;
     const decoded = isValidGzipHeader(bytes) ? decompressSync(bytes) : bytes;
+    const result = parseLogFile(decodeTextBytes(decoded));
     listingStore.markVisited(name);
-    return { name, result: parseLogFile(decodeTextBytes(decoded)) };
+    return { name, result };
   }
   return null;
 }

@@ -357,10 +357,12 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
               );
             })}
 
-            {/* Invisible overlay for mouse events - must be after bars to be on top */}
+            {/* Invisible overlay for mouse events - must be after bars to be on top.
+                Covers only the bars area (not the lanes below) so each lane segment
+                keeps its own hover title; the crosshair lines still draw to axisTop. */}
             <rect
               width={xMax}
-              height={axisTop}
+              height={yMax}
               fill="transparent"
               onMouseDown={handlers.handleMouseDown}
               onMouseUp={handlers.handleMouseUp}

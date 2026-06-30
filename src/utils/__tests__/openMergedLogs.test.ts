@@ -5,13 +5,11 @@ import { useListingStore } from '../../stores/listingStore';
 import { useLogStore } from '../../stores/logStore';
 import type { LogParserResult } from '../../types/log.types';
 
-const { mockFetchExtensionFileBytes } = vi.hoisted(() => ({ mockFetchExtensionFileBytes: vi.fn() }));
-vi.mock('../extensionFileLoader', () => ({ fetchExtensionFileBytes: mockFetchExtensionFileBytes }));
-
-// parseLogFile is heavy and content-sensitive; stub it so the test exercises the
-// dispatch/merge/visited glue, not the parser.
-vi.mock('../logParser', () => ({
-  parseLogFile: (): LogParserResult => ({
+const { mockFetchExtensionFileBytes, mockParseLogFile } = vi.hoisted(() => ({
+  mockFetchExtensionFileBytes: vi.fn(),
+  // parseLogFile is heavy and content-sensitive; stub it so the tests exercise the
+  // dispatch/merge/visited glue, not the parser. A vi.fn lets a test force a throw.
+  mockParseLogFile: vi.fn((): LogParserResult => ({
     requests: [], httpRequests: [], connectionIds: [],
     rawLogLines: [
       {
@@ -20,8 +18,10 @@ vi.mock('../logParser', () => ({
       },
     ],
     sentryEvents: [],
-  }) as LogParserResult,
+  }) as LogParserResult),
 }));
+vi.mock('../extensionFileLoader', () => ({ fetchExtensionFileBytes: mockFetchExtensionFileBytes }));
+vi.mock('../logParser', () => ({ parseLogFile: mockParseLogFile }));
 
 describe('orderChronologically', () => {
   it('sorts by embedded date oldest-first', () => {
@@ -33,6 +33,16 @@ describe('orderChronologically', () => {
   it('falls back to the name when an entry has no embedded date', () => {
     // Undated names have no date key, so they sort by name (the `?? name` fallback).
     expect(orderChronologically(['zeta.log', 'alpha.log'])).toEqual(['alpha.log', 'zeta.log']);
+  });
+
+  it('breaks same-hour ties deterministically by full name', () => {
+    // Same date key (…-08) → ordered by name regardless of input order.
+    expect(
+      orderChronologically(['nse.2026-04-14-08.log.gz', 'console.2026-04-14-08.log.gz'])
+    ).toEqual(['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz']);
+    expect(
+      orderChronologically(['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'])
+    ).toEqual(['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz']);
   });
 });
 
@@ -59,6 +69,19 @@ describe('openMergedEntries (archive source)', () => {
     ]);
     expect(useArchiveStore.getState().visitedEntries.has('logs.2026-04-14-08.log')).toBe(true);
     expect(useArchiveStore.getState().visitedEntries.has('logs.2026-04-14-09.log')).toBe(true);
+  });
+
+  it('does not mark an entry visited when parsing fails', async () => {
+    // Unique archive + entry name so persisted visit history from other tests
+    // can't pre-populate visitedEntries.
+    const data = new TextEncoder().encode('raw log text');
+    useArchiveStore.getState().loadArchive('parse-fail.tar.gz', [{ name: 'fails.2026-04-14-08.log', data }]);
+    mockParseLogFile.mockImplementationOnce(() => { throw new Error('parse failure'); });
+
+    const route = await openMergedEntries(['fails.2026-04-14-08.log']);
+
+    expect(route).toBeNull();
+    expect(useArchiveStore.getState().visitedEntries.has('fails.2026-04-14-08.log')).toBe(false);
   });
 
   it('returns null when no name resolves to a known source', async () => {
