@@ -200,8 +200,11 @@ export interface ParsedLogLine {
   /** Source file path extracted from log (e.g., "ClientProxy.swift" or "crates/matrix-sdk/src/http_client/native.rs") */
   readonly filePath?: string;
   /**
-   * Name of the rotated log file this line was loaded from, set only when
-   * several files are merged into one view. Absent for single-file loads.
+   * Name of the log file this line was loaded from. Set by
+   * `mergeLogParserResults` for every line it returns — including the
+   * single-file case — so any log opened through `loadMergedLogParserResults`
+   * carries it. Absent only on raw parser output that bypasses the merge path
+   * (e.g. a direct `loadLogParserResult(result)` with no source name).
    */
   readonly sourceFile?: string;
   /** Source file line number extracted from log */

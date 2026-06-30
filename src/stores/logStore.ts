@@ -704,7 +704,9 @@ export const useLogStore = create<LogStore>((set, get) => ({
         anonymizingProgress: 0,
         error: null,
         loadedEntryNames: overrides?.loadedEntryNames ?? [],
-        ...(overrides?.logFileName !== undefined && { logFileName: overrides.logFileName }),
+        // Always reset (like loadedEntryNames) so a new load never shows the
+        // previous file's name when the source name is unknown.
+        logFileName: overrides?.logFileName ?? null,
       });
       get().filterRequests();
       get().filterHttpRequests();
