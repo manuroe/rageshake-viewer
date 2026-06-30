@@ -125,7 +125,8 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
   const lanes = useMemo<ActivityLane[] | undefined>(() => {
     if (processColorMap.size <= 1 || logLines.length === 0) return undefined;
     const { min, max } = getMinMaxTimestamps(logLines);
-    if (min === 0 && max === 0) return undefined;
+    // getMinMaxTimestamps returns 0/0 only when no line has a positive timestamp.
+    if (max === 0) return undefined;
     const range = max - min;
     const bucketSize = range > 0 ? Math.max(MICROS_PER_SECOND, Math.ceil(range / 100)) : MICROS_PER_SECOND;
 
@@ -150,7 +151,7 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
       const buckets = countsByProcess.get(proc);
       const segments: ActivityLaneSegment[] = [];
       if (buckets) {
-        const keys = [...buckets.keys()].sort((a, b) => a - b);
+        const entries = [...buckets.entries()].sort((a, b) => a[0] - b[0]);
         let runStart: number | null = null;
         let runEnd = 0;
         let runCount = 0;
@@ -162,15 +163,15 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
             title: `${proc} · ${formatTime(runStart)}–${formatTime(runEnd)} · ${runCount} lines`,
           });
         };
-        for (const key of keys) {
+        for (const [key, count] of entries) {
           if (runStart !== null && key === runEnd) {
             runEnd = key + bucketSize;
-            runCount += buckets.get(key) ?? 0;
+            runCount += count;
           } else {
             flush();
             runStart = key;
             runEnd = key + bucketSize;
-            runCount = buckets.get(key) ?? 0;
+            runCount = count;
           }
         }
         flush();
