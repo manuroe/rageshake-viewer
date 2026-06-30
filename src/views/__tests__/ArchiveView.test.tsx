@@ -623,11 +623,11 @@ describe('ArchiveView', () => {
       useArchiveStore.getState().loadArchive('test.tar.gz', entries);
       renderArchiveView();
 
-      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('checkbox', { name: /select logs\.2026-04-14-08/i }));
 
-      expect(screen.getByRole('button', { name: /open 1 files together/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open 1 file together/i })).toBeInTheDocument();
     });
 
     it('opens the ticked files merged and navigates to the summary', async () => {
@@ -657,7 +657,7 @@ describe('ArchiveView', () => {
       expect(screen.getByRole('button', { name: /open 2 files together/i })).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /^clear$/i }));
-      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
     });
 
     it('unticking a ticked file removes it from the selection', () => {
@@ -666,9 +666,9 @@ describe('ArchiveView', () => {
 
       const cb = screen.getByRole('checkbox', { name: /select logs\.2026-04-14-08/i });
       fireEvent.click(cb); // tick
-      expect(screen.getByRole('button', { name: /open 1 files together/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open 1 file together/i })).toBeInTheDocument();
       fireEvent.click(cb); // untick
-      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
     });
 
     it('clicking select-all when all are ticked clears the selection', () => {
@@ -679,7 +679,7 @@ describe('ArchiveView', () => {
       fireEvent.click(selectAll); // all ticked
       expect(screen.getByRole('button', { name: /open 2 files together/i })).toBeInTheDocument();
       fireEvent.click(selectAll); // toggle off → cleared
-      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
     });
   });
 });

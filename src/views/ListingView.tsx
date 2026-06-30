@@ -433,7 +433,7 @@ export function ListingView() {
           {selected.size > 0 && (
             <>
               <button className={styles.openSelectedButton} onClick={openSelected}>
-                Open {selected.size} files together
+                Open {selected.size} {selected.size === 1 ? 'file' : 'files'} together
               </button>
               <button className={styles.clearSelectedButton} onClick={() => setSelected(new Set())}>
                 Clear

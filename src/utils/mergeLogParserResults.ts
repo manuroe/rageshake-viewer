@@ -43,7 +43,11 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
     return { ...result, rawLogLines: result.rawLogLines.map((l) => ({ ...l, sourceFile: name })) };
   }
 
-  const rawLogLines: ParsedLogLine[] = [];
+  // Each line is paired with the timestamp used to position it on the merged
+  // timeline. Orphan lines (timestampUs === 0, e.g. after a blank-line boundary)
+  // carry forward the last positive timestamp from the same file, so they stay
+  // with their originating section instead of jumping to the start.
+  const sortable: { line: ParsedLogLine; sortKey: number }[] = [];
   const requests: SyncRequest[] = [];
   const httpRequests: HttpRequest[] = [];
   const sentryEvents: SentryEvent[] = [];
@@ -51,8 +55,14 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
 
   let offset = 0;
   for (const { name, result } of files) {
+    let lastPositiveTs = 0;
     for (const line of result.rawLogLines) {
-      rawLogLines.push({ ...line, lineNumber: line.lineNumber + offset, sourceFile: name });
+      const ts = line.timestampUs as number;
+      if (ts > 0) lastPositiveTs = ts;
+      sortable.push({
+        line: { ...line, lineNumber: line.lineNumber + offset, sourceFile: name },
+        sortKey: ts > 0 ? ts : lastPositiveTs,
+      });
     }
     for (const r of result.requests) {
       requests.push({
@@ -75,9 +85,11 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
     offset += result.rawLogLines.length;
   }
 
-  // Interleave by time. Array.sort is stable, so equal-timestamp lines keep the
-  // file order they were pushed in (e.g. console before nse for the same µs).
-  rawLogLines.sort((a, b) => (a.timestampUs as number) - (b.timestampUs as number));
+  // Interleave by time. Array.sort is stable, so equal-key lines keep the file
+  // order they were pushed in (e.g. console before nse for the same µs, and an
+  // orphan line right after the positive line whose timestamp it carries).
+  sortable.sort((a, b) => a.sortKey - b.sortKey);
+  const rawLogLines = sortable.map((s) => s.line);
 
   // Requests render in array order in the tables, so sort them by send time too.
   // Use the merged line index to resolve each request's timestamp.

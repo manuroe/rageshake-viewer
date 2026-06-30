@@ -97,6 +97,36 @@ describe('mergeLogParserResults', () => {
     expect(merged.httpRequests.map((r) => r.sendLineNumber)).toEqual([1, 3]);
   });
 
+  it('keeps a zero-timestamp orphan line with its originating section', () => {
+    const at = (n: number, ts: number): ParsedLogLine => ({
+      ...line(n),
+      timestampUs: ts as ParsedLogLine['timestampUs'],
+    });
+    // fileA: positive, orphan (ts 0), positive; fileB: a positive line in between.
+    const fileA: LogParserResult = {
+      requests: [], httpRequests: [], connectionIds: [],
+      rawLogLines: [at(1, 10), at(2, 0), at(3, 30)], sentryEvents: [],
+    };
+    const fileB: LogParserResult = {
+      requests: [], httpRequests: [], connectionIds: [],
+      rawLogLines: [at(1, 20)], sentryEvents: [],
+    };
+
+    const merged = mergeLogParserResults([
+      { name: 'a.log', result: fileA },
+      { name: 'b.log', result: fileB },
+    ]);
+
+    // The orphan (ts 0) carries fileA's last positive ts (10), so it stays right
+    // after a.log's 10µs line instead of jumping to the front.
+    expect(merged.rawLogLines.map((l) => [l.sourceFile, l.timestampUs])).toEqual([
+      ['a.log', 10],
+      ['a.log', 0],
+      ['b.log', 20],
+      ['a.log', 30],
+    ]);
+  });
+
   it('leaves a 0 line reference (incomplete request) un-offset', () => {
     // sendLineNumber/responseLineNumber of 0 means "no line" — must stay 0, not
     // become the file offset, or it would point at an unrelated line.

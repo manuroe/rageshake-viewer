@@ -505,7 +505,7 @@ describe('ListingView', () => {
       fireEvent.click(checkbox);
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /open 1 files together/i }));
+        fireEvent.click(screen.getByRole('button', { name: /open 1 file together/i }));
       });
 
       expect(mockOpenMergedEntries).toHaveBeenCalledWith(['console.2026-03-04-10.log.gz']);
@@ -522,7 +522,7 @@ describe('ListingView', () => {
       expect(screen.getByRole('button', { name: /open 2 files together/i })).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /^clear$/i }));
-      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
     });
 
     it('unticking a file and toggling select-all off both clear the selection', async () => {
@@ -531,15 +531,15 @@ describe('ListingView', () => {
 
       const cb = await screen.findByRole('checkbox', { name: /select console\.2026-03-04-10/i });
       fireEvent.click(cb); // tick
-      expect(screen.getByRole('button', { name: /open 1 files together/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /open 1 file together/i })).toBeInTheDocument();
       fireEvent.click(cb); // untick
-      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
 
       const selectAll = screen.getByRole('checkbox', { name: /select all log files/i });
       fireEvent.click(selectAll); // all ticked
       expect(screen.getByRole('button', { name: /open 2 files together/i })).toBeInTheDocument();
       fireEvent.click(selectAll); // toggle off → cleared
-      expect(screen.queryByRole('button', { name: /open .* files together/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
     });
 
     it('does not navigate when opening yields no route', async () => {
@@ -550,7 +550,7 @@ describe('ListingView', () => {
       const checkbox = await screen.findByRole('checkbox', { name: /select console\.2026-03-04-10/i });
       fireEvent.click(checkbox);
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /open 1 files together/i }));
+        fireEvent.click(screen.getByRole('button', { name: /open 1 file together/i }));
       });
 
       expect(mockOpenMergedEntries).toHaveBeenCalled();

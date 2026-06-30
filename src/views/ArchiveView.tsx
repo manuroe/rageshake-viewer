@@ -360,7 +360,7 @@ export function ArchiveView() {
           {selected.size > 0 && (
             <>
               <button className={styles.openSelectedButton} onClick={() => openEntries([...selected])}>
-                Open {selected.size} files together
+                Open {selected.size} {selected.size === 1 ? 'file' : 'files'} together
               </button>
               <button className={styles.clearSelectedButton} onClick={() => setSelected(new Set())}>
                 Clear
