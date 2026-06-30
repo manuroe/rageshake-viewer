@@ -29,6 +29,11 @@ describe('orderChronologically', () => {
       orderChronologically(['logs.2026-04-14-10.log.gz', 'logs.2026-04-14-08.log.gz', 'logs.2026-04-14-09.log.gz'])
     ).toEqual(['logs.2026-04-14-08.log.gz', 'logs.2026-04-14-09.log.gz', 'logs.2026-04-14-10.log.gz']);
   });
+
+  it('falls back to the name when an entry has no embedded date', () => {
+    // Undated names have no date key, so they sort by name (the `?? name` fallback).
+    expect(orderChronologically(['zeta.log', 'alpha.log'])).toEqual(['alpha.log', 'zeta.log']);
+  });
 });
 
 describe('openMergedEntries (archive source)', () => {

@@ -149,4 +149,44 @@ describe('LogSelectionDialog', () => {
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  it('lists entries from the extension listing when no archive is loaded', () => {
+    useListingStore.getState().loadListing('https://rs.example/api/listing/X/', [
+      { name: 'console.2026-04-14-08.log.gz', url: 'https://rs.example/x/console.2026-04-14-08.log.gz' },
+      { name: 'nse.2026-04-14-08.log.gz', url: 'https://rs.example/x/nse.2026-04-14-08.log.gz' },
+    ]);
+    render(<MemoryRouter><LogSelectionDialog onClose={onClose} /></MemoryRouter>);
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    expect(screen.getByText('console.2026-04-14-08.log.gz')).toBeInTheDocument();
+  });
+
+  it('unticks a pre-checked file', () => {
+    loadArchive(['logs.2026-04-14-08.log.gz']);
+    useLogStore.setState({ loadedEntryNames: ['logs.2026-04-14-08.log.gz'] });
+    render(<MemoryRouter><LogSelectionDialog onClose={onClose} /></MemoryRouter>);
+
+    const cb = screen.getByRole('checkbox', { name: /logs\.2026-04-14-08/i }) as HTMLInputElement;
+    expect(cb.checked).toBe(true);
+    fireEvent.click(cb);
+    expect(cb.checked).toBe(false);
+    // Nothing selected → apply disabled.
+    expect(screen.getByRole('button', { name: /display 0 selected/i })).toBeDisabled();
+  });
+
+  it('stops the applying state if opening rejects', async () => {
+    loadArchive(['logs.2026-04-14-08.log.gz']);
+    useLogStore.setState({ loadedEntryNames: ['logs.2026-04-14-08.log.gz'] });
+    mockOpenMergedEntries.mockRejectedValue(new Error('boom'));
+    render(<MemoryRouter><LogSelectionDialog onClose={onClose} /></MemoryRouter>);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /display 1 selected/i }));
+    });
+
+    expect(mockOpenMergedEntries).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    // Button re-enabled (no longer "Opening…") after the failure.
+    expect(screen.getByRole('button', { name: /display 1 selected/i })).toBeEnabled();
+  });
 });

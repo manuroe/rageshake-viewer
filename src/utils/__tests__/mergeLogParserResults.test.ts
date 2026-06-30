@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mergeLogParserResults, type NamedLogParserResult } from '../mergeLogParserResults';
-import type { LogParserResult, ParsedLogLine, HttpRequest } from '../../types/log.types';
+import type { LogParserResult, ParsedLogLine, HttpRequest, SyncRequest } from '../../types/log.types';
 
 function line(n: number): ParsedLogLine {
   return {
@@ -107,6 +107,30 @@ describe('mergeLogParserResults', () => {
     expect(merged.httpRequests.map((r) => [r.sendLineNumber, r.responseLineNumber])).toEqual([
       [1, 0],
       [0, 5],
+    ]);
+  });
+
+  it('offsets sync (connId) request line refs and keeps 0 sentinels', () => {
+    const sync = (send: number, resp: number): SyncRequest => ({ ...http(send, resp), connId: 'room-list' });
+    const withSync = (name: string, lines: number, reqs: SyncRequest[]): NamedLogParserResult => ({
+      name,
+      result: {
+        requests: reqs,
+        httpRequests: [],
+        connectionIds: [],
+        rawLogLines: Array.from({ length: lines }, (_, i) => line(i + 1)),
+        sentryEvents: [],
+      },
+    });
+
+    const merged = mergeLogParserResults([
+      withSync('08.log', 2, [sync(1, 2)]),
+      withSync('09.log', 2, [sync(0, 0)]), // incomplete sync request → refs stay 0
+    ]);
+
+    expect(merged.requests.map((r) => [r.sendLineNumber, r.responseLineNumber])).toEqual([
+      [1, 2],
+      [0, 0],
     ]);
   });
 });

@@ -1694,6 +1694,40 @@ describe('LogDisplayView open-in-new-tab button', () => {
     expect(openedWindow.location.href).toContain('#/logs');
   });
 
+  const storedCropText = (): string => {
+    const href = (window.open as ReturnType<typeof vi.fn>).mock.results[0].value.location.href as string;
+    const uuid = new URLSearchParams((href.split('#')[1] ?? '').replace(/^\/logs\?/, '')).get('tabLog');
+    return (JSON.parse(localStorage.getItem(`rageshake-tablog-${uuid}`)!) as { text: string }).text;
+  };
+
+  it('falls back to line-number bounds for a zero-timestamp orphan endpoint', async () => {
+    const user = userEvent.setup();
+    // Middle line is a zero-timestamp orphan; bounds come from the positive
+    // timestamps, and the orphan is kept via the line-number range.
+    const l1 = createParsedLogLine({ lineNumber: 1, timestampUs: 1_000_000, rawText: 'a' });
+    const l2 = createParsedLogLine({ lineNumber: 2, timestampUs: 0, rawText: 'b-orphan' });
+    const l3 = createParsedLogLine({ lineNumber: 3, timestampUs: 2_000_000, rawText: 'c' });
+    useLogStore.setState({ rawLogLines: [l1, l2, l3], lineNumberIndex: new Map([[1, l1], [2, l2], [3, l3]]) });
+    render(<LogDisplayView />);
+
+    await user.click(screen.getByRole('button', { name: /open in new tab/i }));
+
+    expect(window.open).toHaveBeenCalled();
+    expect(storedCropText()).toBe('a\nb-orphan\nc');
+  });
+
+  it('crops by line range when no visible line has a positive timestamp', async () => {
+    const user = userEvent.setup();
+    const l1 = createParsedLogLine({ lineNumber: 1, timestampUs: 0, rawText: 'a' });
+    const l2 = createParsedLogLine({ lineNumber: 2, timestampUs: 0, rawText: 'b' });
+    useLogStore.setState({ rawLogLines: [l1, l2], lineNumberIndex: new Map([[1, l1], [2, l2]]) });
+    render(<LogDisplayView />);
+
+    await user.click(screen.getByRole('button', { name: /open in new tab/i }));
+
+    expect(storedCropText()).toBe('a\nb');
+  });
+
   it('propagates the active filter and time range into the new-tab URL', async () => {
     const user = userEvent.setup();
     const line = createParsedLogLine({ lineNumber: 1, rawText: '2024-01-01T10:00:00.000000Z INFO match-me' });

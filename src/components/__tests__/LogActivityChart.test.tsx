@@ -666,5 +666,37 @@ describe('LogActivityChart', () => {
       // The unknown process never becomes a lane.
       expect(screen.queryByText('other')).not.toBeInTheDocument();
     });
+
+    it('merges adjacent active buckets into a single segment', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'] });
+      // Range is 1s → 1s buckets; console lines at 1s and 2s land in consecutive
+      // buckets and must collapse into one segment rect.
+      const logs = [
+        procLine(1, 1, 'console.2026-04-14-08.log.gz'),
+        procLine(2, 2, 'console.2026-04-14-08.log.gz'),
+        procLine(3, 1, 'nse.2026-04-14-08.log.gz'),
+      ];
+
+      const { container } = render(<LogActivityChart logLines={logs} />);
+
+      // console (palette[0]) renders exactly one merged segment.
+      expect(container.querySelectorAll('rect[fill="#3b82f6"]')).toHaveLength(1);
+    });
+
+    it('renders no lanes when several processes are loaded but there are no lines', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'] });
+      render(<LogActivityChart logLines={[]} />);
+      expect(screen.queryByText('console')).not.toBeInTheDocument();
+    });
+
+    it('renders no lanes when every line has a non-positive timestamp', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'] });
+      const logs = [
+        procLine(1, 0, 'console.2026-04-14-08.log.gz'),
+        procLine(2, 0, 'nse.2026-04-14-08.log.gz'),
+      ];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('console')).not.toBeInTheDocument();
+    });
   });
 });
