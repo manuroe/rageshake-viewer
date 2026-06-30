@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLogStore } from '../stores/logStore';
+import { useArchiveStore } from '../stores/archiveStore';
+import { useListingStore } from '../stores/listingStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -15,9 +17,16 @@ export function BurgerMenu() {
   const [searchParams] = useSearchParams();
   const { clearData, clearLastRoute } = useLogStore();
   const loadedEntryNames = useLogStore((state) => state.loadedEntryNames);
+  const archiveEntryCount = useArchiveStore((state) => state.archiveEntries.length);
+  const listingEntryCount = useListingStore((state) => state.listingEntries.length);
   const { theme, setTheme } = useThemeStore();
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const [showLogSelection, setShowLogSelection] = useState(false);
+
+  // "Select logs…" only makes sense when there's a multi-file source to pick
+  // from (a loaded archive or extension listing). Direct single-file loads
+  // (upload, demo, open-in-new-tab) set loadedEntryNames but have no such source.
+  const canSelectLogs = loadedEntryNames.length > 0 && (archiveEntryCount > 0 || listingEntryCount > 0);
 
   useClickOutside(menuRef, () => setIsOpen(false), isOpen);
 
@@ -87,7 +96,7 @@ export function BurgerMenu() {
           >
             Sync Requests
           </button>
-          {loadedEntryNames.length > 0 && (
+          {canSelectLogs && (
             <>
               <div className={styles.burgerDivider} />
               <button

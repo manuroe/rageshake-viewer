@@ -69,8 +69,9 @@ export function removeTabLog(uuid: string): void {
  * const entry = loadAndClearTabLog(uuid);
  * if (entry) {
  *   const result = parseLogFile(entry.text);
- *   loadLogParserResult(result);
- *   setLogFileName(entry.fileName ?? null);
+ *   loadLogParserResult(result, entry.fileName
+ *     ? { loadedEntryNames: [entry.fileName], logFileName: entry.fileName }
+ *     : undefined);
  * }
  */
 export function loadAndClearTabLog(uuid: string): { text: string; fileName: string | null } | null {

@@ -189,9 +189,7 @@ interface LogStore {
   // Navigation memory
   setLastRoute: (route: string) => void;
   clearLastRoute: () => void;
-  /** Update the displayed log file name. Call after loadLogParserResult with the source file's name. */
-  setLogFileName: (name: string | null) => void;
-  
+
   // Error handling
   setError: (error: AppError | null) => void;
   clearError: () => void;
@@ -662,10 +660,6 @@ export const useLogStore = create<LogStore>((set, get) => ({
     set({ lastRoute: null });
   },
 
-  setLogFileName: (name) => {
-    set({ logFileName: name });
-  },
-  
   setError: (error) => {
     set({ error });
   },

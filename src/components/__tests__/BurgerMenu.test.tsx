@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { BurgerMenu } from '../BurgerMenu';
 import { useLogStore } from '../../stores/logStore';
+import { useArchiveStore } from '../../stores/archiveStore';
+import { useListingStore } from '../../stores/listingStore';
 import { KeyboardShortcutContext } from '../KeyboardShortcutContext';
 import type { KeyboardShortcutContextValue } from '../KeyboardShortcutContext';
 
@@ -41,6 +43,8 @@ describe('BurgerMenu', () => {
     navigateMock.mockClear();
     currentSearchParams = new URLSearchParams();
     useLogStore.getState().clearData();
+    useArchiveStore.getState().clearArchive();
+    useListingStore.getState().clearListing();
   });
 
   describe('Cross-View Navigation Param Preservation', () => {
@@ -332,7 +336,11 @@ describe('BurgerMenu', () => {
   });
 
   describe('Select logs', () => {
+    const data = new TextEncoder().encode('x');
+
     it('opens and closes the log selection dialog', () => {
+      // A loaded archive provides the multi-file source the dialog selects from.
+      useArchiveStore.getState().loadArchive('test.tar.gz', [{ name: 'logs.2026-04-14-08.log.gz', data }]);
       useLogStore.setState({ loadedEntryNames: ['logs.2026-04-14-08.log.gz'] });
       render(
         <MemoryRouter initialEntries={['/logs']}>
@@ -350,6 +358,20 @@ describe('BurgerMenu', () => {
     });
 
     it('hides "Select logs" when no log is loaded', () => {
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      expect(screen.queryByText(/select logs/i)).not.toBeInTheDocument();
+    });
+
+    it('hides "Select logs" for a single-file load with no archive/listing source', () => {
+      // e.g. a direct file upload or demo: loadedEntryNames is set, but there's
+      // nothing to multi-select from, so the item stays hidden.
+      useLogStore.setState({ loadedEntryNames: ['demo.log'] });
       render(
         <MemoryRouter initialEntries={['/logs']}>
           <BurgerMenu />
