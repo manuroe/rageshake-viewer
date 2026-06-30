@@ -13,13 +13,11 @@ const {
   mockLoadAndClearTabLog,
   mockParseLogFile,
   mockLoadLogParserResult,
-  mockSetLogFileName,
   mockSetSearchParams,
 } = vi.hoisted(() => ({
   mockLoadAndClearTabLog: vi.fn<(uuid: string) => { text: string; fileName: string | null } | null>(),
   mockParseLogFile: vi.fn(),
   mockLoadLogParserResult: vi.fn(),
-  mockSetLogFileName: vi.fn(),
   mockSetSearchParams: vi.fn(),
 }));
 
@@ -33,9 +31,9 @@ vi.mock('../../utils/logParser', () => ({
 
 vi.mock('../../stores/logStore', () => ({
   useLogStore: Object.assign(
-    (selector: (state: { loadLogParserResult: typeof mockLoadLogParserResult; setLogFileName: typeof mockSetLogFileName }) => unknown) =>
-      selector({ loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }),
-    { getState: () => ({ clearData: vi.fn(), loadLogParserResult: mockLoadLogParserResult, setLogFileName: mockSetLogFileName }) },
+    (selector: (state: { loadLogParserResult: typeof mockLoadLogParserResult }) => unknown) =>
+      selector({ loadLogParserResult: mockLoadLogParserResult }),
+    { getState: () => ({ clearData: vi.fn(), loadLogParserResult: mockLoadLogParserResult }) },
   ),
 }));
 
@@ -81,7 +79,22 @@ describe('useTabLog', () => {
     await waitFor(() => {
       expect(mockLoadAndClearTabLog).toHaveBeenCalledWith(FAKE_UUID_A);
       expect(mockParseLogFile).toHaveBeenCalledWith(logText);
-      expect(mockLoadLogParserResult).toHaveBeenCalledWith(PARSED_RESULT);
+      // No file name → no overrides, so loadedEntryNames is left empty.
+      expect(mockLoadLogParserResult).toHaveBeenCalledWith(PARSED_RESULT, undefined);
+    });
+  });
+
+  it('records the file name as the loaded entry when present', async () => {
+    mockLoadAndClearTabLog.mockReturnValue({ text: 'content', fileName: 'console.2026-04-14-08.log.gz' });
+    mockSearchParams = new URLSearchParams(`?${TAB_LOG_PARAM}=${FAKE_UUID_A}`);
+
+    renderHook(() => useTabLog());
+
+    await waitFor(() => {
+      expect(mockLoadLogParserResult).toHaveBeenCalledWith(PARSED_RESULT, {
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        logFileName: 'console.2026-04-14-08.log.gz',
+      });
     });
   });
 

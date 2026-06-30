@@ -1235,3 +1235,48 @@ describe('RequestTable — auto-scale effect', () => {
     expect(useLogStore.getState().timelineScale).toBe(50);
   });
 });
+
+describe('RequestTable — process colours (merged multi-process logs)', () => {
+  beforeEach(() => {
+    useLogStore.getState().clearData();
+  });
+
+  it('shows a legend and tints rows by process when several processes are merged', () => {
+    const reqs = [
+      createHttpRequest({ requestId: 'A', sendLineNumber: 10, responseLineNumber: 11 }),
+      createHttpRequest({ requestId: 'B', sendLineNumber: 20, responseLineNumber: 21 }),
+    ];
+    const lineA = createParsedLogLine({ lineNumber: 10, sourceFile: 'console.2026-04-14-08.log.gz' });
+    const lineB = createParsedLogLine({ lineNumber: 20, sourceFile: 'nse.2026-04-14-08.log.gz' });
+    useLogStore.setState({
+      rawLogLines: [lineA, lineB],
+      lineNumberIndex: new Map([[10, lineA], [20, lineB]]),
+      loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'],
+    });
+
+    renderWithRouter(<RequestTable {...createProps({ filteredRequests: reqs, totalCount: 2 })} />);
+
+    const legend = screen.getByLabelText('Process colour legend');
+    expect(legend).toHaveTextContent('console');
+    expect(legend).toHaveTextContent('nse');
+
+    const rowA = document.querySelector('[data-row-id="sticky-10"]') as HTMLElement;
+    // Stripe is on the inner sticky-row element (above its opaque background).
+    const stickyA = rowA.querySelector('div') as HTMLElement;
+    expect(stickyA.style.boxShadow).toContain('inset');
+  });
+
+  it('shows no legend for a single process', () => {
+    const reqs = [createHttpRequest({ requestId: 'A', sendLineNumber: 10, responseLineNumber: 11 })];
+    const lineA = createParsedLogLine({ lineNumber: 10, sourceFile: 'console.2026-04-14-08.log.gz' });
+    useLogStore.setState({
+      rawLogLines: [lineA],
+      lineNumberIndex: new Map([[10, lineA]]),
+      loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+    });
+
+    renderWithRouter(<RequestTable {...createProps({ filteredRequests: reqs, totalCount: 1 })} />);
+
+    expect(screen.queryByLabelText('Process colour legend')).not.toBeInTheDocument();
+  });
+});

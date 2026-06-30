@@ -3,8 +3,18 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { BurgerMenu } from '../BurgerMenu';
 import { useLogStore } from '../../stores/logStore';
+import { useArchiveStore } from '../../stores/archiveStore';
+import { useListingStore } from '../../stores/listingStore';
 import { KeyboardShortcutContext } from '../KeyboardShortcutContext';
 import type { KeyboardShortcutContextValue } from '../KeyboardShortcutContext';
+
+vi.mock('../LogSelectionDialog', () => ({
+  LogSelectionDialog: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="log-selection-dialog">
+      <button onClick={onClose}>close-mock</button>
+    </div>
+  ),
+}));
 
 // Bypass zustand persist middleware to avoid localStorage issues in tests
 vi.mock('zustand/middleware', async (importOriginal) => {
@@ -33,6 +43,8 @@ describe('BurgerMenu', () => {
     navigateMock.mockClear();
     currentSearchParams = new URLSearchParams();
     useLogStore.getState().clearData();
+    useArchiveStore.getState().clearArchive();
+    useListingStore.getState().clearListing();
   });
 
   describe('Cross-View Navigation Param Preservation', () => {
@@ -320,6 +332,54 @@ describe('BurgerMenu', () => {
       fireEvent.click(screen.getByText('Keyboard Shortcuts'));
       expect(toggleHelp).toHaveBeenCalledTimes(1);
       expect(screen.queryByText('Keyboard Shortcuts')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Select logs', () => {
+    const data = new TextEncoder().encode('x');
+
+    it('opens and closes the log selection dialog', () => {
+      // A loaded archive provides the multi-file source the dialog selects from.
+      useArchiveStore.getState().loadArchive('test.tar.gz', [{ name: 'logs.2026-04-14-08.log.gz', data }]);
+      useLogStore.setState({ loadedEntryNames: ['logs.2026-04-14-08.log.gz'] });
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByText(/select logs/i));
+
+      expect(screen.getByTestId('log-selection-dialog')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('close-mock'));
+      expect(screen.queryByTestId('log-selection-dialog')).not.toBeInTheDocument();
+    });
+
+    it('hides "Select logs" when no log is loaded', () => {
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      expect(screen.queryByText(/select logs/i)).not.toBeInTheDocument();
+    });
+
+    it('hides "Select logs" for a single-file load with no archive/listing source', () => {
+      // e.g. a direct file upload or demo: loadedEntryNames is set, but there's
+      // nothing to multi-select from, so the item stays hidden.
+      useLogStore.setState({ loadedEntryNames: ['demo.log'] });
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      expect(screen.queryByText(/select logs/i)).not.toBeInTheDocument();
     });
   });
 });

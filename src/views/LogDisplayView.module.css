@@ -211,6 +211,7 @@
     background: rgba(255, 255, 255, 0.05);
 }
 
+
 .matchLine {
     background: var(--log-match-bg);
     border-left-color: var(--log-search-highlight);

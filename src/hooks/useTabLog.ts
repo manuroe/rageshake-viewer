@@ -19,7 +19,6 @@ export const TAB_LOG_PARAM = 'tabLog';
 export function useTabLog(): void {
   const [searchParams, setSearchParams] = useSearchParams();
   const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
-  const setLogFileName = useLogStore((state) => state.setLogFileName);
 
   // Track the last UUID processed so StrictMode double-effects are suppressed
   // while a *different* UUID later in the session is still handled correctly.
@@ -49,7 +48,11 @@ export function useTabLog(): void {
     }
 
     const result = parseLogFile(entry.text);
-    loadLogParserResult(result);
-    setLogFileName(entry.fileName);
-  }, [tabLogId, loadLogParserResult, setLogFileName, setSearchParams]);
+    // Record the file name as the (single) loaded entry so loadedEntryNames stays
+    // accurate; a missing name leaves both empty as before.
+    loadLogParserResult(
+      result,
+      entry.fileName ? { loadedEntryNames: [entry.fileName], logFileName: entry.fileName } : undefined,
+    );
+  }, [tabLogId, loadLogParserResult, setSearchParams]);
 }

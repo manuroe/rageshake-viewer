@@ -241,7 +241,15 @@
    Dark Theme
    ========================================================================== */
 
+/* Forced themes must also drive native controls (checkboxes, scrollbars, etc.);
+   without this, color-scheme stays at the OS default and they render mismatched. */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
 [data-theme="dark"] {
+  color-scheme: dark;
+
   /* Primary Colors */
   --color-primary: #4da3ff;
   --color-primary-hover: #6bb3ff;

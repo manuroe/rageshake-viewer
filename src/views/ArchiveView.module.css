@@ -17,6 +17,21 @@
     border-radius: var(--radius-lg);
 }
 
+/* ── multi-select action (lives in the view header) ─────────────────────── */
+
+.openSelectedButton {
+    composes: pillButton from '../components/Button.module.css';
+}
+
+.clearSelectedButton {
+    composes: pillButton pillButtonSecondary from '../components/Button.module.css';
+}
+
+.selectCheckbox {
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
 /* ── details.json user text card ────────────────────────────────────────── */
 
 .profileHeader {

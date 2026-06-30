@@ -3,8 +3,10 @@ import type { ParsedLogLine, LogLevel, SentryEvent } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_SECOND, MICROS_PER_MILLISECOND } from '../types/time.types';
 import { getMinMaxTimestamps } from '../utils/timeUtils';
-import { BaseActivityChart, type ActivityBucket } from './BaseActivityChart';
+import { BaseActivityChart, type ActivityBucket, type ActivityLane, type ActivityLaneSegment } from './BaseActivityChart';
 import type { SelectionRange } from '../hooks/useChartInteraction';
+import { useLogStore } from '../stores/logStore';
+import { buildProcessColorMap, processOf } from '../utils/processColors';
 
 interface LogActivityChartProps {
   logLines: readonly ParsedLogLine[];
@@ -114,6 +116,70 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
     return { buckets: dataBuckets, maxCount: dataMaxCount, minTime: dataMinTime, maxTime: dataMaxTime };
   }, [logLines, sentryEvents, formatTime]);
 
+  // Per-process "is this process logging, when" lanes, shown under the bars
+  // only when several processes are merged (e.g. console + nse). Reuses the same
+  // colour map as the line stripes / request rows.
+  const loadedEntryNames = useLogStore((state) => state.loadedEntryNames);
+  const processColorMap = useMemo(() => buildProcessColorMap(loadedEntryNames), [loadedEntryNames]);
+
+  const lanes = useMemo<ActivityLane[] | undefined>(() => {
+    if (processColorMap.size <= 1 || logLines.length === 0) return undefined;
+    const { min, max } = getMinMaxTimestamps(logLines);
+    // getMinMaxTimestamps returns 0/0 only when no line has a positive timestamp.
+    if (max === 0) return undefined;
+    const range = max - min;
+    const bucketSize = range > 0 ? Math.max(MICROS_PER_SECOND, Math.ceil(range / 100)) : MICROS_PER_SECOND;
+
+    // Count lines per (process, bucket) in one pass.
+    const countsByProcess = new Map<string, Map<number, number>>();
+    for (const line of logLines) {
+      if (!line.sourceFile) continue;
+      if (line.timestampUs === 0) continue;
+      const proc = processOf(line.sourceFile);
+      if (!processColorMap.has(proc)) continue;
+      const bucket = Math.floor(line.timestampUs / bucketSize) * bucketSize;
+      let buckets = countsByProcess.get(proc);
+      if (!buckets) {
+        buckets = new Map();
+        countsByProcess.set(proc, buckets);
+      }
+      buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
+    }
+
+    // One lane per process; merge contiguous active buckets into segments.
+    return [...processColorMap].map(([proc, color]) => {
+      const buckets = countsByProcess.get(proc);
+      const segments: ActivityLaneSegment[] = [];
+      if (buckets) {
+        const entries = [...buckets.entries()].sort((a, b) => a[0] - b[0]);
+        let runStart: number | null = null;
+        let runEnd = 0;
+        let runCount = 0;
+        const flush = () => {
+          if (runStart === null) return;
+          segments.push({
+            startUs: runStart,
+            endUs: runEnd,
+            title: `${proc} · ${formatTime(runStart)}–${formatTime(runEnd)} · ${runCount} lines`,
+          });
+        };
+        for (const [key, count] of entries) {
+          if (runStart !== null && key === runEnd) {
+            runEnd = key + bucketSize;
+            runCount += count;
+          } else {
+            flush();
+            runStart = key;
+            runEnd = key + bucketSize;
+            runCount = count;
+          }
+        }
+        flush();
+      }
+      return { label: proc, color, segments };
+    });
+  }, [processColorMap, logLines, formatTime]);
+
   const getCategoryColor = useCallback((level: ChartCategory) => LOG_LEVEL_COLORS[level], []);
 
   const getCategoryCount = useCallback((bucket: LogBucket, level: ChartCategory) => bucket.counts[level], []);
@@ -166,6 +232,7 @@ export function LogActivityChart({ logLines, sentryEvents, onTimeRangeSelected, 
       externalSelection={externalSelection}
       onCursorMove={onCursorMove}
       onSelectionChange={onSelectionChange}
+      lanes={lanes}
     />
   );
 }

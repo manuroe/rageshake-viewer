@@ -1,0 +1,24 @@
+/* Legend mapping each process colour to its name, shown above the logs and
+   request views when several processes (console, nse, …) are merged. */
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 4px 8px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}

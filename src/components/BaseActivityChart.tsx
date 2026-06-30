@@ -16,6 +16,29 @@ export interface ActivityBucket {
   total: number;
 }
 
+/** A filled run within an activity lane (binary presence over a time span). */
+export interface ActivityLaneSegment {
+  readonly startUs: number;
+  readonly endUs: number;
+  /** Tooltip text shown on hover. */
+  readonly title: string;
+}
+
+/**
+ * A binary presence track rendered under the bars on the same time axis — e.g.
+ * "which process was logging, when". Only the log chart uses these.
+ */
+export interface ActivityLane {
+  readonly label: string;
+  readonly color: string;
+  readonly segments: readonly ActivityLaneSegment[];
+}
+
+/** Lane geometry (SVG units within the chart's viewBox). */
+const LANE_HEIGHT = 6;
+const LANE_GAP = 4;
+const LANE_AREA_GAP = 8;
+
 interface BaseActivityChartProps<TBucket extends ActivityBucket, TCategory extends string> {
   /** Buckets of time-aggregated data */
   buckets: TBucket[];
@@ -62,6 +85,12 @@ interface BaseActivityChartProps<TBucket extends ActivityBucket, TCategory exten
   onCursorMove?: (timeUs: number | null) => void;
   /** Fired as a drag selection changes on this chart (see `useChartInteraction`). */
   onSelectionChange?: (selection: SelectionRange | null) => void;
+  /**
+   * Optional binary presence lanes drawn under the bars, sharing the time axis.
+   * When present the x-axis and cursors shift below the lanes. Used by the log
+   * chart to show per-process activity; omit elsewhere.
+   */
+  lanes?: ActivityLane[];
 }
 
 /**
@@ -87,6 +116,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
   externalSelection,
   onCursorMove,
   onSelectionChange,
+  lanes,
 }: BaseActivityChartProps<TBucket, TCategory>) {
   const { tooltipData, tooltipLeft, tooltipTop, showTooltip, hideTooltip } = useTooltip<TBucket>();
   const tooltipOffsetLeft = 12;
@@ -101,6 +131,14 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
   const margin = useMemo(() => ({ top: 10, right: 10, bottom: 30, left: marginLeft }), [marginLeft]);
   const xMax = width - margin.left - margin.right;
   const yMax = height - margin.top - margin.bottom;
+
+  // Presence lanes (if any) sit between the bars (which keep using yMax) and the
+  // x-axis, which shifts down to `axisTop`. With no lanes, axisTop === yMax so
+  // every other chart renders exactly as before.
+  const laneRows = lanes ?? [];
+  const lanesHeight = laneRows.length ? LANE_AREA_GAP + laneRows.length * (LANE_HEIGHT + LANE_GAP) : 0;
+  const axisTop = yMax + lanesHeight;
+  const svgHeight = height + lanesHeight;
 
   // Scales
   const xScale = useMemo(
@@ -252,7 +290,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
+        <svg ref={svgRef} width="100%" height={svgHeight} viewBox={`0 0 ${width} ${svgHeight}`} style={{ display: 'block' }}>
           <Group left={margin.left} top={margin.top}>
             {/* Render stacked bars */}
             {buckets.map((bucket) => {
@@ -290,7 +328,38 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
               );
             })}
 
-            {/* Invisible overlay for mouse events - must be after bars to be on top */}
+            {/* Per-process presence lanes, under the bars on the shared time axis. */}
+            {laneRows.map((lane, i) => {
+              const laneY = yMax + LANE_AREA_GAP + i * (LANE_HEIGHT + LANE_GAP);
+              return (
+                <Group key={`lane-${i}-${lane.label}`}>
+                  <text
+                    x={-6}
+                    y={laneY + LANE_HEIGHT - 1}
+                    textAnchor="end"
+                    fontSize={9}
+                    fill="var(--text-muted, #888)"
+                    pointerEvents="none"
+                  >
+                    {lane.label}
+                  </text>
+                  <rect x={0} y={laneY} width={xMax} height={LANE_HEIGHT} rx={2} fill="var(--border-light, #ddd)" />
+                  {lane.segments.map((seg, j) => {
+                    const x0 = timeToX(seg.startUs);
+                    const x1 = timeToX(seg.endUs);
+                    return (
+                      <rect key={j} x={x0} y={laneY} width={Math.max(1, x1 - x0)} height={LANE_HEIGHT} rx={2} fill={lane.color}>
+                        <title>{seg.title}</title>
+                      </rect>
+                    );
+                  })}
+                </Group>
+              );
+            })}
+
+            {/* Invisible overlay for mouse events - must be after bars to be on top.
+                Covers only the bars area (not the lanes below) so each lane segment
+                keeps its own hover title; the crosshair lines still draw to axisTop. */}
             <rect
               width={xMax}
               height={yMax}
@@ -305,7 +374,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
 
             {/* Axes */}
             <AxisBottom
-              top={yMax}
+              top={axisTop}
               scale={xScale}
               tickFormat={() => ''} // Hide automatic ticks
               stroke="#666"
@@ -323,7 +392,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 {/* Start time label - actual minimum time */}
                 <text
                   x={xScale(buckets[0].timeLabel) ?? 0}
-                  y={yMax + 16}
+                  y={axisTop + 16}
                   textAnchor="start"
                   fontSize={9}
                   fill="#666"
@@ -334,7 +403,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 {/* End time label - actual maximum time */}
                 <text
                   x={(xScale(buckets[buckets.length - 1].timeLabel) ?? 0) + (xScale.bandwidth() ?? 0)}
-                  y={yMax + 16}
+                  y={axisTop + 16}
                   textAnchor="end"
                   fontSize={9}
                   fill="#666"
@@ -366,14 +435,14 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                   x={Math.min(selectionStart.x, selectionEnd.x) - margin.left}
                   y={0}
                   width={Math.abs(selectionEnd.x - selectionStart.x)}
-                  height={yMax}
+                  height={axisTop}
                   fill="rgba(33, 150, 243, 0.2)"
                   pointerEvents="none"
                 />
                 {/* Start cursor */}
                 <Line
                   from={{ x: selectionStart.x - margin.left, y: 0 }}
-                  to={{ x: selectionStart.x - margin.left, y: yMax }}
+                  to={{ x: selectionStart.x - margin.left, y: axisTop }}
                   stroke="#2196f3"
                   strokeWidth={2}
                   pointerEvents="none"
@@ -381,7 +450,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 {/* End cursor */}
                 <Line
                   from={{ x: selectionEnd.x - margin.left, y: 0 }}
-                  to={{ x: selectionEnd.x - margin.left, y: yMax }}
+                  to={{ x: selectionEnd.x - margin.left, y: axisTop }}
                   stroke="#2196f3"
                   strokeWidth={2}
                   pointerEvents="none"
@@ -389,7 +458,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 {/* Time labels */}
                 <text
                   x={selectionStart.x - margin.left}
-                  y={yMax + 20}
+                  y={axisTop + 20}
                   textAnchor="middle"
                   fontSize={10}
                   fill="#2196f3"
@@ -400,7 +469,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 </text>
                 <text
                   x={selectionEnd.x - margin.left}
-                  y={yMax + 20}
+                  y={axisTop + 20}
                   textAnchor="middle"
                   fontSize={10}
                   fill="#2196f3"
@@ -417,7 +486,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
               <>
                 <Line
                   from={{ x: cursorX - margin.left, y: 0 }}
-                  to={{ x: cursorX - margin.left, y: yMax }}
+                  to={{ x: cursorX - margin.left, y: axisTop }}
                   stroke="#666"
                   strokeWidth={1}
                   pointerEvents="none"
@@ -426,7 +495,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 {/* Time label on x-axis */}
                 <text
                   x={cursorX - margin.left}
-                  y={yMax + 20}
+                  y={axisTop + 20}
                   textAnchor="middle"
                   fontSize={10}
                   fill="#333"
@@ -443,7 +512,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
               <>
                 <Line
                   from={{ x: timeToX(externalCursorTime), y: 0 }}
-                  to={{ x: timeToX(externalCursorTime), y: yMax }}
+                  to={{ x: timeToX(externalCursorTime), y: axisTop }}
                   stroke="#666"
                   strokeWidth={1}
                   pointerEvents="none"
@@ -451,7 +520,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 />
                 <text
                   x={timeToX(externalCursorTime)}
-                  y={yMax + 20}
+                  y={axisTop + 20}
                   textAnchor="middle"
                   fontSize={10}
                   fill="#333"
@@ -475,27 +544,27 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                   x={selStartX}
                   y={0}
                   width={selEndX - selStartX}
-                  height={yMax}
+                  height={axisTop}
                   fill="rgba(33, 150, 243, 0.2)"
                   pointerEvents="none"
                 />
                 <Line
                   from={{ x: selStartX, y: 0 }}
-                  to={{ x: selStartX, y: yMax }}
+                  to={{ x: selStartX, y: axisTop }}
                   stroke="#2196f3"
                   strokeWidth={2}
                   pointerEvents="none"
                 />
                 <Line
                   from={{ x: selEndX, y: 0 }}
-                  to={{ x: selEndX, y: yMax }}
+                  to={{ x: selEndX, y: axisTop }}
                   stroke="#2196f3"
                   strokeWidth={2}
                   pointerEvents="none"
                 />
                 <text
                   x={selStartX}
-                  y={yMax + 20}
+                  y={axisTop + 20}
                   textAnchor="middle"
                   fontSize={10}
                   fill="#2196f3"
@@ -506,7 +575,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 </text>
                 <text
                   x={selEndX}
-                  y={yMax + 20}
+                  y={axisTop + 20}
                   textAnchor="middle"
                   fontSize={10}
                   fill="#2196f3"

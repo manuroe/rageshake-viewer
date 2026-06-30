@@ -32,8 +32,7 @@ function isGzipFile(file: File): boolean {
 
 export function FileUpload() {
   const navigate = useNavigate();
-  const loadLogParserResult = useLogStore((state) => state.loadLogParserResult);
-  const setLogFileName = useLogStore((state) => state.setLogFileName);
+  const loadMergedLogParserResults = useLogStore((state) => state.loadMergedLogParserResults);
   const lastRoute = useLogStore((state) => state.lastRoute);
   const loadArchive = useArchiveStore((state) => state.loadArchive);
   const [validationError, setValidationError] = useState<AppError | null>(null);
@@ -152,8 +151,9 @@ export function FileUpload() {
         // Parse once and derive both sync-specific and all HTTP requests
         const result = parseLogFile(logContent);
 
-        loadLogParserResult(result);
-        setLogFileName(file.name);
+        // Load via the merged path (single entry) so loadedEntryNames + logFileName
+        // are set together and stay accurate.
+        loadMergedLogParserResults([{ name: file.name, result }]);
         const targetRoute = lastRoute && lastRoute !== '/' ? lastRoute : '/summary';
         void navigate(targetRoute);
       } catch (error) {
@@ -163,7 +163,7 @@ export function FileUpload() {
         setValidationError(appError);
       }
     },
-    [loadLogParserResult, setLogFileName, navigate, lastRoute, readFileAsText, readFileAsArrayBuffer, handleTarGzFile]
+    [loadMergedLogParserResults, navigate, lastRoute, readFileAsText, readFileAsArrayBuffer, handleTarGzFile]
   );
 
   const handleDrop = useCallback(

@@ -14,6 +14,8 @@ import { isInputFocused, metaKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
+import { buildProcessColorMap, processOf } from '../utils/processColors';
+import { ProcessLegend } from '../components/ProcessLegend';
 import { LogExportDialog } from '../components/LogExportDialog';
 import { UnanonymizeDialog } from '../components/UnanonymizeDialog';
 import type { ExportContext } from '../utils/logExportUtils';
@@ -96,7 +98,11 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false }: LogDisplayViewProps) {
-  const { rawLogLines, lineNumberIndex, sentryEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs, logFileName } = useLogStore();
+  const { rawLogLines, sentryEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs, logFileName, loadedEntryNames } = useLogStore();
+  // Colour lines by process only when several distinct processes are merged
+  // (e.g. console + nse); a single process needs no differentiation.
+  const processColorMap = useMemo(() => buildProcessColorMap(loadedEntryNames), [loadedEntryNames]);
+  const showProcessColors = processColorMap.size > 1;
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
@@ -312,25 +318,45 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   }, [newTabError]);
 
   /**
-   * Opens a new tab loaded with the full contiguous slice of the log from the
-   * first to the last currently-visible line number, sourced from the store's
-   * full `lineNumberIndex` so that lines excluded by the time filter (but
-   * within the visible line-number range) are also included. The current text
-   * filter and time range are carried over via URL params so the new tab
-   * starts with the same view settings.
+   * Opens a new tab loaded with the contiguous slice of the log spanning the
+   * first to the last currently-visible line, sourced from the store's full
+   * (time-sorted) `rawLogLines` so that lines hidden by the time filter — but
+   * within the visible time span — are also included. The slice is taken by
+   * timestamp rather than line number: with merged multi-process logs, line
+   * numbers no longer run monotonically with time. The current text filter and
+   * time range are carried over via URL params so the new tab starts with the
+   * same view settings.
    */
   const handleOpenInNewTab = useCallback(() => {
     if (displayItems.length === 0) return;
 
-    const firstLineNumber = displayItems[0].data.line.lineNumber;
-    const lastLineNumber = displayItems[displayItems.length - 1].data.line.lineNumber;
+    // Bound the crop by the first/last *positive* visible timestamps. Using the
+    // raw first/last items would break when an endpoint is a zero-timestamp
+    // orphan line: a 0 bound either passes the whole log (firstUs === 0) or
+    // excludes every timestamped line (lastUs === 0). Line numbers bound the
+    // orphan lines (and the whole crop when nothing visible is timestamped).
+    let firstUs = 0;
+    let lastUs = 0;
+    for (const item of displayItems) {
+      const ts = item.data.line.timestampUs;
+      if (ts > 0) {
+        if (firstUs === 0) firstUs = ts;
+        lastUs = ts;
+      }
+    }
+    const hasTimeBounds = firstUs > 0;
+    const firstLineNum = displayItems[0].data.line.lineNumber;
+    const lastLineNum = displayItems[displayItems.length - 1].data.line.lineNumber;
+    const inLineRange = (line: ParsedLogLine) =>
+      line.lineNumber >= firstLineNum && line.lineNumber <= lastLineNum;
 
-    // Source from the store's full lineNumberIndex so the crop is truly
-    // contiguous raw-log lines, regardless of any time filter applied upstream.
     const croppedParts: string[] = [];
-    for (let ln = firstLineNumber; ln <= lastLineNumber; ln++) {
-      const line = lineNumberIndex.get(ln);
-      if (line) croppedParts.push(line.rawText);
+    for (const line of rawLogLines) {
+      const ts = line.timestampUs;
+      const inRange = hasTimeBounds && ts > 0
+        ? ts >= firstUs && ts <= lastUs
+        : inLineRange(line);
+      if (inRange) croppedParts.push(line.rawText);
     }
     const croppedText = croppedParts.join('\n');
 
@@ -359,7 +385,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     }
     newWindow.opener = null;
     newWindow.location.href = url.toString();
-  }, [displayItems, lineNumberIndex, filterQuery, startTime, endTime, logFileName]);
+  }, [displayItems, rawLogLines, filterQuery, startTime, endTime, logFileName]);
 
   // Search determines highlighting within all currently rendered lines (including
   // lines expanded from collapsed groups via forcedRanges).
@@ -850,6 +876,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
         </div>
       </div>
 
+      {showProcessColors && <ProcessLegend colorMap={processColorMap} />}
+
       <div ref={parentRef} className={styles.logContentWrapper}>
         <div
           className={styles.logContent}
@@ -872,6 +900,11 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             const collapsedCount = collapseInfo && gapBelow ? Math.min(collapseInfo.count, gapBelow.remainingGap) : 0;
             const isSentryLine = sentryLineNumbers.has(line.lineNumber);
             const httpErrorStatus = isSentryLine ? null : getHttpErrorStatus(line.rawText);
+            // Colour each line by its originating process when several are merged
+            // (e.g. console + nse). A left box-shadow stripe is used so it sits
+            // alongside the search-match/pattern border without clobbering it.
+            const processColor =
+              showProcessColors && line.sourceFile ? processColorMap.get(processOf(line.sourceFile)) : undefined;
 
             return (
               <div
@@ -900,6 +933,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                   // Elevate the row above subsequent siblings when its menu is open so
                   // DOM-order paint (later rows cover earlier rows) cannot clip the menu.
                   zIndex: menuOpenForIndex === index ? 10 : undefined,
+                  boxShadow: processColor ? `inset 3px 0 0 0 ${processColor}` : undefined,
                 }}
               >
                 <RowTimeAction

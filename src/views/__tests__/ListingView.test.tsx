@@ -9,11 +9,11 @@ import { useListingStore } from '../../stores/listingStore';
 
 const {
   mockNavigate,
-  mockLoadFromExtensionUrl,
+  mockOpenMergedEntries,
   mockFetchExtensionFileBytes,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
-  mockLoadFromExtensionUrl: vi.fn(),
+  mockOpenMergedEntries: vi.fn(),
   mockFetchExtensionFileBytes: vi.fn(),
 }));
 
@@ -22,8 +22,11 @@ vi.mock('../../components/BurgerMenu', () => ({
 }));
 
 vi.mock('../../utils/extensionFileLoader', () => ({
-  loadFromExtensionUrl: mockLoadFromExtensionUrl,
   fetchExtensionFileBytes: mockFetchExtensionFileBytes,
+}));
+
+vi.mock('../../utils/openMergedLogs', () => ({
+  openMergedEntries: mockOpenMergedEntries,
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -156,7 +159,7 @@ beforeEach(() => {
   useListingStore.setState({ allVisited: {}, visitedEntries: new Set() });
   vi.clearAllMocks();
 
-  mockLoadFromExtensionUrl.mockResolvedValue('/summary');
+  mockOpenMergedEntries.mockResolvedValue('/summary');
   mockFetchExtensionFileBytes.mockResolvedValue(new TextEncoder().encode('raw log text'));
 
   originalFetch = global.fetch;
@@ -279,9 +282,9 @@ describe('ListingView', () => {
     expect(screen.getByText('incomplete')).toBeInTheDocument();
   });
 
-  it('opens dated logs inside the viewer summary route and marks them visited', async () => {
+  it('opens dated logs inside the viewer summary route', async () => {
     installExtensionRuntime();
-    mockLoadFromExtensionUrl.mockResolvedValue('/summary');
+    mockOpenMergedEntries.mockResolvedValue('/summary');
 
     renderListingView();
 
@@ -290,17 +293,28 @@ describe('ListingView', () => {
       fireEvent.click(button);
     });
 
-    expect(mockLoadFromExtensionUrl).toHaveBeenCalledWith(
-      `${LISTING_URL}console.2026-03-04-10.log.gz`,
-      'console.2026-03-04-10.log.gz'
-    );
+    expect(mockOpenMergedEntries).toHaveBeenCalledWith(['console.2026-03-04-10.log.gz']);
     expect(mockNavigate).toHaveBeenCalledWith('/summary');
-    expect(useListingStore.getState().visitedEntries.has('console.2026-03-04-10.log.gz')).toBe(true);
+  });
+
+  it('does not navigate when opening a single entry yields no route', async () => {
+    installExtensionRuntime();
+    mockOpenMergedEntries.mockResolvedValue(null);
+
+    renderListingView();
+
+    const button = await screen.findByRole('button', { name: /open console\.2026-03-04-10\.log\.gz/i });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(mockOpenMergedEntries).toHaveBeenCalledWith(['console.2026-03-04-10.log.gz']);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('opens undated logs inside the viewer logs route', async () => {
     installExtensionRuntime();
-    mockLoadFromExtensionUrl.mockResolvedValue('/logs');
+    mockOpenMergedEntries.mockResolvedValue('/logs');
 
     renderListingView();
 
@@ -478,6 +492,69 @@ describe('ListingView', () => {
 
     await waitFor(() => {
       expect(useListingStore.getState().listingSummaries.get('console.2026-03-04-10.log.gz')?.totalLines).toBe(0);
+    });
+  });
+
+  describe('multi-select open', () => {
+    it('opens the ticked files merged via openMergedEntries', async () => {
+      installExtensionRuntime();
+      mockOpenMergedEntries.mockResolvedValue('/summary');
+      renderListingView();
+
+      const checkbox = await screen.findByRole('checkbox', { name: /select console\.2026-03-04-10/i });
+      fireEvent.click(checkbox);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /open 1 file together/i }));
+      });
+
+      expect(mockOpenMergedEntries).toHaveBeenCalledWith(['console.2026-03-04-10.log.gz']);
+      expect(mockNavigate).toHaveBeenCalledWith('/summary');
+    });
+
+    it('select-all then Clear toggles the action bar', async () => {
+      installExtensionRuntime();
+      renderListingView();
+
+      const selectAll = await screen.findByRole('checkbox', { name: /select all log files/i });
+      fireEvent.click(selectAll);
+      // console.*.log.gz + logcat.log.gz are analyzable → 2 files
+      expect(screen.getByRole('button', { name: /open 2 files together/i })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^clear$/i }));
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
+    });
+
+    it('unticking a file and toggling select-all off both clear the selection', async () => {
+      installExtensionRuntime();
+      renderListingView();
+
+      const cb = await screen.findByRole('checkbox', { name: /select console\.2026-03-04-10/i });
+      fireEvent.click(cb); // tick
+      expect(screen.getByRole('button', { name: /open 1 file together/i })).toBeInTheDocument();
+      fireEvent.click(cb); // untick
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
+
+      const selectAll = screen.getByRole('checkbox', { name: /select all log files/i });
+      fireEvent.click(selectAll); // all ticked
+      expect(screen.getByRole('button', { name: /open 2 files together/i })).toBeInTheDocument();
+      fireEvent.click(selectAll); // toggle off → cleared
+      expect(screen.queryByRole('button', { name: /open .* together/i })).not.toBeInTheDocument();
+    });
+
+    it('does not navigate when opening yields no route', async () => {
+      installExtensionRuntime();
+      mockOpenMergedEntries.mockResolvedValue(null);
+      renderListingView();
+
+      const checkbox = await screen.findByRole('checkbox', { name: /select console\.2026-03-04-10/i });
+      fireEvent.click(checkbox);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /open 1 file together/i }));
+      });
+
+      expect(mockOpenMergedEntries).toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
   });
 });

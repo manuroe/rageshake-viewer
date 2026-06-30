@@ -34,6 +34,8 @@ import { wrapError, type AppError } from '../utils/errorHandling';
 import { DEFAULT_MS_PER_PIXEL } from '../utils/timelineUtils';
 import { filterSyncRequests, filterHttpRequests } from '../utils/requestFilters';
 import { buildAnonymizationDictionary, buildCompiledAnonymizer, buildCompiledUnanonymizer } from '../utils/anonymizeUtils';
+import { mergeLogParserResults, type NamedLogParserResult } from '../utils/mergeLogParserResults';
+import { stripEntryPrefix } from '../utils/listingEntries';
 
 /**
  * Mutable token shared between `anonymizeLogs` and `cancelAnonymization` so
@@ -98,6 +100,14 @@ interface LogStore {
 
   // Name of the currently loaded log file (null when none is loaded or source is unknown)
   logFileName: string | null;
+
+  /**
+   * Source-file names currently merged into the view, in chronological order.
+   * One entry for a single-file load; several when the user opens rotated
+   * hourly logs together. Empty when nothing is loaded. Used by the "Select
+   * logs" control to know what is already open.
+   */
+  loadedEntryNames: string[];
 
   // Sentry events detected during parsing
   sentryEvents: SentryEvent[];
@@ -179,9 +189,7 @@ interface LogStore {
   // Navigation memory
   setLastRoute: (route: string) => void;
   clearLastRoute: () => void;
-  /** Update the displayed log file name. Call after loadLogParserResult with the source file's name. */
-  setLogFileName: (name: string | null) => void;
-  
+
   // Error handling
   setError: (error: AppError | null) => void;
   clearError: () => void;
@@ -194,8 +202,16 @@ interface LogStore {
    * expected in a browser context. Use this instead of calling the individual
    * setters manually to avoid setting data without derived filters.
    */
-  loadLogParserResult: (result: LogParserResult) => void;
-  
+  loadLogParserResult: (result: LogParserResult, overrides?: { loadedEntryNames?: string[]; logFileName?: string }) => void;
+
+  /**
+   * Merge several parsed log files into one continuous dataset and load it.
+   * `files` must be ordered chronologically (oldest first). Sets
+   * `loadedEntryNames` and a summary `logFileName`. Use this for both
+   * single- and multi-file opens so `loadedEntryNames` stays accurate.
+   */
+  loadMergedLogParserResults: (files: NamedLogParserResult[]) => void;
+
   // Helper to get displayTime by line number
   getDisplayTime: (lineNumber: number) => string;
 }
@@ -260,6 +276,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
   lastRoute: null,
   detectedPlatform: null,
   logFileName: null,
+  loadedEntryNames: [],
   sentryEvents: [],
   isAnonymized: false,
   isAnonymizing: false,
@@ -418,6 +435,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       openLogViewerIds: new Set(),
       detectedPlatform: null,
       logFileName: null,
+      loadedEntryNames: [],
       sentryEvents: [],
       isAnonymized: false,
       isAnonymizing: false,
@@ -642,10 +660,6 @@ export const useLogStore = create<LogStore>((set, get) => ({
     set({ lastRoute: null });
   },
 
-  setLogFileName: (name) => {
-    set({ logFileName: name });
-  },
-  
   setError: (error) => {
     set({ error });
   },
@@ -658,7 +672,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
     return get().lineNumberIndex.get(lineNumber)?.displayTime ?? '';
   },
 
-  loadLogParserResult: (result) => {
+  loadLogParserResult: (result, overrides) => {
     // Cancel any in-flight async anonymisation so it cannot overwrite the
     // newly-loaded log data after this function returns.
     if (currentCancelToken) {
@@ -689,6 +703,10 @@ export const useLogStore = create<LogStore>((set, get) => ({
         isAnonymizing: false,
         anonymizingProgress: 0,
         error: null,
+        loadedEntryNames: overrides?.loadedEntryNames ?? [],
+        // Always reset (like loadedEntryNames) so a new load never shows the
+        // previous file's name when the source name is unknown.
+        logFileName: overrides?.logFileName ?? null,
       });
       get().filterRequests();
       get().filterHttpRequests();
@@ -696,5 +714,13 @@ export const useLogStore = create<LogStore>((set, get) => ({
       const appError = wrapError(error, 'Failed to process log data');
       set({ error: appError });
     }
+  },
+
+  loadMergedLogParserResults: (files) => {
+    const names = files.map((f) => f.name);
+    get().loadLogParserResult(mergeLogParserResults(files), {
+      loadedEntryNames: names,
+      logFileName: names.length === 1 ? stripEntryPrefix(names[0]) : `${names.length} files`,
+    });
   },
 }));

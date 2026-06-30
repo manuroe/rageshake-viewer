@@ -12,7 +12,8 @@ import styles from './ArchiveView.module.css';
 import { useListingStore } from '../stores/listingStore';
 import { isAnalyzableEntry, type ArchiveSummary } from '../utils/archiveSummary';
 import { parseDetailsJson } from '../utils/detailsJson';
-import { fetchExtensionFileBytes, loadFromExtensionUrl } from '../utils/extensionFileLoader';
+import { fetchExtensionFileBytes } from '../utils/extensionFileLoader';
+import { openMergedEntries } from '../utils/openMergedLogs';
 import { decodeTextBytes, isValidGzipHeader } from '../utils/fileValidator';
 import {
   getEntryKind,
@@ -140,8 +141,9 @@ export function ListingView() {
     visitedEntries,
     loadListing,
     setListingSummary,
-    markVisited,
   } = useListingStore();
+  /** Entry names ticked for opening together as one merged timeline. */
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [detailsUrl, setDetailsUrl] = useState<string | null>(null);
   const [parsedDetails, setParsedDetails] = useState<ListingDetails | null>(null);
   const [matrixProfile, setMatrixProfile] = useState<MatrixProfile | null>(null);
@@ -345,14 +347,20 @@ export function ListingView() {
       }
 
       void (async () => {
-        const route = await loadFromExtensionUrl(entry.url, entry.name);
-        if (!route) return;
-        markVisited(entryName);
-        void navigate(route);
+        const route = await openMergedEntries([entryName]);
+        if (route) void navigate(route);
       })();
     },
-    [listingEntries, markVisited, navigate]
+    [listingEntries, navigate]
   );
+
+  /** Open all ticked log entries merged into one timeline. */
+  const openSelected = useCallback(() => {
+    void (async () => {
+      const route = await openMergedEntries([...selected]);
+      if (route) void navigate(route);
+    })();
+  }, [selected, navigate]);
 
   const handleOpenRaw = useCallback(
     (entryName: string) => {
@@ -388,6 +396,28 @@ export function ListingView() {
     [listingEntries]
   );
 
+  // Log entries that can be ticked for opening together.
+  const selectableNames = useMemo(
+    () => sortedEntries.filter((e) => isAnalyzableEntry(e.name)).map((e) => e.name),
+    [sortedEntries]
+  );
+  const allSelected = selectableNames.length > 0 && selectableNames.every((n) => selected.has(n));
+
+  const toggleSelected = useCallback((name: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) =>
+      prev.size > 0 && selectableNames.every((n) => prev.has(n)) ? new Set() : new Set(selectableNames)
+    );
+  }, [selectableNames]);
+
   if (!listingUrlParam && listingEntries.length === 0) {
     return null;
   }
@@ -400,6 +430,16 @@ export function ListingView() {
           <h1 className="header-title">{listingLabel}</h1>
         </div>
         <div className="header-right">
+          {selected.size > 0 && (
+            <>
+              <button className={styles.openSelectedButton} onClick={openSelected}>
+                Open {selected.size} {selected.size === 1 ? 'file' : 'files'} together
+              </button>
+              <button className={styles.clearSelectedButton} onClick={() => setSelected(new Set())}>
+                Clear
+              </button>
+            </>
+          )}
           <span className={styles.entryCount}>{listingEntries.length} files</span>
         </div>
       </div>
@@ -409,6 +449,15 @@ export function ListingView() {
             <table className={tableStyles.table}>
               <thead className={tableStyles.tableHead}>
                 <tr>
+                  <th className={tableStyles.tableHeadCell}>
+                    <input
+                      type="checkbox"
+                      className={styles.selectCheckbox}
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all log files"
+                    />
+                  </th>
                   <th className={tableStyles.tableHeadCell}>File</th>
                   <th className={`${tableStyles.tableHeadCell} ${tableStyles.alignRight}`}>Lines</th>
                   <th className={`${tableStyles.tableHeadCell} ${tableStyles.alignRight}`}>Sentry</th>
@@ -429,6 +478,17 @@ export function ListingView() {
 
                   return (
                     <tr key={entry.url} className={tableStyles.tableRowHover}>
+                      <td className={tableStyles.tableCell}>
+                        {analyzable && (
+                          <input
+                            type="checkbox"
+                            className={styles.selectCheckbox}
+                            checked={selected.has(entry.name)}
+                            onChange={() => toggleSelected(entry.name)}
+                            aria-label={`Select ${displayName}`}
+                          />
+                        )}
+                      </td>
                       <td className={tableStyles.tableCell}>
                         <button
                           className={`${styles.fileLink} ${(kind !== 'other' && visitedEntries.has(entry.name)) ? styles.fileLinkVisited : ''} ${kind === 'other' ? styles.fileLinkOther : ''}`}

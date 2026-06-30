@@ -28,7 +28,11 @@ export function extractDateKey(name: string): string | null {
   return match ? match[1] : null;
 }
 
-function extractCategory(name: string): string {
+/**
+ * The leading category token of a log filename — also the process name for
+ * rageshake logs (e.g. `console`, `nse`, `shareextension`).
+ */
+export function extractCategory(name: string): string {
   const basename = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
   const match = basename.match(/^([^.]+)/);
   return match ? match[1] : basename;

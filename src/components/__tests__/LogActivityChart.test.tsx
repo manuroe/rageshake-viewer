@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 import { screen, fireEvent } from '@testing-library/dom';
 import { LogActivityChart } from '../LogActivityChart';
 import { createParsedLogLines, createParsedLogLine } from '../../test/fixtures';
+import { useLogStore } from '../../stores/logStore';
 import type { SentryEvent } from '../../types/log.types';
 
 describe('LogActivityChart', () => {
@@ -607,5 +608,95 @@ describe('LogActivityChart', () => {
     expect(timeLabels.length).toBeGreaterThanOrEqual(2);
     expect(timeLabels.some((t) => t.startsWith('00:00:00'))).toBe(false);
     expect(timeLabels.some((t) => t.startsWith('18:29'))).toBe(true);
+  });
+
+  describe('per-process activity lanes', () => {
+    afterEach(() => {
+      useLogStore.setState({ loadedEntryNames: [] });
+    });
+
+    function procLine(lineNumber: number, tsSeconds: number, sourceFile: string) {
+      return createParsedLogLine({ lineNumber, timestampUs: tsSeconds * 1_000_000, sourceFile });
+    }
+
+    it('renders a labelled lane per process with coloured segments when several are merged', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'] });
+      const logs = [
+        procLine(1, 0, 'console.2026-04-14-08.log.gz'),
+        procLine(2, 40, 'console.2026-04-14-08.log.gz'),
+        procLine(3, 38, 'nse.2026-04-14-08.log.gz'),
+        procLine(4, 80, 'console.2026-04-14-08.log.gz'),
+      ];
+
+      const { container } = render(<LogActivityChart logLines={logs} />);
+
+      expect(screen.getByText('console')).toBeInTheDocument();
+      expect(screen.getByText('nse')).toBeInTheDocument();
+      // Lane segments carry the process colour (console is first in the palette).
+      expect(container.querySelector('rect[fill="#3b82f6"]')).not.toBeNull();
+    });
+
+    it('renders no lanes for a single process', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz'] });
+      render(<LogActivityChart logLines={[procLine(1, 0, 'console.2026-04-14-08.log.gz')]} />);
+      expect(screen.queryByText('console')).not.toBeInTheDocument();
+    });
+
+    it('still shows a lane for a loaded process with no lines, and ignores untagged / unknown lines', () => {
+      useLogStore.setState({
+        loadedEntryNames: [
+          'console.2026-04-14-08.log.gz',
+          'nse.2026-04-14-08.log.gz',
+          'shareextension.2026-04-14-08.log.gz',
+        ],
+      });
+      const logs = [
+        procLine(1, 0, 'console.2026-04-14-08.log.gz'),
+        procLine(2, 40, 'nse.2026-04-14-08.log.gz'),
+        createParsedLogLine({ lineNumber: 3, timestampUs: 50_000_000 }), // untagged (no sourceFile)
+        procLine(4, 60, 'other.2026-04-14-08.log.gz'), // process not in the loaded set
+      ];
+
+      render(<LogActivityChart logLines={logs} />);
+
+      // shareextension has no lines but still gets an (empty) lane label.
+      expect(screen.getByText('console')).toBeInTheDocument();
+      expect(screen.getByText('nse')).toBeInTheDocument();
+      expect(screen.getByText('shareextension')).toBeInTheDocument();
+      // The unknown process never becomes a lane.
+      expect(screen.queryByText('other')).not.toBeInTheDocument();
+    });
+
+    it('merges adjacent active buckets into a single segment', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'] });
+      // Range is 1s → 1s buckets; console lines at 1s and 2s land in consecutive
+      // buckets and must collapse into one segment rect.
+      const logs = [
+        procLine(1, 1, 'console.2026-04-14-08.log.gz'),
+        procLine(2, 2, 'console.2026-04-14-08.log.gz'),
+        procLine(3, 1, 'nse.2026-04-14-08.log.gz'),
+      ];
+
+      const { container } = render(<LogActivityChart logLines={logs} />);
+
+      // console (palette[0]) renders exactly one merged segment.
+      expect(container.querySelectorAll('rect[fill="#3b82f6"]')).toHaveLength(1);
+    });
+
+    it('renders no lanes when several processes are loaded but there are no lines', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'] });
+      render(<LogActivityChart logLines={[]} />);
+      expect(screen.queryByText('console')).not.toBeInTheDocument();
+    });
+
+    it('renders no lanes when every line has a non-positive timestamp', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'] });
+      const logs = [
+        procLine(1, 0, 'console.2026-04-14-08.log.gz'),
+        procLine(2, 0, 'nse.2026-04-14-08.log.gz'),
+      ];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('console')).not.toBeInTheDocument();
+    });
   });
 });
