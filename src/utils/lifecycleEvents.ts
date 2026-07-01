@@ -146,6 +146,23 @@ const RULES: readonly LifecycleRule[] = [
   },
 ];
 
+/** Escape regex metacharacters so a literal substring can go in an alternation. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Cheap candidacy gate run before the full rule scan: a line can only match a
+ * rule if it contains that rule's anchor (first `includes`) token, so a single
+ * native regex pass rules out ~all non-lifecycle lines in one shot instead of
+ * ~N `String.includes` scans each. Derived from RULES (deduped anchors) so it
+ * can't drift out of sync. `detectLifecycleKind` runs on every parsed log line,
+ * so this is a hot path.
+ */
+const PREFILTER = new RegExp(
+  [...new Set(RULES.map((r) => r.includes[0]))].map(escapeRegExp).join("|"),
+);
+
 /**
  * Classify a single log message into a lifecycle event kind, or `null` when the
  * line is not a lifecycle transition. Matches on per-platform message
@@ -163,6 +180,7 @@ const RULES: readonly LifecycleRule[] = [
 export function detectLifecycleKind(
   message: string,
 ): { kind: LifecycleEventKind; platform: Platform } | null {
+  if (!PREFILTER.test(message)) return null;
   for (const rule of RULES) {
     if (rule.includes.every((s) => message.includes(s))) {
       return { kind: rule.kind, platform: rule.platform };
