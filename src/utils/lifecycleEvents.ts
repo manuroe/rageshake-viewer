@@ -1,13 +1,13 @@
-import type { LifecycleEvent, LifecycleEventKind } from "../types/log.types";
-import type { TimestampMicros } from "../types/time.types";
-import { shadeColor } from "./processColors";
+import type { LifecycleEvent, LifecycleEventKind } from '../types/log.types';
+import type { TimestampMicros } from '../types/time.types';
+import { shadeColor } from './processColors';
 
 /**
  * Lifecycle kinds rendered as vertical lines on the charts — the two genuinely
  * point-in-time signals. Background/foreground/refresh are durations and are
  * shown as the app-state band instead (see {@link deriveAppStateSegments}).
  */
-export const MARKER_KINDS = ["coldStart", "crash"] as const;
+export const MARKER_KINDS = ['coldStart', 'crash'] as const;
 export type MarkerKind = (typeof MARKER_KINDS)[number];
 
 /**
@@ -18,14 +18,14 @@ export type MarkerKind = (typeof MARKER_KINDS)[number];
  * const stroke = MARKER_COLOR['crash']; // 'var(--log-level-error)'
  */
 export const MARKER_COLOR: Record<MarkerKind, string> = {
-  "coldStart": "var(--color-success)",
-  crash: "var(--log-level-error)",
+  coldStart: 'var(--color-success)',
+  crash: 'var(--log-level-error)',
 };
 
 /** Human-readable label for each vertical marker, used in the Help legend. */
 export const MARKER_LABEL: Record<MarkerKind, string> = {
-  "coldStart": "Cold start",
-  crash: "Crash",
+  coldStart: 'Cold start',
+  crash: 'Crash',
 };
 
 /** True when a lifecycle kind is drawn as a vertical marker line. */
@@ -40,7 +40,7 @@ export function isMarkerKind(kind: LifecycleEventKind): kind is MarkerKind {
  * These colour the bars where the app logged; silence (no logs) is left empty
  * and reads as "idle / doing nothing".
  */
-export type AppState = "foreground" | "background" | "backgroundWorking";
+export type AppState = 'foreground' | 'background' | 'backgroundWorking';
 
 /**
  * Derive the per-state bar colours as shades of a lane's base colour, so the
@@ -56,19 +56,19 @@ export type AppState = "foreground" | "background" | "backgroundWorking";
 export function appStateColors(baseColor: string): Record<AppState, string> {
   return {
     foreground: shadeColor(baseColor, -0.18),
-    "backgroundWorking": shadeColor(baseColor, 0.12),
+    backgroundWorking: shadeColor(baseColor, 0.12),
     background: shadeColor(baseColor, 0.28, -0.15),
   };
 }
 
 /** Human-readable label for each app-state, used in hover titles + Help legend. */
 export const APP_STATE_LABEL: Record<AppState, string> = {
-  foreground: "Foreground",
-  background: "Background",
-  "backgroundWorking": "Background refresh",
+  foreground: 'Foreground',
+  background: 'Background',
+  backgroundWorking: 'Background refresh',
 };
 
-type Platform = "android" | "ios";
+type Platform = 'android' | 'ios';
 
 /**
  * One detection rule: a log message matches this rule when it contains every
@@ -97,58 +97,58 @@ const RULES: readonly LifecycleRule[] = [
   // shared rageshake, so the next-launch line is the reliable signal. It also
   // surfaces as a Sentry event (Reports table) — the duplicate is intentional;
   // the red marker is the at-a-glance signal.
-  { kind: "crash", platform: "ios", includes: ["Sentry detected a crash"] },
+  { kind: 'crash', platform: 'ios', includes: ['Sentry detected a crash'] },
   {
-    kind: "coldStart",
-    platform: "ios",
-    includes: ["Sentry configured (enabled:"],
+    kind: 'coldStart',
+    platform: 'ios',
+    includes: ['Sentry configured (enabled:'],
   },
   {
-    kind: "background",
-    platform: "ios",
-    includes: ["Application will resign active"],
+    kind: 'background',
+    platform: 'ios',
+    includes: ['Application will resign active'],
   },
   {
-    kind: "foreground",
-    platform: "ios",
-    includes: ["Application did become active"],
+    kind: 'foreground',
+    platform: 'ios',
+    includes: ['Application did become active'],
   },
   // Background app refresh is an interval — split boundaries drive the
   // backgroundWorking state segment (see deriveAppStateSegments).
   {
-    kind: "backgroundRefreshStart",
-    platform: "ios",
-    includes: ["Started background app refresh"],
+    kind: 'backgroundRefreshStart',
+    platform: 'ios',
+    includes: ['Started background app refresh'],
   },
   {
-    kind: "backgroundRefreshEnd",
-    platform: "ios",
-    includes: ["Background app refresh finished"],
+    kind: 'backgroundRefreshEnd',
+    platform: 'ios',
+    includes: ['Background app refresh finished'],
   },
 
   // Android (Timber). Short tokens are anchored on the `MainActivity` tag.
-  { kind: "crash", platform: "android", includes: ["FATAL EXCEPTION"] },
-  { kind: "crash", platform: "android", includes: ["Uncaught exception:"] },
+  { kind: 'crash', platform: 'android', includes: ['FATAL EXCEPTION'] },
+  { kind: 'crash', platform: 'android', includes: ['Uncaught exception:'] },
   {
-    kind: "coldStart",
-    platform: "android",
-    includes: ["MainActivity", "onCreate, with savedInstanceState:"],
+    kind: 'coldStart',
+    platform: 'android',
+    includes: ['MainActivity', 'onCreate, with savedInstanceState:'],
   },
   {
-    kind: "background",
-    platform: "android",
-    includes: ["MainActivity", "onPause"],
+    kind: 'background',
+    platform: 'android',
+    includes: ['MainActivity', 'onPause'],
   },
   {
-    kind: "foreground",
-    platform: "android",
-    includes: ["MainActivity", "onResume"],
+    kind: 'foreground',
+    platform: 'android',
+    includes: ['MainActivity', 'onResume'],
   },
 ];
 
 /** Escape regex metacharacters so a literal substring can go in an alternation. */
 function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -160,7 +160,7 @@ function escapeRegExp(s: string): string {
  * so this is a hot path.
  */
 const PREFILTER = new RegExp(
-  [...new Set(RULES.map((r) => r.includes[0]))].map(escapeRegExp).join("|"),
+  [...new Set(RULES.map((r) => r.includes[0]))].map(escapeRegExp).join('|'),
 );
 
 /**
@@ -213,7 +213,7 @@ function lastEventUs(
  * lastColdStartUs([{ kind: 'coldStart', timestampUs: 100, … }, { kind: 'coldStart', timestampUs: 500, … }]); // → 500
  */
 export function lastColdStartUs(events: readonly LifecycleEvent[]): TimestampMicros | null {
-  return lastEventUs(events, (k) => k === "coldStart");
+  return lastEventUs(events, (k) => k === 'coldStart');
 }
 
 /**
@@ -225,7 +225,7 @@ export function lastColdStartUs(events: readonly LifecycleEvent[]): TimestampMic
  * lastForegroundUs([{ kind: 'coldStart', timestampUs: 100, … }, { kind: 'foreground', timestampUs: 900, … }]); // → 900
  */
 export function lastForegroundUs(events: readonly LifecycleEvent[]): TimestampMicros | null {
-  return lastEventUs(events, (k) => k === "foreground" || k === "coldStart");
+  return lastEventUs(events, (k) => k === 'foreground' || k === 'coldStart');
 }
 
 /** A contiguous span during which the app was in a single {@link AppState}. */
@@ -273,15 +273,15 @@ export function appStateAt(
  * stops logging, so the activity bars stop on their own. */
 function stateForKind(kind: LifecycleEventKind): AppState | null {
   switch (kind) {
-    case "coldStart":
-    case "foreground":
-      return "foreground";
-    case "background":
-    case "backgroundRefreshEnd":
-      return "background";
-    case "backgroundRefreshStart":
-      return "backgroundWorking";
-    case "crash":
+    case 'coldStart':
+    case 'foreground':
+      return 'foreground';
+    case 'background':
+    case 'backgroundRefreshEnd':
+      return 'background';
+    case 'backgroundRefreshStart':
+      return 'backgroundWorking';
+    case 'crash':
       return null;
   }
 }
