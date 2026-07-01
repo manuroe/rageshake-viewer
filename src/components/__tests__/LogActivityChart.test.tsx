@@ -6,6 +6,8 @@ import { createParsedLogLines, createParsedLogLine } from '../../test/fixtures';
 import { useLogStore } from '../../stores/logStore';
 import type { SentryEvent, LifecycleEvent, LifecycleEventKind } from '../../types/log.types';
 import type { TimestampMicros } from '../../types/time.types';
+import { appStateColors } from '../../utils/lifecycleEvents';
+import { APP_LANE_COLOR } from '../../utils/processColors';
 
 /** Minimal lifecycle event for the app-state lane tests. */
 function lc(kind: LifecycleEventKind, timestampUs: number): LifecycleEvent {
@@ -748,6 +750,22 @@ describe('LogActivityChart', () => {
       const logs = [consoleLineAt(1, 1), consoleLineAt(2, 60)];
       render(<LogActivityChart logLines={logs} />);
       expect(screen.queryByText('app')).not.toBeInTheDocument();
+    });
+
+    it('draws an interior isolated log line but not boundary-touching ones', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        lifecycleEvents: [lc('coldStart', 1_000_000)],
+      });
+      // Three isolated lines, each alone in its bucket → three zero-width runs.
+      // The foreground segment spans [1s, 120s] (log bounds). Only the 60s line is
+      // strictly interior; the 1s and 120s lines merely touch the segment edges
+      // and must not render phantom 1px bars at the state boundaries.
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 60), consoleLineAt(3, 120)];
+      const { container } = render(<LogActivityChart logLines={logs} />);
+      expect(screen.getByText('app')).toBeInTheDocument();
+      const fg = appStateColors(APP_LANE_COLOR).foreground;
+      expect(container.querySelectorAll(`rect[fill="${fg}"]`)).toHaveLength(1);
     });
   });
 });

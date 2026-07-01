@@ -170,12 +170,18 @@ export function LogActivityChart({ logLines, sentryEvents, markers, onTimeRangeS
       const appRuns = bucketActivityRuns(appActivityTs, min, max, bucketSize);
       const stateColor = appStateColors(APP_LANE_COLOR);
       const appSegments: ActivityLaneSegment[] = [];
-        for (const seg of stateSegments) {
-          for (const run of appRuns) {
-            const s = Math.max(run.startUs, seg.startUs);
-            const e = Math.min(run.endUs, seg.endUs);
-            if (e < s) continue;
-            appSegments.push({
+      for (const seg of stateSegments) {
+        for (const run of appRuns) {
+          const s = Math.max(run.startUs, seg.startUs);
+          const e = Math.min(run.endUs, seg.endUs);
+          if (e < s) continue; // no overlap
+          // Zero-width intersection (e === s): keep it only for a genuine
+          // single-point run strictly inside the segment (an isolated log line,
+          // which BaseActivityChart still draws as a 1px bar). Drop pure boundary
+          // touches — a run ending exactly at a segment edge — which would
+          // otherwise render as a phantom 1px bar at every state transition.
+          if (e === s && (s === seg.startUs || s === seg.endUs)) continue;
+          appSegments.push({
             startUs: s,
             endUs: e,
             color: stateColor[seg.state],
