@@ -11,7 +11,7 @@ import { APP_LANE_COLOR } from '../../utils/processColors';
 
 /** Minimal lifecycle event for the app-state lane tests. */
 function lc(kind: LifecycleEventKind, timestampUs: number): LifecycleEvent {
-  return { kind, platform: 'ios', lineNumber: 0, timestampUs: timestampUs as TimestampMicros, message: '' };
+  return { kind, platform: 'ios', lineNumber: 0, timestampUs: timestampUs as TimestampMicros };
 }
 
 describe('LogActivityChart', () => {

@@ -6,7 +6,7 @@ import type { TimestampMicros } from '../../types/time.types';
 import { MARKER_COLOR } from '../../utils/lifecycleEvents';
 
 function ev(kind: LifecycleEvent['kind'], timestampUs: number): LifecycleEvent {
-  return { kind, platform: 'ios', lineNumber: 1, timestampUs: timestampUs as TimestampMicros, message: '' };
+  return { kind, platform: 'ios', lineNumber: 1, timestampUs: timestampUs as TimestampMicros };
 }
 
 const timeToX = (us: number) => us / 1000; // simple linear mapping for tests

@@ -16,7 +16,6 @@ function ev(kind: LifecycleEventKind, timestampUs: number): LifecycleEvent {
     platform: 'ios',
     lineNumber: 1,
     timestampUs: timestampUs as TimestampMicros,
-    message: `${kind} @ ${timestampUs}`,
   };
 }
 

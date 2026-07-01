@@ -164,8 +164,6 @@ export interface LifecycleEvent {
   readonly platform: 'android' | 'ios';
   readonly lineNumber: number;
   readonly timestampUs: TimestampMicros;
-  /** First ~150 chars of the source line, for future hover/detail UI. */
-  readonly message: string;
 }
 
 export interface LogParserResult {

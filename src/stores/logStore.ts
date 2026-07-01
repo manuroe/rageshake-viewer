@@ -113,7 +113,8 @@ interface LogStore {
   sentryEvents: SentryEvent[];
 
   // App-lifecycle events (cold start / background / foreground / crash) detected
-  // during parsing. Carry no PII, so they are left untouched by anonymization.
+  // during parsing. Hold only a kind, platform, line number and timestamp — no
+  // free-form log text — so they carry no PII and need no anonymization.
   lifecycleEvents: LifecycleEvent[];
 
   // Anonymization state

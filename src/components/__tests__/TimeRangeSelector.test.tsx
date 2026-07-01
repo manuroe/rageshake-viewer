@@ -7,7 +7,7 @@ import type { TimestampMicros } from '../../types/time.types';
 
 /** Minimal lifecycle event for the preset tests. */
 function lc(kind: LifecycleEventKind, timestampUs: number, lineNumber = 1): LifecycleEvent {
-  return { kind, platform: 'ios', lineNumber, timestampUs: timestampUs as TimestampMicros, message: '' };
+  return { kind, platform: 'ios', lineNumber, timestampUs: timestampUs as TimestampMicros };
 }
 
 const mockSetTimeFilter = vi.fn();

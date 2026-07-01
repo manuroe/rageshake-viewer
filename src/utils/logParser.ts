@@ -263,7 +263,6 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
         platform: lifecycle.platform,
         lineNumber: i + 1,
         timestampUs,
-        message: line.slice(0, 150),
       });
     }
 
