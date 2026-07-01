@@ -33,6 +33,7 @@ export function SummaryView() {
     allRequests,
     connectionIds,
     sentryEvents,
+    lifecycleEvents,
     startTime,
     endTime,
     detectedPlatform,
@@ -165,9 +166,10 @@ export function SummaryView() {
       startTime,
       endTime,
       localTimeRangeUs,
-      lineNumberIndex
+      lineNumberIndex,
+      lifecycleEvents
     );
-  }, [rawLogLines, allHttpRequests, allRequests, connectionIds, sentryEvents, startTime, endTime, localStartTime, localEndTime, lineNumberIndex]);
+  }, [rawLogLines, allHttpRequests, allRequests, connectionIds, sentryEvents, startTime, endTime, localStartTime, localEndTime, lineNumberIndex, lifecycleEvents]);
 
   /**
    * Derived chart data with incomplete requests optionally excluded.
@@ -303,6 +305,7 @@ export function SummaryView() {
             <LogActivityChart
               logLines={stats.filteredLogLines}
               sentryEvents={stats.sentryEvents}
+              markers={stats.lifecycleEvents}
               onTimeRangeSelected={handleTimeRangeSelected}
               onResetZoom={handleResetZoom}
               externalCursorTime={enableChartSync ? sharedCursorTime : undefined}
@@ -529,6 +532,7 @@ export function SummaryView() {
                     httpRequestSpans={httpRequestSpansForChart}
                     displayMode={displayMode}
                     timeRange={stats.chartTimeRange}
+                    markers={stats.lifecycleEvents}
                     onTimeRangeSelected={handleTimeRangeSelected}
                     onResetZoom={handleResetZoom}
                     externalCursorTime={enableChartSync ? sharedCursorTime : undefined}
@@ -550,6 +554,7 @@ export function SummaryView() {
                     bandwidthRequestSpans={bandwidthSpansForChart}
                     displayMode={displayMode}
                     timeRange={stats.chartTimeRange}
+                    markers={stats.lifecycleEvents}
                     onTimeRangeSelected={handleTimeRangeSelected}
                     onResetZoom={handleResetZoom}
                     externalCursorTime={enableChartSync ? sharedCursorTime : undefined}

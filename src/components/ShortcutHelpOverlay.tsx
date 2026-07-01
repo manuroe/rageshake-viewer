@@ -3,6 +3,8 @@ import type { MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { SHORTCUTS, SHORTCUT_CATEGORIES, metaKey, optionKey, type ShortcutCategory } from '../utils/shortcuts';
 import { useKeyboardShortcutContext } from './KeyboardShortcutContext';
+import { MARKER_COLOR, MARKER_LABEL, MARKER_KINDS, appStateColors, APP_STATE_LABEL } from '../utils/lifecycleEvents';
+import { APP_LANE_COLOR } from '../utils/processColors';
 import styles from './ShortcutHelpOverlay.module.css';
 
 // ---------------------------------------------------------------------------
@@ -110,10 +112,35 @@ const SYNC_COLOR_LEGEND: readonly ColorLegendItem[] = [
   { label: '/sync long-poll success', color: 'var(--sync-longpoll-success)' },
 ];
 
+// Vertical markers drawn on the activity charts (point-in-time signals only).
+// Derived from the shared maps so colors/labels can't drift from the markers.
+const LIFECYCLE_MARKER_LEGEND: readonly ColorLegendItem[] = MARKER_KINDS.map((kind) => ({
+  label: MARKER_LABEL[kind],
+  color: MARKER_COLOR[kind],
+}));
+
+// App-state band shown on the log chart. Derived from the shared state maps.
+const APP_STATE_SHADES = appStateColors(APP_LANE_COLOR);
+const APP_STATE_LEGEND: readonly ColorLegendItem[] = (
+  ['foreground', 'background', 'backgroundWorking'] as const
+).map((state) => ({ label: APP_STATE_LABEL[state], color: APP_STATE_SHADES[state] }));
+
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function ColorLegendSection({ title, items }: { title: string; items: readonly ColorLegendItem[] }) {
+function ColorLegendSection({
+  title,
+  items,
+  swatch = 'disk',
+}: {
+  title: string;
+  items: readonly ColorLegendItem[];
+  /** `'line'` = vertical bar (markers), `'block'` = filled band (app state);
+   * defaults to a disk. */
+  swatch?: 'disk' | 'line' | 'block';
+}) {
+  const swatchClass =
+    swatch === 'line' ? styles.legendLine : swatch === 'block' ? styles.legendBlock : styles.legendSwatch;
   return (
     <section className={styles.section}>
       <div className={styles.categoryTitle}>{title}</div>
@@ -121,7 +148,7 @@ function ColorLegendSection({ title, items }: { title: string; items: readonly C
         <div key={item.label} className={styles.legendRow}>
           <span
             aria-hidden="true"
-            className={styles.legendSwatch}
+            className={swatchClass}
             style={{ backgroundColor: item.color }}
           />
           <div className={styles.legendLabel}>{item.label}</div>
@@ -231,6 +258,8 @@ export function ShortcutHelpOverlay() {
             <ColorLegendSection title="Log Colors" items={LOG_COLOR_LEGEND} />
             <ColorLegendSection title="HTTP Colors" items={HTTP_COLOR_LEGEND} />
             <ColorLegendSection title="Sync Colors" items={SYNC_COLOR_LEGEND} />
+            <ColorLegendSection title="Lifecycle Markers" items={LIFECYCLE_MARKER_LEGEND} swatch="line" />
+            <ColorLegendSection title="App State" items={APP_STATE_LEGEND} swatch="block" />
           </div>
         </div>
       </div>

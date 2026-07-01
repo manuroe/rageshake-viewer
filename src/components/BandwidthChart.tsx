@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_SECOND, MICROS_PER_MILLISECOND } from '../types/time.types';
-import type { BandwidthRequestEntry, BandwidthRequestSpan } from '../types/log.types';
+import type { BandwidthRequestEntry, BandwidthRequestSpan, LifecycleEvent } from '../types/log.types';
 import { renderBandwidthTooltip, type BandwidthBucket } from './BandwidthChartTooltip';
 import type { SelectionRange } from '../hooks/useChartInteraction';
 import { BandwidthConcurrencyChart } from './BandwidthConcurrencyChart';
@@ -32,6 +32,8 @@ interface BandwidthChartProps {
   onCursorMove?: (timeUs: number | null) => void;
   /** Fired as a drag selection changes on this chart. */
   onSelectionChange?: (selection: SelectionRange | null) => void;
+  /** App-lifecycle events drawn as vertical markers. */
+  markers?: readonly LifecycleEvent[];
 }
 
 /**
@@ -65,6 +67,7 @@ export function BandwidthChart({
   externalSelection,
   onCursorMove,
   onSelectionChange,
+  markers,
 }: BandwidthChartProps) {
   const formatTime = useCallback((timestampUs: number): string => {
     const date = new Date(timestampUs / MICROS_PER_MILLISECOND);
@@ -165,6 +168,7 @@ export function BandwidthChart({
         externalSelection={externalSelection}
         onCursorMove={onCursorMove}
         onSelectionChange={onSelectionChange}
+        markers={markers}
       />
     );
   }
@@ -193,6 +197,7 @@ export function BandwidthChart({
       externalSelection={externalSelection}
       onCursorMove={onCursorMove}
       onSelectionChange={onSelectionChange}
+      markers={markers}
     />
   );
 }

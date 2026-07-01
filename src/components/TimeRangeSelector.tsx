@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLogStore } from '../stores/logStore';
 import { useURLParams } from '../hooks/useURLParams';
-import { getTimeDisplayName, parseTimeInput } from '../utils/timeUtils';
+import { getTimeDisplayName, parseTimeInput, microsToISO } from '../utils/timeUtils';
+import { lastColdStartUs, lastForegroundUs } from '../utils/lifecycleEvents';
+import type { TimestampMicros } from '../types/time.types';
 import { ValidationError } from '../utils/errorHandling';
 import { useClickOutside } from '../hooks/useClickOutside';
 import ErrorDisplay from './ErrorDisplay';
@@ -16,8 +18,13 @@ const SHORTCUTS = [
 ];
 
 export function TimeRangeSelector() {
-  const { startTime, endTime } = useLogStore();
+  const { startTime, endTime, lifecycleEvents } = useLogStore();
   const { setTimeFilter } = useURLParams();
+  // Lifecycle-derived presets: resolve at click time to the last cold start /
+  // foreground, so the filter flows through the existing ISO-datetime path
+  // (calculateTimeRangeMicros needs no lifecycle awareness). Hidden when absent.
+  const coldStartUs = lastColdStartUs(lifecycleEvents);
+  const foregroundUs = lastForegroundUs(lifecycleEvents);
   const [isOpen, setIsOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [customStart, setCustomStart] = useState(startTime || '');
@@ -43,6 +50,13 @@ export function TimeRangeSelector() {
 
   const handleShortcut = (shortcut: string) => {
     setTimeFilter(shortcut, 'end');
+    setIsOpen(false);
+    setShowCustom(false);
+    setError(null);
+  };
+
+  const handleSinceTimestamp = (us: TimestampMicros) => {
+    setTimeFilter(microsToISO(us), 'end');
     setIsOpen(false);
     setShowCustom(false);
     setError(null);
@@ -128,6 +142,30 @@ export function TimeRangeSelector() {
               </button>
             ))}
           </div>
+
+          {(coldStartUs !== null || foregroundUs !== null) && (
+            <>
+              <div className={styles.timeRangeDivider} />
+              <div className={styles.timeRangeShortcuts}>
+                {coldStartUs !== null && (
+                  <button
+                    className={styles.timeRangeItem}
+                    onClick={() => handleSinceTimestamp(coldStartUs)}
+                  >
+                    Since last cold start
+                  </button>
+                )}
+                {foregroundUs !== null && (
+                  <button
+                    className={styles.timeRangeItem}
+                    onClick={() => handleSinceTimestamp(foregroundUs)}
+                  >
+                    Since last foreground
+                  </button>
+                )}
+              </div>
+            </>
+          )}
 
           <div className={styles.timeRangeDivider} />
 

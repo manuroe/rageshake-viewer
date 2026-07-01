@@ -5,10 +5,11 @@ import { scaleLinear } from '@visx/scale';
 import { AxisLeft } from '@visx/axis';
 import { useTooltip } from '@visx/tooltip';
 import { curveStepAfter } from 'd3-shape';
-import type { BandwidthRequestSpan } from '../types/log.types';
+import type { BandwidthRequestSpan, LifecycleEvent } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../types/time.types';
 import type { SelectionRange } from '../hooks/useChartInteraction';
+import { LifecycleMarkers } from './LifecycleMarkers';
 import { formatBytes } from '../utils/sizeUtils';
 import type { StepPoint } from '../utils/concurrencyUtils';
 import { getCountAtTime } from '../utils/concurrencyUtils';
@@ -32,6 +33,8 @@ interface BandwidthConcurrencyChartProps {
   onCursorMove?: (timeUs: number | null) => void;
   /** Fired as a drag selection changes on this chart. */
   onSelectionChange?: (selection: SelectionRange | null) => void;
+  /** App-lifecycle events drawn as full-height vertical markers. */
+  markers?: readonly LifecycleEvent[];
   /** Chart height in pixels. */
   height?: number;
 }
@@ -171,6 +174,7 @@ export function BandwidthConcurrencyChart({
   externalSelection,
   onCursorMove,
   onSelectionChange,
+  markers,
   height = 140,
 }: BandwidthConcurrencyChartProps) {
   const { minTime, maxTime } = timeRange;
@@ -498,6 +502,9 @@ export function BandwidthConcurrencyChart({
               onMouseLeave={handleMouseLeave}
               style={{ cursor: isSelecting ? 'col-resize' : 'crosshair' }}
             />
+
+            {/* App-lifecycle markers */}
+            <LifecycleMarkers markers={markers} timeToX={timeToX} bottomY={yMax} />
 
             {/* Selection: two cursor lines + highlighted band */}
             {isSelecting && selectionStart && selectionEnd && (

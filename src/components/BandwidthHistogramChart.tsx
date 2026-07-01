@@ -11,6 +11,8 @@ import type { SelectionRange } from '../hooks/useChartInteraction';
 import { getBucketColor } from '../utils/httpStatusBuckets';
 import { formatBytes } from '../utils/sizeUtils';
 import type { BandwidthBucket } from './BandwidthChartTooltip';
+import type { LifecycleEvent } from '../types/log.types';
+import { LifecycleMarkers } from './LifecycleMarkers';
 
 const SVG_WIDTH = 800;
 
@@ -45,6 +47,8 @@ interface BandwidthHistogramChartProps {
   readonly onCursorMove?: (timeUs: number | null) => void;
   /** Fired as a drag selection changes on this chart. */
   readonly onSelectionChange?: (selection: SelectionRange | null) => void;
+  /** App-lifecycle events drawn as full-height vertical markers. */
+  readonly markers?: readonly LifecycleEvent[];
 }
 
 /**
@@ -89,6 +93,7 @@ export function BandwidthHistogramChart({
   externalSelection,
   onCursorMove,
   onSelectionChange,
+  markers,
 }: BandwidthHistogramChartProps) {
   const { tooltipData, tooltipLeft, tooltipTop, showTooltip, hideTooltip } =
     useTooltip<BandwidthBucket>();
@@ -370,6 +375,9 @@ export function BandwidthHistogramChart({
               onMouseLeave={handlers.handleMouseLeave}
               style={{ cursor: isSelecting ? 'col-resize' : 'crosshair' }}
             />
+
+            {/* App-lifecycle markers */}
+            <LifecycleMarkers markers={markers} timeToX={timeToX} bottomY={yMax} />
 
             {/* ── Bottom axis line + time labels ───────────────────────── */}
             <line x1={0} y1={yMax} x2={xMax} y2={yMax} stroke="#666" strokeWidth={1} pointerEvents="none" />

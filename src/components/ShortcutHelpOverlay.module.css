@@ -165,6 +165,22 @@
     flex-shrink: 0;
 }
 
+/* Vertical-line swatch — mirrors how lifecycle markers render on the charts. */
+.legendLine {
+    width: 2px;
+    height: 14px;
+    margin: 0 5px;
+    flex-shrink: 0;
+}
+
+/* Filled-band swatch — mirrors the app-state lane segments. */
+.legendBlock {
+    width: 16px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
 .legendLabel {
     font-size: var(--font-size-md);
     color: var(--text-primary);

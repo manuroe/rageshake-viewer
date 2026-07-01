@@ -1,7 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TimeRangeSelector } from '../TimeRangeSelector';
 import { useLogStore } from '../../stores/logStore';
+import type { LifecycleEvent, LifecycleEventKind } from '../../types/log.types';
+import type { TimestampMicros } from '../../types/time.types';
+
+/** Minimal lifecycle event for the preset tests. */
+function lc(kind: LifecycleEventKind, timestampUs: number, lineNumber = 1): LifecycleEvent {
+  return { kind, platform: 'ios', lineNumber, timestampUs: timestampUs as TimestampMicros, message: '' };
+}
 
 const mockSetTimeFilter = vi.fn();
 
@@ -316,6 +323,73 @@ describe('TimeRangeSelector', () => {
       // The inputs should be synced with store values
       const fromInput = screen.getByLabelText('From:') as HTMLInputElement;
       expect(fromInput.value).toBe('09:00:00');
+    });
+  });
+
+  describe('lifecycle presets', () => {
+    const COLD_START_US = 1_735_689_600_000_000; // 2025-01-01T00:00:00.000000Z in µs
+    const FOREGROUND_US = 1_735_689_660_000_000; // +60s
+
+    afterEach(() => {
+      useLogStore.setState({ lifecycleEvents: [] });
+    });
+
+    it('hides lifecycle preset group when there are no lifecycle events', () => {
+      useLogStore.setState({ lifecycleEvents: [] });
+      render(<TimeRangeSelector />);
+      fireEvent.click(screen.getByRole('button', { name: /select time range/i }));
+      expect(screen.queryByText('Since last cold start')).not.toBeInTheDocument();
+      expect(screen.queryByText('Since last foreground')).not.toBeInTheDocument();
+    });
+
+    it('shows "Since last cold start" when lifecycle events contain a coldStart', () => {
+      useLogStore.setState({ lifecycleEvents: [lc('coldStart', COLD_START_US)] });
+      render(<TimeRangeSelector />);
+      fireEvent.click(screen.getByRole('button', { name: /select time range/i }));
+      expect(screen.getByText('Since last cold start')).toBeInTheDocument();
+    });
+
+    it('calls setTimeFilter with an ISO timestamp when "Since last cold start" is clicked', () => {
+      useLogStore.setState({ lifecycleEvents: [lc('coldStart', COLD_START_US)] });
+      render(<TimeRangeSelector />);
+      fireEvent.click(screen.getByRole('button', { name: /select time range/i }));
+      fireEvent.click(screen.getByText('Since last cold start'));
+      expect(mockSetTimeFilter).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), 'end');
+    });
+
+    it('shows "Since last foreground" when lifecycle events contain a foreground event', () => {
+      useLogStore.setState({
+        lifecycleEvents: [
+          lc('coldStart', COLD_START_US, 1),
+          lc('background', COLD_START_US + 10_000_000, 2),
+          lc('foreground', FOREGROUND_US, 3),
+        ],
+      });
+      render(<TimeRangeSelector />);
+      fireEvent.click(screen.getByRole('button', { name: /select time range/i }));
+      expect(screen.getByText('Since last foreground')).toBeInTheDocument();
+    });
+
+    it('calls setTimeFilter with an ISO timestamp when "Since last foreground" is clicked', () => {
+      useLogStore.setState({
+        lifecycleEvents: [
+          lc('coldStart', COLD_START_US, 1),
+          lc('background', COLD_START_US + 10_000_000, 2),
+          lc('foreground', FOREGROUND_US, 3),
+        ],
+      });
+      render(<TimeRangeSelector />);
+      fireEvent.click(screen.getByRole('button', { name: /select time range/i }));
+      fireEvent.click(screen.getByText('Since last foreground'));
+      expect(mockSetTimeFilter).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), 'end');
+    });
+
+    it('closes dropdown after clicking a lifecycle preset', () => {
+      useLogStore.setState({ lifecycleEvents: [lc('coldStart', COLD_START_US)] });
+      render(<TimeRangeSelector />);
+      fireEvent.click(screen.getByRole('button', { name: /select time range/i }));
+      fireEvent.click(screen.getByText('Since last cold start'));
+      expect(screen.queryByText('Since last cold start')).not.toBeInTheDocument();
     });
   });
 });

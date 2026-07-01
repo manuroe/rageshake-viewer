@@ -4,7 +4,13 @@ import { screen, fireEvent } from '@testing-library/dom';
 import { LogActivityChart } from '../LogActivityChart';
 import { createParsedLogLines, createParsedLogLine } from '../../test/fixtures';
 import { useLogStore } from '../../stores/logStore';
-import type { SentryEvent } from '../../types/log.types';
+import type { SentryEvent, LifecycleEvent, LifecycleEventKind } from '../../types/log.types';
+import type { TimestampMicros } from '../../types/time.types';
+
+/** Minimal lifecycle event for the app-state lane tests. */
+function lc(kind: LifecycleEventKind, timestampUs: number): LifecycleEvent {
+  return { kind, platform: 'ios', lineNumber: 0, timestampUs: timestampUs as TimestampMicros, message: '' };
+}
 
 describe('LogActivityChart', () => {
   it('renders the chart with stacked bars', () => {
@@ -697,6 +703,51 @@ describe('LogActivityChart', () => {
       ];
       render(<LogActivityChart logLines={logs} />);
       expect(screen.queryByText('console')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('app-state lane (lifecycle events)', () => {
+    afterEach(() => {
+      useLogStore.setState({ loadedEntryNames: [], lifecycleEvents: [] });
+    });
+
+    function consoleLineAt(lineNumber: number, tsSeconds: number) {
+      return createParsedLogLine({ lineNumber, timestampUs: tsSeconds * 1_000_000, sourceFile: 'console.2026-04-14-08.log.gz' });
+    }
+
+    it('shows an "app" lane when lifecycle events are present', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        lifecycleEvents: [lc('coldStart', 1_000_000)],
+      });
+      // Two logs very close together (same bucket) so the run has non-zero width,
+      // which is required for the intersection with the state segment to pass e > s.
+      const logs = [
+        consoleLineAt(1, 1),
+        createParsedLogLine({ lineNumber: 2, timestampUs: 1_100_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        consoleLineAt(3, 60),
+        consoleLineAt(4, 120),
+      ];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.getByText('app')).toBeInTheDocument();
+    });
+
+    it('shows no app lane when there are no lifecycle events', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz'], lifecycleEvents: [] });
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 60)];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('app')).not.toBeInTheDocument();
+    });
+
+    it('shows no app lane when lifecycle events produce no segments (crash only)', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        // crash does not drive the state band, so it yields no segment → no lane.
+        lifecycleEvents: [lc('crash', 1_000_000)],
+      });
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 60)];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('app')).not.toBeInTheDocument();
     });
   });
 });
