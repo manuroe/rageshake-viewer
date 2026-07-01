@@ -40,9 +40,11 @@ export function makeRowStripeColorer({
   return (sourceFile, timestampUs) => {
     const proc = sourceFile ? processOf(sourceFile) : appProcess ?? undefined;
     if (hasState && appProcess !== null && proc === appProcess) {
-      // No known timestamp for this row (e.g. its send line is missing) — we
-      // can't tell which state it was in, so don't guess a shade.
-      if (timestampUs === undefined) return undefined;
+      // No known timestamp for this row (its send line is missing, or the line
+      // was unparseable — the parser uses timestampUs <= 0 for "absent", as does
+      // getMinMaxTimestamps) — we can't tell which state it was in, so don't
+      // guess a shade.
+      if (timestampUs === undefined || timestampUs <= 0) return undefined;
       const state = appStateAt(stateSegments, timestampUs);
       return state ? stateColors[state] : APP_LANE_COLOR;
     }

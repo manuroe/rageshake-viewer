@@ -163,10 +163,15 @@ export function LogActivityChart({ logLines, sentryEvents, markers, onTimeRangeS
     // App-state lane — only when lifecycle state exists. Merged into the console
     // stream (on iOS the console process is the main app): draw a bar wherever
     // the app logged, coloured by the state at that moment. Silence is left
-    // empty (idle); no background track so gaps don't read as a state. Prefer
-    // the console stream, else (single-file / differently-named) the whole log.
-    if (hasState) {
-      const appActivityTs = tsByProcess.get(CONSOLE_PROCESS) ?? allTsUs;
+    // empty (idle); no background track so gaps don't read as a state.
+    //
+    // App-stream activity: the console stream when present; else the whole log
+    // for a single-process (or untagged) log; else — a multi-process log with no
+    // console — there is no identifiable app stream, so skip the lane rather than
+    // let a non-app process (e.g. nse) drive it. Mirrors makeRowStripeColorer.
+    const appActivityTs =
+      tsByProcess.get(CONSOLE_PROCESS) ?? (processColorMap.size > 1 ? null : allTsUs);
+    if (hasState && appActivityTs) {
       const appRuns = bucketActivityRuns(appActivityTs, min, max, bucketSize);
       const stateColor = appStateColors(APP_LANE_COLOR);
       const appSegments: ActivityLaneSegment[] = [];
