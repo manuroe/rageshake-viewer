@@ -170,12 +170,12 @@ export function LogActivityChart({ logLines, sentryEvents, markers, onTimeRangeS
       const appRuns = bucketActivityRuns(appActivityTs, min, max, bucketSize);
       const stateColor = appStateColors(APP_LANE_COLOR);
       const appSegments: ActivityLaneSegment[] = [];
-      for (const seg of stateSegments) {
-        for (const run of appRuns) {
-          const s = Math.max(run.startUs, seg.startUs);
-          const e = Math.min(run.endUs, seg.endUs);
-          if (e <= s) continue;
-          appSegments.push({
+        for (const seg of stateSegments) {
+          for (const run of appRuns) {
+            const s = Math.max(run.startUs, seg.startUs);
+            const e = Math.min(run.endUs, seg.endUs);
+            if (e < s) continue;
+            appSegments.push({
             startUs: s,
             endUs: e,
             color: stateColor[seg.state],
