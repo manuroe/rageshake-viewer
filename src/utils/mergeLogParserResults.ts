@@ -4,6 +4,7 @@ import type {
   SyncRequest,
   HttpRequest,
   SentryEvent,
+  LifecycleEvent,
 } from '../types/log.types';
 
 /** A parsed log file paired with the source-file name it came from. */
@@ -35,7 +36,7 @@ export interface NamedLogParserResult {
  */
 export function mergeLogParserResults(files: readonly NamedLogParserResult[]): LogParserResult {
   if (files.length === 0) {
-    return { requests: [], httpRequests: [], connectionIds: [], rawLogLines: [], sentryEvents: [] };
+    return { requests: [], httpRequests: [], connectionIds: [], rawLogLines: [], sentryEvents: [], lifecycleEvents: [] };
   }
   if (files.length === 1) {
     // Tag the single file too, so the source-file column is consistent.
@@ -51,6 +52,7 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
   const requests: SyncRequest[] = [];
   const httpRequests: HttpRequest[] = [];
   const sentryEvents: SentryEvent[] = [];
+  const lifecycleEvents: LifecycleEvent[] = [];
   const connectionIds = new Set<string>();
 
   let offset = 0;
@@ -81,6 +83,9 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
     for (const e of result.sentryEvents) {
       sentryEvents.push({ ...e, lineNumber: e.lineNumber + offset });
     }
+    for (const e of result.lifecycleEvents ?? []) {
+      lifecycleEvents.push({ ...e, lineNumber: e.lineNumber + offset });
+    }
     for (const id of result.connectionIds) connectionIds.add(id);
     offset += result.rawLogLines.length;
   }
@@ -99,6 +104,8 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
   requests.sort((a, b) => sendTime(a) - sendTime(b));
   httpRequests.sort((a, b) => sendTime(a) - sendTime(b));
   sentryEvents.sort((a, b) => (tsByLine.get(a.lineNumber) ?? 0) - (tsByLine.get(b.lineNumber) ?? 0));
+  // Lifecycle events carry their own timestamp, so sort on it directly.
+  lifecycleEvents.sort((a, b) => a.timestampUs - b.timestampUs);
 
   return {
     requests,
@@ -106,6 +113,7 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
     connectionIds: [...connectionIds],
     rawLogLines,
     sentryEvents,
+    lifecycleEvents,
     // Only flag the merged log as anonymized when every part is.
     isAnonymized: files.every((f) => f.result.isAnonymized),
   };

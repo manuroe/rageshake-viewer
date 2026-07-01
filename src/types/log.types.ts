@@ -145,12 +145,38 @@ export interface SentryEvent {
   readonly sentryUrl?: string;
 }
 
+/** Kind of an app-lifecycle event detected from a single log line. */
+export type LifecycleEventKind =
+  | 'coldStart'
+  | 'background'
+  | 'foreground'
+  | 'crash'
+  | 'backgroundRefreshStart'
+  | 'backgroundRefreshEnd';
+
+/**
+ * An app-lifecycle transition detected from the logs (cold start, enter
+ * background, resume, crash). Surfaced as a vertical marker on the activity
+ * charts and used by the "Since last cold start" time-range preset.
+ */
+export interface LifecycleEvent {
+  readonly kind: LifecycleEventKind;
+  readonly platform: 'android' | 'ios';
+  readonly lineNumber: number;
+  readonly timestampUs: TimestampMicros;
+  /** First ~150 chars of the source line, for future hover/detail UI. */
+  readonly message: string;
+}
+
 export interface LogParserResult {
   readonly requests: readonly SyncRequest[];
   readonly httpRequests: readonly HttpRequest[];
   readonly connectionIds: readonly string[];
   readonly rawLogLines: readonly ParsedLogLine[];
   readonly sentryEvents: readonly SentryEvent[];
+  /** App-lifecycle events. Optional so older/partial result fixtures stay valid;
+   * the parser always populates it. */
+  readonly lifecycleEvents?: readonly LifecycleEvent[];
   /**
    * True when the log content was previously exported with the anonymization
    * marker prepended. Used to pre-activate the anonymized button state on load.

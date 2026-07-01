@@ -1,6 +1,7 @@
-import type { HttpRequest, SyncRequest, LogParserResult, ParsedLogLine, LogLevel, SentryEvent } from '../types/log.types';
+import type { HttpRequest, SyncRequest, LogParserResult, ParsedLogLine, LogLevel, SentryEvent, LifecycleEvent } from '../types/log.types';
 import type { ISODateTimeString, TimestampMicros } from '../types/time.types';
 import { isoToMicros, extractTimeFromISO } from './timeUtils';
+import { detectLifecycleKind } from './lifecycleEvents';
 import { parseSizeString } from './sizeUtils';
 import { ParsingError } from './errorHandling';
 import { INCOMPLETE_STATUS_KEY } from './statusCodeUtils';
@@ -136,6 +137,7 @@ export interface AllHttpRequestsResult {
   readonly httpRequests: readonly HttpRequest[];
   readonly rawLogLines: readonly ParsedLogLine[];
   readonly sentryEvents: readonly SentryEvent[];
+  readonly lifecycleEvents: readonly LifecycleEvent[];
 }
 
 export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult {
@@ -153,6 +155,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
   const allRecordsList: HttpRequestRecord[] = [];
   const rawLogLines: ParsedLogLine[] = [];
   const sentryEvents: SentryEvent[] = [];
+  const lifecycleEvents: LifecycleEvent[] = [];
   let linesWithTimestamps = 0;
   // Counts non-empty physical lines so the file-size gate below can fire even
   // when all physical lines are continuation lines folded into one UNKNOWN entry.
@@ -246,6 +249,22 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
           sentryUrl: `${SENTRY_URL_BASE}${sentryId}`,
         });
       }
+    }
+
+    // Detect app-lifecycle events (cold start / background / foreground / crash).
+    // Reuses the timestamp already parsed for this entry. Skip on an unparseable
+    // timestamp (timestampUs 0) — same "0 means absent" convention used elsewhere
+    // (e.g. getMinMaxTimestamps) — so a corrupt line can't poison the state band
+    // as the carried-in state for the whole timeline.
+    const lifecycle = timestampUs > 0 ? detectLifecycleKind(line) : null;
+    if (lifecycle) {
+      lifecycleEvents.push({
+        kind: lifecycle.kind,
+        platform: lifecycle.platform,
+        lineNumber: i + 1,
+        timestampUs,
+        message: line.slice(0, 150),
+      });
     }
 
     // Early filter for performance - look for HTTP request patterns
@@ -587,6 +606,7 @@ export function parseAllHttpRequests(logContent: string): AllHttpRequestsResult 
     httpRequests: allRequests,
     rawLogLines,
     sentryEvents,
+    lifecycleEvents,
   };
 }
 
@@ -604,7 +624,7 @@ export function parseLogFile(logContent: string): LogParserResult {
   }
 
   // First parse all HTTP requests
-  const { httpRequests, rawLogLines, sentryEvents } = parseAllHttpRequests(contentToParse);
+  const { httpRequests, rawLogLines, sentryEvents, lifecycleEvents } = parseAllHttpRequests(contentToParse);
 
   // Filter for sync-specific requests and add connId
   const syncRequests: SyncRequest[] = [];
@@ -667,6 +687,7 @@ export function parseLogFile(logContent: string): LogParserResult {
     connectionIds,
     rawLogLines,
     sentryEvents,
+    lifecycleEvents,
     isAnonymized,
   };
 }

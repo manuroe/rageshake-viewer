@@ -243,6 +243,9 @@ export function parseLogcatContent(content: string): LogParserResult {
     connectionIds: [],
     rawLogLines,
     sentryEvents: [],
+    // ponytail: logcat lifecycle detection skipped — main rageshake path covers
+    // it; add here if Android logcat-only uploads need lifecycle markers.
+    lifecycleEvents: [],
     isAnonymized: false,
   };
 }

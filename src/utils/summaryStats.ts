@@ -14,7 +14,7 @@
  *   once in `logStore` on parse — O(1) lookups instead of repeated `.find()`.
  */
 
-import type { HttpRequest, HttpRequestSpan, HttpRequestWithTimestamp, SyncRequest, ParsedLogLine, SentryEvent, BandwidthRequestEntry, BandwidthRequestSpan } from '../types/log.types';
+import type { HttpRequest, HttpRequestSpan, HttpRequestWithTimestamp, SyncRequest, ParsedLogLine, SentryEvent, LifecycleEvent, BandwidthRequestEntry, BandwidthRequestSpan } from '../types/log.types';
 import type { TimestampMicros } from '../types/time.types';
 import { getTimeRangeUs } from './requestFilters';
 import { INCOMPLETE_STATUS_KEY, isNumericStatus } from './statusCodeUtils';
@@ -86,6 +86,8 @@ export interface SummaryStats {
   readonly warningsByType: readonly MessageCount[];
   /** Sentry events within the active time window. */
   readonly sentryEvents: readonly SentryEvent[];
+  /** App-lifecycle events within the active time window (chart markers). */
+  readonly lifecycleEvents: readonly LifecycleEvent[];
   /** HTTP error status codes with counts (4xx / 5xx only). */
   readonly httpErrorsByStatus: readonly HttpStatusCount[];
   /** Up to 5 URIs with the highest number of HTTP errors. */
@@ -135,6 +137,7 @@ const EMPTY_STATS: SummaryStats = Object.freeze({
   errorsByType: [] as readonly MessageCount[],
   warningsByType: [] as readonly MessageCount[],
   sentryEvents: [] as SentryEvent[],
+  lifecycleEvents: [] as LifecycleEvent[],
   httpErrorsByStatus: [] as readonly HttpStatusCount[],
   topFailedUrls: [] as readonly FailedUrl[],
   slowestHttpRequests: [] as readonly SlowHttpRequest[],
@@ -164,6 +167,8 @@ const EMPTY_STATS: SummaryStats = Object.freeze({
  *   takes precedence over `startTime` / `endTime`.
  * @param lineNumberIndex - Precomputed `Map<lineNumber, ParsedLogLine>` (from
  *   `logStore`) used for O(1) timestamp lookups.
+ * @param lifecycleEvents - All app-lifecycle events extracted from the log.
+ *   Trailing optional param so existing callers stay source-compatible.
  * @returns A {@link SummaryStats} object with all derived values.
  */
 export function computeSummaryStats(
@@ -175,7 +180,8 @@ export function computeSummaryStats(
   startTime: TimeFilterValue | null,
   endTime: TimeFilterValue | null,
   localTimeRangeUs: TimeRangeUs | null,
-  lineNumberIndex: ReadonlyMap<number, ParsedLogLine>
+  lineNumberIndex: ReadonlyMap<number, ParsedLogLine>,
+  lifecycleEvents: readonly LifecycleEvent[] = []
 ): SummaryStats {
   if (rawLogLines.length === 0) return EMPTY_STATS;
 
@@ -213,6 +219,11 @@ export function computeSummaryStats(
     if (!ts) return false;
     return isTimestampInRange(ts);
   });
+
+  // Lifecycle events carry their own timestamp, so range-check it directly.
+  const filteredLifecycleEvents = lifecycleEvents.filter((event) =>
+    isTimestampInRange(event.timestampUs)
+  );
 
   const filteredHttpRequests = allHttpRequests.filter((req) => {
     if (!timeRangeUs) return true;
@@ -556,6 +567,7 @@ export function computeSummaryStats(
     errorsByType,
     warningsByType,
     sentryEvents: filteredSentryEvents,
+    lifecycleEvents: filteredLifecycleEvents,
     httpErrorsByStatus,
     topFailedUrls,
     slowestHttpRequests,
