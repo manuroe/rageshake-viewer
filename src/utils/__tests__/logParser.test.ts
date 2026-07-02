@@ -949,6 +949,16 @@ describe('parseLogFile', () => {
 
       expect(result.sentryEvents).toHaveLength(2);
     });
+
+    it('skips lifecycle detection on an unparseable (epoch-zero) timestamp', () => {
+      // isoToMicros returns 0 both for a genuinely unparseable timestamp and for
+      // the literal Unix epoch — either way, 0 means "absent" and must not be
+      // treated as a real lifecycle transition.
+      const epochLine = '1970-01-01T00:00:00.000000Z  WARN [matrix-rust-sdk] Application will resign active';
+      const result = parseLogFile(epochLine);
+
+      expect(result.lifecycleEvents).toHaveLength(0);
+    });
   });
 
   describe('sentry event detection', () => {

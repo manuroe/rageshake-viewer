@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildProcessColorMap, processOf } from '../processColors';
+import { buildProcessColorMap, processOf, shadeColor, APP_LANE_COLOR } from '../processColors';
 
 describe('processOf', () => {
   it('returns the leading filename token as the process name', () => {
@@ -26,5 +26,43 @@ describe('buildProcessColorMap', () => {
     const b = buildProcessColorMap(['console.x.log', 'nse.x.log']);
     expect(a.get('console')).toBe(b.get('console'));
     expect(a.get('nse')).toBe(b.get('nse'));
+  });
+
+  it('gives console (sorted first) the app base colour', () => {
+    const map = buildProcessColorMap(['nse.x.log', 'console.x.log', 'shareextension.x.log']);
+    expect(map.get('console')).toBe(APP_LANE_COLOR);
+  });
+});
+
+describe('shadeColor', () => {
+  it('returns an hsl() string preserving hue', () => {
+    expect(shadeColor('#3b82f6', 0)).toMatch(/^hsl\(21[0-9], \d+%, \d+%\)$/);
+  });
+
+  it('lightens for positive deltaL and darkens for negative', () => {
+    const l = (c: string) => Number(c.match(/(\d+)%\)$/)![1]);
+    expect(l(shadeColor('#3b82f6', 0.2))).toBeGreaterThan(l(shadeColor('#3b82f6', 0)));
+    expect(l(shadeColor('#3b82f6', -0.2))).toBeLessThan(l(shadeColor('#3b82f6', 0)));
+  });
+
+  it('clamps lightness to a legible range', () => {
+    expect(shadeColor('#000000', -1)).toBe('hsl(0, 0%, 12%)');
+    expect(shadeColor('#ffffff', 1)).toBe('hsl(0, 0%, 92%)');
+  });
+
+  it('expands 3-digit shorthand hex the same as its 6-digit form', () => {
+    expect(shadeColor('#3bf', 0)).toBe(shadeColor('#33bbff', 0));
+  });
+
+  it('derives hue for a green-dominant colour', () => {
+    expect(shadeColor('#00ff00', 0)).toMatch(/^hsl\(120, \d+%, \d+%\)$/);
+  });
+
+  it('derives hue for a red-dominant colour with blue > green', () => {
+    expect(shadeColor('#ff0080', 0)).toMatch(/^hsl\(3\d\d, \d+%, \d+%\)$/);
+  });
+
+  it('derives hue for a red-dominant colour with green >= blue', () => {
+    expect(shadeColor('#ff8000', 0)).toMatch(/^hsl\(3\d, \d+%, \d+%\)$/);
   });
 });

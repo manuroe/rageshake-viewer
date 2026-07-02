@@ -8,6 +8,8 @@ import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../types/time.types';
 import { useChartInteraction } from '../hooks/useChartInteraction';
 import type { SelectionRange } from '../hooks/useChartInteraction';
+import type { LifecycleEvent } from '../types/log.types';
+import { LifecycleMarkers } from './LifecycleMarkers';
 
 /** Generic bucket structure for activity charts */
 export interface ActivityBucket {
@@ -22,6 +24,9 @@ export interface ActivityLaneSegment {
   readonly endUs: number;
   /** Tooltip text shown on hover. */
   readonly title: string;
+  /** Per-segment fill override; falls back to the lane's `color` when omitted.
+   * Used by the app-state bars to colour each span by state. */
+  readonly color?: string;
 }
 
 /**
@@ -32,6 +37,10 @@ export interface ActivityLane {
   readonly label: string;
   readonly color: string;
   readonly segments: readonly ActivityLaneSegment[];
+  /** Draw the faint full-width background track behind the segments (default
+   * true). The app lane sets this false so silent gaps stay empty rather than
+   * reading as a state. */
+  readonly showTrack?: boolean;
 }
 
 /** Lane geometry (SVG units within the chart's viewBox). */
@@ -91,6 +100,8 @@ interface BaseActivityChartProps<TBucket extends ActivityBucket, TCategory exten
    * chart to show per-process activity; omit elsewhere.
    */
   lanes?: ActivityLane[];
+  /** App-lifecycle events drawn as full-height vertical markers. */
+  markers?: readonly LifecycleEvent[];
 }
 
 /**
@@ -117,6 +128,7 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
   onCursorMove,
   onSelectionChange,
   lanes,
+  markers,
 }: BaseActivityChartProps<TBucket, TCategory>) {
   const { tooltipData, tooltipLeft, tooltipTop, showTooltip, hideTooltip } = useTooltip<TBucket>();
   const tooltipOffsetLeft = 12;
@@ -343,12 +355,14 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                   >
                     {lane.label}
                   </text>
-                  <rect x={0} y={laneY} width={xMax} height={LANE_HEIGHT} rx={2} fill="var(--border-light, #ddd)" />
+                  {lane.showTrack !== false && (
+                    <rect x={0} y={laneY} width={xMax} height={LANE_HEIGHT} rx={2} fill="var(--border-light, #ddd)" />
+                  )}
                   {lane.segments.map((seg, j) => {
                     const x0 = timeToX(seg.startUs);
                     const x1 = timeToX(seg.endUs);
                     return (
-                      <rect key={j} x={x0} y={laneY} width={Math.max(1, x1 - x0)} height={LANE_HEIGHT} rx={2} fill={lane.color}>
+                      <rect key={j} x={x0} y={laneY} width={Math.max(1, x1 - x0)} height={LANE_HEIGHT} rx={2} fill={seg.color ?? lane.color}>
                         <title>{seg.title}</title>
                       </rect>
                     );
@@ -356,6 +370,9 @@ export function BaseActivityChart<TBucket extends ActivityBucket, TCategory exte
                 </Group>
               );
             })}
+
+            {/* App-lifecycle markers, full chart height (bars + lanes). */}
+            <LifecycleMarkers markers={markers} timeToX={timeToX} bottomY={axisTop} />
 
             {/* Invisible overlay for mouse events - must be after bars to be on top.
                 Covers only the bars area (not the lanes below) so each lane segment

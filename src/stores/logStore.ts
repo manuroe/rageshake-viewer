@@ -29,7 +29,7 @@
  * restricts to a subset.
  */
 import { create } from 'zustand';
-import type { HttpRequest, SyncRequest, ParsedLogLine, SentryEvent, LogParserResult, AnonymizationDictionary } from '../types/log.types';
+import type { HttpRequest, SyncRequest, ParsedLogLine, SentryEvent, LifecycleEvent, LogParserResult, AnonymizationDictionary } from '../types/log.types';
 import { wrapError, type AppError } from '../utils/errorHandling';
 import { DEFAULT_MS_PER_PIXEL } from '../utils/timelineUtils';
 import { filterSyncRequests, filterHttpRequests } from '../utils/requestFilters';
@@ -111,6 +111,11 @@ interface LogStore {
 
   // Sentry events detected during parsing
   sentryEvents: SentryEvent[];
+
+  // App-lifecycle events (cold start / background / foreground / crash) detected
+  // during parsing. Hold only a kind, platform, line number and timestamp — no
+  // free-form log text — so they carry no PII and need no anonymization.
+  lifecycleEvents: LifecycleEvent[];
 
   // Anonymization state
   /** Whether the currently loaded log is in anonymized form. */
@@ -278,6 +283,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
   logFileName: null,
   loadedEntryNames: [],
   sentryEvents: [],
+  lifecycleEvents: [],
   isAnonymized: false,
   isAnonymizing: false,
   anonymizingProgress: 0,
@@ -437,6 +443,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
       logFileName: null,
       loadedEntryNames: [],
       sentryEvents: [],
+      lifecycleEvents: [],
       isAnonymized: false,
       isAnonymizing: false,
       anonymizingProgress: 0,
@@ -691,6 +698,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
         selectedConnId: defaultConn,
         allHttpRequests: [...result.httpRequests],
         sentryEvents: [...result.sentryEvents],
+        lifecycleEvents: [...(result.lifecycleEvents ?? [])],
         rawLogLines: [...result.rawLogLines],
         lineNumberIndex,
         detectedPlatform,

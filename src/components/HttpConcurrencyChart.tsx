@@ -7,8 +7,9 @@ import { useTooltip } from '@visx/tooltip';
 import { curveStepAfter } from 'd3-shape';
 import type { TimestampMicros } from '../types/time.types';
 import { MICROS_PER_MILLISECOND } from '../types/time.types';
-import type { HttpRequestSpan } from '../types/log.types';
+import type { HttpRequestSpan, LifecycleEvent } from '../types/log.types';
 import type { SelectionRange } from '../hooks/useChartInteraction';
+import { LifecycleMarkers } from './LifecycleMarkers';
 import { computeStepPoints, getCountAtTime } from '../utils/concurrencyUtils';
 import { getBucketKey, getBucketColor, getBucketLabel, sortStatusCodes } from '../utils/httpStatusBuckets';
 import { useStepChartInteraction } from '../hooks/useStepChartInteraction';
@@ -33,6 +34,8 @@ interface HttpConcurrencyChartProps {
   onCursorMove?: (timeUs: number | null) => void;
   /** Fired as a drag selection changes on this chart. */
   onSelectionChange?: (selection: SelectionRange | null) => void;
+  /** App-lifecycle events drawn as full-height vertical markers. */
+  markers?: readonly LifecycleEvent[];
   /** Chart height in pixels. */
   height?: number;
 }
@@ -70,6 +73,7 @@ export function HttpConcurrencyChart({
   externalSelection,
   onCursorMove,
   onSelectionChange,
+  markers,
   height = 120,
 }: HttpConcurrencyChartProps) {
   const { minTime, maxTime } = timeRange;
@@ -308,6 +312,9 @@ export function HttpConcurrencyChart({
               onMouseLeave={handleMouseLeave}
               style={{ cursor: isSelecting ? 'col-resize' : 'crosshair' }}
             />
+
+            {/* App-lifecycle markers */}
+            <LifecycleMarkers markers={markers} timeToX={timeToX} bottomY={yMax} />
 
             {/* Selection: two cursor lines + highlighted band */}
             {isSelecting && selectionStart && selectionEnd && (

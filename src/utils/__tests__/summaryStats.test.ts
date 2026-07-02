@@ -292,6 +292,26 @@ describe('computeSummaryStats — syncRequestsByConnection', () => {
   });
 });
 
+describe('computeSummaryStats — lifecycleEvents', () => {
+  it('filters lifecycle events to the active local time range', () => {
+    const lines = makeLines(5);
+    const index = buildIndex(lines);
+    const lifecycleEvents = [
+      { kind: 'coldStart' as const, platform: 'ios' as const, lineNumber: 0, timestampUs: lines[0].timestampUs },
+      { kind: 'foreground' as const, platform: 'ios' as const, lineNumber: 2, timestampUs: lines[2].timestampUs },
+      { kind: 'background' as const, platform: 'ios' as const, lineNumber: 4, timestampUs: lines[4].timestampUs },
+    ];
+    // Local zoom to lines 1–3: only the middle event (line 2) falls inside.
+    const localRange = { startUs: lines[1].timestampUs, endUs: lines[3].timestampUs };
+
+    const result = computeSummaryStats(
+      lines, [], [], [], [], null, null, localRange, index, lifecycleEvents
+    );
+
+    expect(result.lifecycleEvents.map((e) => e.lineNumber)).toEqual([2]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Top failed URLs
 // ---------------------------------------------------------------------------

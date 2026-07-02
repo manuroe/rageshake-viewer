@@ -4,7 +4,15 @@ import { screen, fireEvent } from '@testing-library/dom';
 import { LogActivityChart } from '../LogActivityChart';
 import { createParsedLogLines, createParsedLogLine } from '../../test/fixtures';
 import { useLogStore } from '../../stores/logStore';
-import type { SentryEvent } from '../../types/log.types';
+import type { SentryEvent, LifecycleEvent, LifecycleEventKind } from '../../types/log.types';
+import type { TimestampMicros } from '../../types/time.types';
+import { appStateColors } from '../../utils/lifecycleEvents';
+import { APP_LANE_COLOR } from '../../utils/processColors';
+
+/** Minimal lifecycle event for the app-state lane tests. */
+function lc(kind: LifecycleEventKind, timestampUs: number): LifecycleEvent {
+  return { kind, platform: 'ios', lineNumber: 0, timestampUs: timestampUs as TimestampMicros };
+}
 
 describe('LogActivityChart', () => {
   it('renders the chart with stacked bars', () => {
@@ -697,6 +705,108 @@ describe('LogActivityChart', () => {
       ];
       render(<LogActivityChart logLines={logs} />);
       expect(screen.queryByText('console')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('app-state lane (lifecycle events)', () => {
+    afterEach(() => {
+      useLogStore.setState({ loadedEntryNames: [], lifecycleEvents: [] });
+    });
+
+    function consoleLineAt(lineNumber: number, tsSeconds: number) {
+      return createParsedLogLine({ lineNumber, timestampUs: tsSeconds * 1_000_000, sourceFile: 'console.2026-04-14-08.log.gz' });
+    }
+
+    it('shows an "app" lane when lifecycle events are present', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        lifecycleEvents: [lc('coldStart', 1_000_000)],
+      });
+      // Two logs very close together (same bucket) so the run has non-zero width,
+      // which is required for the intersection with the state segment to pass e > s.
+      const logs = [
+        consoleLineAt(1, 1),
+        createParsedLogLine({ lineNumber: 2, timestampUs: 1_100_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        consoleLineAt(3, 60),
+        consoleLineAt(4, 120),
+      ];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.getByText('app')).toBeInTheDocument();
+    });
+
+    it('shows no app lane when there are no lifecycle events', () => {
+      useLogStore.setState({ loadedEntryNames: ['console.2026-04-14-08.log.gz'], lifecycleEvents: [] });
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 60)];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('app')).not.toBeInTheDocument();
+    });
+
+    it('shows no app lane when lifecycle events produce no segments (crash only)', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        // crash does not drive the state band, so it yields no segment → no lane.
+        lifecycleEvents: [lc('crash', 1_000_000)],
+      });
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 60)];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('app')).not.toBeInTheDocument();
+    });
+
+    it('draws an interior isolated log line but not boundary-touching ones', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        lifecycleEvents: [lc('coldStart', 1_000_000)],
+      });
+      // Three isolated lines, each alone in its bucket → three zero-width runs.
+      // The foreground segment spans [1s, 120s] (log bounds). Only the 60s line is
+      // strictly interior; the 1s and 120s lines merely touch the segment edges
+      // and must not render phantom 1px bars at the state boundaries.
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 60), consoleLineAt(3, 120)];
+      const { container } = render(<LogActivityChart logLines={logs} />);
+      expect(screen.getByText('app')).toBeInTheDocument();
+      const fg = appStateColors(APP_LANE_COLOR).foreground;
+      expect(container.querySelectorAll(`rect[fill="${fg}"]`)).toHaveLength(1);
+    });
+
+    it('shows no app lane when activity runs never overlap any state segment', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        // Transition to background at 50s, entirely between the two log runs.
+        lifecycleEvents: [lc('coldStart', 1_000_000), lc('background', 50_000_000)],
+      });
+      // One run at 1s (foreground window) and one at 200s (background window),
+      // far enough apart to land in different buckets. Neither run overlaps the
+      // *other* segment, and each only touches its own segment's boundary, so no
+      // app segment survives.
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 200)];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('app')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('per-process lanes combined with app-state lane', () => {
+    afterEach(() => {
+      useLogStore.setState({ loadedEntryNames: [], lifecycleEvents: [] });
+    });
+
+    it('skips the console per-process lane when the app-state lane already covers it', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'],
+        lifecycleEvents: [lc('coldStart', 1_000_000)],
+      });
+      const logs = [
+        createParsedLogLine({ lineNumber: 1, timestampUs: 1_000_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        createParsedLogLine({ lineNumber: 2, timestampUs: 60_000_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        createParsedLogLine({ lineNumber: 3, timestampUs: 120_000_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        createParsedLogLine({ lineNumber: 4, timestampUs: 30_000_000, sourceFile: 'nse.2026-04-14-08.log.gz' }),
+      ];
+      render(<LogActivityChart logLines={logs} />);
+
+      // The app-state lane represents the console stream here, so console must
+      // not also get its own flat per-process lane — only 'app' and 'nse' show.
+      expect(screen.getByText('app')).toBeInTheDocument();
+      expect(screen.queryByText('console')).not.toBeInTheDocument();
+      expect(screen.getByText('nse')).toBeInTheDocument();
     });
   });
 });

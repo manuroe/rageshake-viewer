@@ -14,7 +14,10 @@ import { isInputFocused, metaKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
-import { buildProcessColorMap, processOf } from '../utils/processColors';
+import { buildProcessColorMap } from '../utils/processColors';
+import { deriveAppStateSegments } from '../utils/lifecycleEvents';
+import { makeRowStripeColorer } from '../utils/laneStripe';
+import { getMinMaxTimestamps } from '../utils/timeUtils';
 import { ProcessLegend } from '../components/ProcessLegend';
 import { LogExportDialog } from '../components/LogExportDialog';
 import { UnanonymizeDialog } from '../components/UnanonymizeDialog';
@@ -98,11 +101,17 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false }: LogDisplayViewProps) {
-  const { rawLogLines, sentryEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs, logFileName, loadedEntryNames } = useLogStore();
+  const { rawLogLines, sentryEvents, lifecycleEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs, logFileName, loadedEntryNames } = useLogStore();
   // Colour lines by process only when several distinct processes are merged
-  // (e.g. console + nse); a single process needs no differentiation.
+  // (e.g. console + nse); a single process needs no differentiation. The app
+  // (console) stream is instead striped by app-state shade — see makeRowStripeColorer.
   const processColorMap = useMemo(() => buildProcessColorMap(loadedEntryNames), [loadedEntryNames]);
   const showProcessColors = processColorMap.size > 1;
+  const stripeColorer = useMemo(() => {
+    const { min, max } = getMinMaxTimestamps(rawLogLines);
+    const stateSegments = deriveAppStateSegments(lifecycleEvents, min, max);
+    return makeRowStripeColorer({ processColorMap, showProcessColors, stateSegments });
+  }, [rawLogLines, lifecycleEvents, processColorMap, showProcessColors]);
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const registerFocusSearch = shortcutCtx?.registerFocusSearch;
   const registerFocusFilter = shortcutCtx?.registerFocusFilter;
@@ -900,11 +909,10 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
             const collapsedCount = collapseInfo && gapBelow ? Math.min(collapseInfo.count, gapBelow.remainingGap) : 0;
             const isSentryLine = sentryLineNumbers.has(line.lineNumber);
             const httpErrorStatus = isSentryLine ? null : getHttpErrorStatus(line.rawText);
-            // Colour each line by its originating process when several are merged
-            // (e.g. console + nse). A left box-shadow stripe is used so it sits
-            // alongside the search-match/pattern border without clobbering it.
-            const processColor =
-              showProcessColors && line.sourceFile ? processColorMap.get(processOf(line.sourceFile)) : undefined;
+            // Left box-shadow stripe: app-state shade for the console stream,
+            // flat process colour for others. Sits alongside the search-match /
+            // pattern border without clobbering it.
+            const processColor = stripeColorer(line.sourceFile, line.timestampUs);
 
             return (
               <div

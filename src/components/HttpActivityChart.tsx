@@ -10,7 +10,7 @@ import {
 } from '../utils/httpStatusBuckets';
 import { HttpConcurrencyChart } from './HttpConcurrencyChart';
 
-import type { HttpRequestWithTimestamp, HttpRequestSpan } from '../types/log.types';
+import type { HttpRequestWithTimestamp, HttpRequestSpan, LifecycleEvent } from '../types/log.types';
 // Re-exported so that existing consumers importing from this module are unaffected.
 export type { HttpRequestWithTimestamp } from '../types/log.types';
 export type { HttpRequestSpan } from '../types/log.types';
@@ -43,6 +43,8 @@ interface HttpActivityChartProps {
   onCursorMove?: (timeUs: number | null) => void;
   /** Fired as a drag selection changes on this chart. */
   onSelectionChange?: (selection: SelectionRange | null) => void;
+  /** App-lifecycle events drawn as vertical markers. */
+  markers?: readonly LifecycleEvent[];
 }
 
 interface HttpBucket extends ActivityBucket {
@@ -62,6 +64,7 @@ export function HttpActivityChart({
   externalSelection,
   onCursorMove,
   onSelectionChange,
+  markers,
 }: HttpActivityChartProps) {
   // Helper to format timestamp as HH:MM:SS in UTC (converts from microseconds)
   const formatTime = useCallback((timestampUs: number): string => {
@@ -194,6 +197,7 @@ export function HttpActivityChart({
         externalSelection={externalSelection}
         onCursorMove={onCursorMove}
         onSelectionChange={onSelectionChange}
+        markers={markers}
       />
     );
   }
@@ -223,6 +227,7 @@ export function HttpActivityChart({
       externalSelection={externalSelection}
       onCursorMove={onCursorMove}
       onSelectionChange={onSelectionChange}
+      markers={markers}
     />
   );
 }

@@ -19,12 +19,14 @@ import { calculateTimelineWidth, computeAutoScale } from '../utils/timelineUtils
 import { buildCompressedTimeline, buildLinearTimeline, formatGapDuration, LABEL_PADDING_PX } from '../utils/waterfallGapUtils';
 import { LogDisplayView } from '../views/LogDisplayView';
 import { useUrlRequestAutoScroll } from '../hooks/useUrlRequestAutoScroll';
-import { microsToMs } from '../utils/timeUtils';
+import { microsToMs, getMinMaxTimestamps } from '../utils/timeUtils';
 import { formatBytes } from '../utils/sizeUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
 import { buildAttemptSegments, buildRetryTooltip, computeHasSegments } from '../utils/requestBarUtils';
 import { INCOMPLETE_STATUS_KEY } from '../utils/statusCodeUtils';
-import { buildProcessColorMap, processOf } from '../utils/processColors';
+import { buildProcessColorMap } from '../utils/processColors';
+import { deriveAppStateSegments } from '../utils/lifecycleEvents';
+import { makeRowStripeColorer } from '../utils/laneStripe';
 import { ProcessLegend } from './ProcessLegend';
 import type { HttpRequest } from '../types/log.types';
 import { RowTimeAction } from './RowTimeAction';
@@ -145,6 +147,7 @@ export function RequestTable({
     openLogViewerIds,
     rawLogLines,
     lineNumberIndex,
+    lifecycleEvents,
     toggleRowExpansion,
     closeLogViewer,
     setActiveRequest,
@@ -152,9 +155,15 @@ export function RequestTable({
     loadedEntryNames,
   } = useLogStore();
   // Colour request rows by originating process when several are merged
-  // (e.g. console + nse); a single process needs no differentiation.
+  // (e.g. console + nse); a single process needs no differentiation. The app
+  // (console) stream is instead striped by app-state shade — see makeRowStripeColorer.
   const processColorMap = useMemo(() => buildProcessColorMap(loadedEntryNames), [loadedEntryNames]);
   const showProcessColors = processColorMap.size > 1;
+  const stripeColorer = useMemo(() => {
+    const { min, max } = getMinMaxTimestamps(rawLogLines);
+    const stateSegments = deriveAppStateSegments(lifecycleEvents, min, max);
+    return makeRowStripeColorer({ processColorMap, showProcessColors, stateSegments });
+  }, [rawLogLines, lifecycleEvents, processColorMap, showProcessColors]);
   const navigate = useNavigate();
   const { setLogFilter, setScale, hasExplicitScale } = useURLParams();
 
@@ -658,8 +667,8 @@ export function RequestTable({
                     {virtualRows.map((vRow) => {
                       const req = displayedRequests[vRow.index];
                       const rowKey = getRowKey(req);
-                      const sourceFile = lineNumberIndex.get(req.sendLineNumber)?.sourceFile;
-                      const processColor = showProcessColors && sourceFile ? processColorMap.get(processOf(sourceFile)) : undefined;
+                      const sendLine = lineNumberIndex.get(req.sendLineNumber);
+                      const processColor = stripeColorer(sendLine?.sourceFile, sendLine?.timestampUs);
                       return (
                       <div
                         key={`sticky-${rowKey}`}
