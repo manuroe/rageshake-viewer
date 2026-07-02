@@ -767,5 +767,46 @@ describe('LogActivityChart', () => {
       const fg = appStateColors(APP_LANE_COLOR).foreground;
       expect(container.querySelectorAll(`rect[fill="${fg}"]`)).toHaveLength(1);
     });
+
+    it('shows no app lane when activity runs never overlap any state segment', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz'],
+        // Transition to background at 50s, entirely between the two log runs.
+        lifecycleEvents: [lc('coldStart', 1_000_000), lc('background', 50_000_000)],
+      });
+      // One run at 1s (foreground window) and one at 200s (background window),
+      // far enough apart to land in different buckets. Neither run overlaps the
+      // *other* segment, and each only touches its own segment's boundary, so no
+      // app segment survives.
+      const logs = [consoleLineAt(1, 1), consoleLineAt(2, 200)];
+      render(<LogActivityChart logLines={logs} />);
+      expect(screen.queryByText('app')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('per-process lanes combined with app-state lane', () => {
+    afterEach(() => {
+      useLogStore.setState({ loadedEntryNames: [], lifecycleEvents: [] });
+    });
+
+    it('skips the console per-process lane when the app-state lane already covers it', () => {
+      useLogStore.setState({
+        loadedEntryNames: ['console.2026-04-14-08.log.gz', 'nse.2026-04-14-08.log.gz'],
+        lifecycleEvents: [lc('coldStart', 1_000_000)],
+      });
+      const logs = [
+        createParsedLogLine({ lineNumber: 1, timestampUs: 1_000_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        createParsedLogLine({ lineNumber: 2, timestampUs: 60_000_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        createParsedLogLine({ lineNumber: 3, timestampUs: 120_000_000, sourceFile: 'console.2026-04-14-08.log.gz' }),
+        createParsedLogLine({ lineNumber: 4, timestampUs: 30_000_000, sourceFile: 'nse.2026-04-14-08.log.gz' }),
+      ];
+      render(<LogActivityChart logLines={logs} />);
+
+      // The app-state lane represents the console stream here, so console must
+      // not also get its own flat per-process lane — only 'app' and 'nse' show.
+      expect(screen.getByText('app')).toBeInTheDocument();
+      expect(screen.queryByText('console')).not.toBeInTheDocument();
+      expect(screen.getByText('nse')).toBeInTheDocument();
+    });
   });
 });

@@ -27,4 +27,12 @@ describe('bucketActivityRuns', () => {
     expect(bucketActivityRuns([], 0, 40, 10)).toEqual([]);
     expect(bucketActivityRuns([5], 0, 40, 0)).toEqual([]);
   });
+
+  it('tracks the actual min/max timestamp within a bucket regardless of arrival order', () => {
+    // All four land in the same bucket (size 100); out-of-order arrival must still
+    // widen the run to the true [5, 20] extent, not just the first timestamp seen.
+    expect(bucketActivityRuns([10, 5, 20, 15], 0, 100, 100)).toEqual([
+      { startUs: 5, endUs: 20, count: 4 },
+    ]);
+  });
 });

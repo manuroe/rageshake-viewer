@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mergeLogParserResults, type NamedLogParserResult } from '../mergeLogParserResults';
-import type { LogParserResult, ParsedLogLine, HttpRequest, SyncRequest } from '../../types/log.types';
+import type { LogParserResult, ParsedLogLine, HttpRequest, SyncRequest, LifecycleEvent } from '../../types/log.types';
+import type { TimestampMicros } from '../../types/time.types';
 
 function line(n: number): ParsedLogLine {
   return {
@@ -50,6 +51,30 @@ describe('mergeLogParserResults', () => {
     // provenance tagged
     expect(merged.rawLogLines[0].sourceFile).toBe('08.log');
     expect(merged.rawLogLines[4].sourceFile).toBe('09.log');
+  });
+
+  it('rebases lifecycle event line numbers by the same per-file offset', () => {
+    const lc = (lineNumber: number): LifecycleEvent => ({
+      kind: 'coldStart', platform: 'ios', lineNumber, timestampUs: 0 as TimestampMicros,
+    });
+    const fileA: LogParserResult = {
+      requests: [], httpRequests: [], connectionIds: [],
+      rawLogLines: Array.from({ length: 3 }, (_, i) => line(i + 1)),
+      sentryEvents: [], lifecycleEvents: [lc(2)],
+    };
+    const fileB: LogParserResult = {
+      requests: [], httpRequests: [], connectionIds: [],
+      rawLogLines: Array.from({ length: 2 }, (_, i) => line(i + 1)),
+      sentryEvents: [], lifecycleEvents: [lc(1)],
+    };
+
+    const merged = mergeLogParserResults([
+      { name: '08.log', result: fileA },
+      { name: '09.log', result: fileB },
+    ]);
+
+    // fileB's event (line 1) shifts by fileA's 3 lines → line 4.
+    expect(merged.lifecycleEvents.map((e) => e.lineNumber)).toEqual([2, 4]);
   });
 
   it('tags the single-file case and leaves numbers untouched', () => {

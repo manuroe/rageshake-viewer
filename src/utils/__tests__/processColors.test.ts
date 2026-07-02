@@ -49,4 +49,20 @@ describe('shadeColor', () => {
     expect(shadeColor('#000000', -1)).toBe('hsl(0, 0%, 12%)');
     expect(shadeColor('#ffffff', 1)).toBe('hsl(0, 0%, 92%)');
   });
+
+  it('expands 3-digit shorthand hex the same as its 6-digit form', () => {
+    expect(shadeColor('#3bf', 0)).toBe(shadeColor('#33bbff', 0));
+  });
+
+  it('derives hue for a green-dominant colour', () => {
+    expect(shadeColor('#00ff00', 0)).toMatch(/^hsl\(120, \d+%, \d+%\)$/);
+  });
+
+  it('derives hue for a red-dominant colour with blue > green', () => {
+    expect(shadeColor('#ff0080', 0)).toMatch(/^hsl\(3\d\d, \d+%, \d+%\)$/);
+  });
+
+  it('derives hue for a red-dominant colour with green >= blue', () => {
+    expect(shadeColor('#ff8000', 0)).toMatch(/^hsl\(3\d, \d+%, \d+%\)$/);
+  });
 });

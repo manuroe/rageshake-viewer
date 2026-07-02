@@ -1,6 +1,6 @@
 import { Group } from '@visx/group';
 import type { LifecycleEvent } from '../types/log.types';
-import { MARKER_COLOR, isMarkerKind } from '../utils/lifecycleEvents';
+import { MARKER_COLOR, isMarkerKind, type MarkerKind } from '../utils/lifecycleEvents';
 
 interface LifecycleMarkersProps {
   /** Lifecycle events to mark, already time-filtered to the chart window. */
@@ -23,12 +23,11 @@ interface LifecycleMarkersProps {
  * <LifecycleMarkers markers={stats.lifecycleEvents} timeToX={timeToX} bottomY={axisTop} />
  */
 export function LifecycleMarkers({ markers, timeToX, bottomY }: LifecycleMarkersProps) {
-  const lines = markers?.filter((e) => isMarkerKind(e.kind)) ?? [];
+  const lines = markers?.filter((e): e is LifecycleEvent & { kind: MarkerKind } => isMarkerKind(e.kind)) ?? [];
   if (lines.length === 0) return null;
   return (
     <Group>
       {lines.map((event) => {
-        if (!isMarkerKind(event.kind)) return null; // narrows kind for MARKER_COLOR
         const x = timeToX(event.timestampUs);
         return (
           <line

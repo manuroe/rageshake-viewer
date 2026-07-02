@@ -55,6 +55,13 @@ describe('detectLifecycleKind', () => {
   it('does not match a bare token without its MainActivity anchor (false-positive guard)', () => {
     expect(detectLifecycleKind('… discussing the onResume callback in docs')).toBeNull();
   });
+
+  it('returns null when the anchor token appears but no rule fully matches', () => {
+    // Contains the "MainActivity" anchor (passes the cheap prefilter) but none of
+    // the paired tokens (onCreate/onPause/onResume), so every rule's `every` check
+    // fails and the scan falls through to null.
+    expect(detectLifecycleKind('… MainActivity: onStart')).toBeNull();
+  });
 });
 
 describe('lastColdStartUs', () => {

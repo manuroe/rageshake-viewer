@@ -49,4 +49,16 @@ describe('makeRowStripeColorer', () => {
     });
     expect(color('nse.x.log', 50)).toBeUndefined();
   });
+
+  it('returns undefined for the app stream when its timestamp is missing or non-positive', () => {
+    const color = makeRowStripeColorer({
+      processColorMap: new Map([['console', '#3b82f6']]),
+      showProcessColors: false,
+      stateSegments: segments,
+    });
+    // Send line missing (no timestamp at all).
+    expect(color('console.x.log', undefined)).toBeUndefined();
+    // Unparseable timestamp — the parser uses <= 0 for "absent".
+    expect(color('console.x.log', 0)).toBeUndefined();
+  });
 });
