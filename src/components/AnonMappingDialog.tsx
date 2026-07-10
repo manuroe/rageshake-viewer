@@ -70,10 +70,10 @@ export function AnonMappingDialog({ dict, buildPreview, onClose }: AnonMappingDi
       .catch(() => { if (!cancelled) setBuildError(true); })
       .finally(() => { if (!cancelled) setBuilding(false); });
     return () => { cancelled = true; };
-    // buildPreview is a fresh closure each render; the dialog is mounted per-open
-    // so capturing the mount-time value is intended.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPreview, rawLogLines, salt]);
+    // buildPreview is memoised by the caller, so its identity changes only when
+    // the underlying source does — rebuilding the preview then (e.g. once
+    // /listing entries load) rather than on every render.
+  }, [isPreview, rawLogLines, salt, buildPreview]);
 
   const effectiveDict = dict ?? preview;
 

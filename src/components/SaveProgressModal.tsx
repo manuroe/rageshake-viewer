@@ -11,8 +11,9 @@ interface SaveProgressModalProps {
   readonly total: number;
   /** When set, the save failed with this message; a Close button is shown. */
   readonly error?: string | null;
-  /** Called to dismiss the modal after an error. */
-  readonly onDismiss?: () => void;
+  /** Dismiss handler — always required so the error state can never be a
+   *  non-dismissable, UI-blocking modal. */
+  readonly onDismiss: () => void;
 }
 
 /**

@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLogStore } from '../stores/logStore';
 import { useArchiveStore } from '../stores/archiveStore';
 import { useListingStore } from '../stores/listingStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useAnonSaltStore } from '../stores/anonSaltStore';
+import type { AnonymizationDictionary } from '../types/log.types';
 import { buildAnonymizationDictionary, buildCompiledAnonymizer } from '../utils/anonymizeUtils';
 import { buildAnonymizedFileText, deriveAnonymizedFilename } from '../utils/anonymizedLogFile';
 import { buildAnonymisedArchiveGz, buildArchiveDictionary, deriveAnonymizedArchiveName, type ArchiveProgress } from '../utils/anonymizeArchive';
@@ -88,36 +89,44 @@ export function BurgerMenu() {
   const paintTick = () => new Promise<void>((r) => setTimeout(r, 0));
 
   // Fetch every listing entry's bytes (one extension round-trip each), reporting
-  // progress and dropping any that fail.
-  const fetchListingEntries = async (
-    onProgress: ArchiveProgress,
-  ): Promise<{ name: string; data: Uint8Array }[]> => {
-    const total = listingEntries.length;
-    let done = 0;
-    onProgress('Fetching files', 0, total);
-    const fetched = await Promise.all(
-      listingEntries.map(async (e) => {
-        let data: Uint8Array | null = null;
-        try {
-          data = await fetchExtensionFileBytes(e.url, e.name);
-        } catch {
-          data = null; // one bad entry (rejected fetch / bad base64) must not abort the export
-        }
-        done += 1;
-        onProgress('Fetching files', done, total);
-        return data ? { name: e.name, data } : null;
-      }),
-    );
-    return fetched.filter((e): e is { name: string; data: Uint8Array } => e !== null);
-  };
+  // progress and dropping any that fail. Memoised so it (and the memoised
+  // preview builder below) keep a stable identity until the listing changes.
+  const fetchListingEntries = useCallback(
+    async (onProgress: ArchiveProgress): Promise<{ name: string; data: Uint8Array }[]> => {
+      const total = listingEntries.length;
+      let done = 0;
+      onProgress('Fetching files', 0, total);
+      const fetched = await Promise.all(
+        listingEntries.map(async (e) => {
+          let data: Uint8Array | null = null;
+          try {
+            data = await fetchExtensionFileBytes(e.url, e.name);
+          } catch {
+            data = null; // one bad entry (rejected fetch / bad base64) must not abort the export
+          }
+          done += 1;
+          onProgress('Fetching files', done, total);
+          return data ? { name: e.name, data } : null;
+        }),
+      );
+      return fetched.filter((e): e is { name: string; data: Uint8Array } => e !== null);
+    },
+    [listingEntries],
+  );
 
   const mappingDict = isArchiveView || isListingView ? null : anonymizationDictionary;
-  const buildMappingPreview = isArchiveView
-    ? (onProgress: ArchiveProgress) => buildArchiveDictionary(archiveEntries, salt, onProgress)
-    : isListingView
-      ? async (onProgress: ArchiveProgress) =>
-          buildArchiveDictionary(await fetchListingEntries(onProgress), salt, onProgress)
-      : undefined;
+  // Memoised so its identity only changes when the underlying source changes;
+  // the mapping dialog depends on it and will rebuild the preview when it does
+  // (e.g. once /listing entries finish loading), without rebuilding on every render.
+  const buildMappingPreview = useMemo<
+    ((onProgress: ArchiveProgress) => Promise<AnonymizationDictionary>) | undefined
+  >(() => {
+    if (isArchiveView) return (onProgress) => buildArchiveDictionary(archiveEntries, salt, onProgress);
+    if (isListingView) {
+      return async (onProgress) => buildArchiveDictionary(await fetchListingEntries(onProgress), salt, onProgress);
+    }
+    return undefined;
+  }, [isArchiveView, isListingView, archiveEntries, salt, fetchListingEntries]);
 
   // Save the single loaded log anonymised: reuse the in-session anonymised lines
   // when present, otherwise anonymise the raw lines on the fly with the salt.
@@ -149,7 +158,14 @@ export function BurgerMenu() {
   const saveAnonymisedListing = async () => {
     const entries = await fetchListingEntries(reportProgress);
     if (entries.length === 0) throw new Error('No files could be fetched from the listing.');
-    const base = listingUrl.split('/').filter(Boolean).pop() ?? 'listing';
+    // Use the URL path (not the raw string) so query/hash fragments don't leak
+    // into the download name.
+    let base = 'listing';
+    try {
+      base = new URL(listingUrl).pathname.split('/').filter(Boolean).pop() ?? 'listing';
+    } catch {
+      // listingUrl isn't a valid absolute URL; keep the fallback.
+    }
     const gz = await buildAnonymisedArchiveGz(entries, salt, reportProgress);
     downloadBlob(gz, deriveAnonymizedArchiveName(base), 'application/gzip');
   };

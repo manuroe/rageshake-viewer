@@ -150,7 +150,9 @@ export async function buildAnonymizationDictionaryFromTexts(
     // reverse entry (which would make unanonymisation restore the wrong value).
     // Astronomically unlikely for realistic sizes; surfaced loudly if it happens.
     if (reverse[alias] !== undefined && reverse[alias] !== original) {
-      throw new Error(`anonymisation alias collision: ${alias} maps both ${reverse[alias]} and ${original}`);
+      // Do not embed the original identifiers in the message — they are the
+      // sensitive values anonymisation exists to hide. The alias is a hash.
+      throw new Error(`anonymisation alias collision on ${alias}`);
     }
     forward[original] = alias;
     reverse[alias] = original;
