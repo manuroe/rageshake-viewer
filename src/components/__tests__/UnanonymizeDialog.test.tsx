@@ -82,7 +82,9 @@ describe('UnanonymizeDialog', () => {
     );
     await loadFile(file);
 
-    expect(screen.getAllByText('dictionary.json').length).toBeGreaterThanOrEqual(1);
+    // findBy* retries until the async FileReader load + re-render settles
+    // (a fixed tick is racy under CI load).
+    expect((await screen.findAllByText('dictionary.json')).length).toBeGreaterThanOrEqual(1);
     // The selected-file span is distinct from the body-text <code> element
     expect(screen.getByText(/1 entries/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /apply and unanonymise/i })).not.toBeDisabled();
@@ -92,14 +94,14 @@ describe('UnanonymizeDialog', () => {
     renderDialog();
     const file = new File(['not valid json{'], 'bad.json', { type: 'application/json' });
     await loadFile(file);
-    expect(screen.getByText(/not valid json/i)).toBeInTheDocument();
+    expect(await screen.findByText(/not valid json/i)).toBeInTheDocument();
   });
 
   it('shows an error for a JSON file that does not match the expected shape', async () => {
     renderDialog();
     const file = new File([JSON.stringify([1, 2, 3])], 'wrong.json', { type: 'application/json' });
     await loadFile(file);
-    expect(screen.getByText(/invalid dictionary/i)).toBeInTheDocument();
+    expect(await screen.findByText(/invalid dictionary/i)).toBeInTheDocument();
   });
 
   it('shows an error when forward/reverse contain non-string values', async () => {
@@ -107,7 +109,7 @@ describe('UnanonymizeDialog', () => {
     const bad = JSON.stringify({ forward: { key: 123 }, reverse: {} });
     const file = new File([bad], 'bad.json', { type: 'application/json' });
     await loadFile(file);
-    expect(screen.getByText(/invalid dictionary/i)).toBeInTheDocument();
+    expect(await screen.findByText(/invalid dictionary/i)).toBeInTheDocument();
   });
 
   it('shows an error when forward is an array', async () => {
@@ -115,7 +117,7 @@ describe('UnanonymizeDialog', () => {
     const bad = JSON.stringify({ forward: ['oops'], reverse: {} });
     const file = new File([bad], 'bad.json', { type: 'application/json' });
     await loadFile(file);
-    expect(screen.getByText(/invalid dictionary/i)).toBeInTheDocument();
+    expect(await screen.findByText(/invalid dictionary/i)).toBeInTheDocument();
   });
 
   it('shows an error when ev.target.result is not a string', async () => {
@@ -140,7 +142,7 @@ describe('UnanonymizeDialog', () => {
     renderDialog();
     const file = new File(['ignored'], 'dict.json', { type: 'application/json' });
     await loadFile(file);
-    expect(screen.getByText(/could not read file/i)).toBeInTheDocument();
+    expect(await screen.findByText(/could not read file/i)).toBeInTheDocument();
   });
 
   it('shows an error when FileReader.onerror fires', async () => {
@@ -163,7 +165,7 @@ describe('UnanonymizeDialog', () => {
     renderDialog();
     const file = new File(['ignored'], 'dict.json', { type: 'application/json' });
     await loadFile(file);
-    expect(screen.getByText(/failed to read file/i)).toBeInTheDocument();
+    expect(await screen.findByText(/failed to read file/i)).toBeInTheDocument();
   });
 
   it('closes with Escape when no keyboard shortcut context is present', () => {
