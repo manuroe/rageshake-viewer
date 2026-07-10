@@ -66,6 +66,26 @@ const MATRIX_IDENTIFIER_RE = new RegExp(
 );
 
 // ---------------------------------------------------------------------------
+// Hashing
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the first `len` hex characters of the SHA-256 digest of `input`.
+ *
+ * Uses the native Web Crypto API (`crypto.subtle`) — no dependency. Available
+ * in the extension, on `localhost` (secure contexts), and in Node 20+/jsdom
+ * test runners via `globalThis.crypto`.
+ */
+export async function sha256Hex(input: string, len: number): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, len);
+}
+
+// ---------------------------------------------------------------------------
 // Dictionary builder
 // ---------------------------------------------------------------------------
 
@@ -73,31 +93,54 @@ const MATRIX_IDENTIFIER_RE = new RegExp(
  * Scan every raw text field in `logLines` and build a bidirectional
  * anonymization dictionary.
  *
- * Replacement aliases follow the naming scheme:
- * - Domains:      `domain0.org`, `domain1.org`, …
- * - User IDs:     `@user0:domain0.org`, `@user1:domain0.org`, …
- * - Room IDs:     `!room0:domain0.org`, `!room1:domain0.org`, …
- * - Room aliases: `#room_alias_0:domain0.org`, …
- * - Event IDs:    `$event0:domain0.org` (with domain) or `$event0` (modern)
+ * Each alias is a pure function of the identifier: a truncated salted SHA-256
+ * hash, so the same identifier maps to the same alias in every rageshake and on
+ * every machine that shares the `salt`. Naming scheme:
+ * - Domains:      `domain-<hash8>.org`
+ * - User IDs:     `@user-<hash12>:domain-<hash8>.org`
+ * - Room IDs:     `!room-<hash12>:domain-<hash8>.org` (or `!room-<hash12>` modern)
+ * - Room aliases: `#room_alias-<hash12>:domain-<hash8>.org`
+ * - Event IDs:    `$event-<hash12>:domain-<hash8>.org` (or `$event-<hash12>` modern)
+ *
+ * The bare server name is hashed separately from the full identifier so all
+ * users on one server share one domain alias (preserves "same server" debugging
+ * info) without revealing that two accounts share a username across servers.
  *
  * Domains encountered inside Matrix identifiers are registered in the `forward`
  * map so that standalone occurrences of the same domain string in log text are
  * also replaced by `applyAnonymization` without a second scan pass.
  *
+ * @param salt Shared secret folded into every hash (see `anonSaltStore`). An
+ *   empty salt yields reproducible-but-guessable pseudonymisation.
+ *
  * @example
  * ```ts
- * const dict = buildAnonymizationDictionary(parsedLines);
- * dict.forward['@alice:matrix.example.org']; // '@user0:domain0.org'
- * dict.reverse['@user0:domain0.org'];         // '@alice:matrix.example.org'
+ * const dict = await buildAnonymizationDictionary(parsedLines, salt);
+ * dict.forward['@alice:matrix.example.org']; // '@user-<hash12>:domain-<hash8>.org'
  * ```
  */
-export function buildAnonymizationDictionary(logLines: readonly ParsedLogLine[]): AnonymizationDictionary {
-  let userCount = 0;
-  let roomCount = 0;
-  let aliasCount = 0;
-  let eventCount = 0;
-  let domainCount = 0;
+export async function buildAnonymizationDictionary(
+  logLines: readonly ParsedLogLine[],
+  salt: string,
+): Promise<AnonymizationDictionary> {
+  const texts: string[] = [];
+  for (const line of logLines) {
+    texts.push(line.rawText);
+    if (line.continuationLines) texts.push(...line.continuationLines);
+  }
+  return buildAnonymizationDictionaryFromTexts(texts, salt);
+}
 
+/**
+ * Build an anonymization dictionary from raw text blobs (e.g. whole files)
+ * instead of parsed log lines. Used to anonymise arbitrary archive members with
+ * cross-file-consistent aliases: pass every file's text so one identifier maps
+ * to one alias across the whole archive.
+ */
+export async function buildAnonymizationDictionaryFromTexts(
+  texts: readonly string[],
+  salt: string,
+): Promise<AnonymizationDictionary> {
   const forward: Record<string, string> = {};
   const reverse: Record<string, string> = {};
 
@@ -106,6 +149,11 @@ export function buildAnonymizationDictionary(logLines: readonly ParsedLogLine[])
     forward[original] = alias;
     reverse[alias] = original;
   }
+
+  // ponytail: 12 hex chars = 48 bits for tokens, 8 = 32 bits for domains —
+  // collisions negligible for realistic log sizes. A collision CANNOT be repaired
+  // with a per-run suffix (different files see different ID sets, which would break
+  // cross-file determinism), so the lengths are fixed. Bump if one is ever observed.
 
   /**
    * Return the existing or freshly-created alias for `serverName`.
@@ -117,7 +165,7 @@ export function buildAnonymizationDictionary(logLines: readonly ParsedLogLine[])
    * so the dictionary remains bijective and unanonymization can recover the
    * exact original server name.
    */
-  function getOrCreateDomainAlias(serverName: string): string {
+  async function getOrCreateDomainAlias(serverName: string): Promise<string> {
     if (forward[serverName] !== undefined) return forward[serverName];
 
     const portMatch = serverName.match(/:\d{1,5}$/);
@@ -126,7 +174,7 @@ export function buildAnonymizationDictionary(logLines: readonly ParsedLogLine[])
 
     let bareAlias = forward[bare];
     if (bareAlias === undefined) {
-      bareAlias = `domain${domainCount++}.org`;
+      bareAlias = `domain-${await sha256Hex(salt + bare, 8)}.org`;
       register(bare, bareAlias);
     }
 
@@ -139,69 +187,61 @@ export function buildAnonymizationDictionary(logLines: readonly ParsedLogLine[])
     return alias;
   }
 
-  function processIdentifier(id: string): void {
+  async function processIdentifier(id: string): Promise<void> {
     if (id.startsWith('@')) {
       const colonIdx = id.indexOf(':');
       if (colonIdx === -1) return;
-      const domainAlias = getOrCreateDomainAlias(id.slice(colonIdx + 1));
+      const domainAlias = await getOrCreateDomainAlias(id.slice(colonIdx + 1));
       if (forward[id] === undefined) {
-        register(id, `@user${userCount}:${domainAlias}`);
-        userCount++;
+        register(id, `@user-${await sha256Hex(salt + id, 12)}:${domainAlias}`);
       }
     } else if (id.startsWith('#')) {
       const colonIdx = id.indexOf(':');
       if (colonIdx === -1) return;
-      const domainAlias = getOrCreateDomainAlias(id.slice(colonIdx + 1));
+      const domainAlias = await getOrCreateDomainAlias(id.slice(colonIdx + 1));
       if (forward[id] === undefined) {
-        register(id, `#room_alias_${aliasCount}:${domainAlias}`);
-        aliasCount++;
+        register(id, `#room_alias-${await sha256Hex(salt + id, 12)}:${domainAlias}`);
       }
     } else if (id.startsWith('!')) {
       const colonIdx = id.indexOf(':');
       if (colonIdx !== -1) {
-        const domainAlias = getOrCreateDomainAlias(id.slice(colonIdx + 1));
+        const domainAlias = await getOrCreateDomainAlias(id.slice(colonIdx + 1));
         if (forward[id] === undefined) {
-          register(id, `!room${roomCount}:${domainAlias}`);
-          roomCount++;
+          register(id, `!room-${await sha256Hex(salt + id, 12)}:${domainAlias}`);
         }
       } else {
         if (forward[id] === undefined) {
-          register(id, `!room${roomCount}`);
-          roomCount++;
+          register(id, `!room-${await sha256Hex(salt + id, 12)}`);
         }
       }
     } else if (id.startsWith('$')) {
       const colonIdx = id.indexOf(':');
       if (colonIdx !== -1) {
-        const domainAlias = getOrCreateDomainAlias(id.slice(colonIdx + 1));
+        const domainAlias = await getOrCreateDomainAlias(id.slice(colonIdx + 1));
         if (forward[id] === undefined) {
-          register(id, `$event${eventCount}:${domainAlias}`);
-          eventCount++;
+          register(id, `$event-${await sha256Hex(salt + id, 12)}:${domainAlias}`);
         }
       } else {
         if (forward[id] === undefined) {
-          register(id, `$event${eventCount}`);
-          eventCount++;
+          register(id, `$event-${await sha256Hex(salt + id, 12)}`);
         }
       }
     }
   }
 
-  function scanText(text: string): void {
-    MATRIX_IDENTIFIER_RE.lastIndex = 0;
+  // Fresh regex instance: we await inside the scan loop, so sharing the module
+  // global's lastIndex could be corrupted by any interleaved use of it.
+  const scanRe = new RegExp(MATRIX_IDENTIFIER_RE.source, 'g');
+  async function scanText(text: string): Promise<void> {
+    scanRe.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = MATRIX_IDENTIFIER_RE.exec(text)) !== null) {
-      processIdentifier(m[0]);
+    while ((m = scanRe.exec(text)) !== null) {
+      await processIdentifier(m[0]);
     }
   }
 
-  for (const line of logLines) {
-    scanText(line.rawText);
-    if (line.continuationLines) {
-      for (const cl of line.continuationLines) {
-        scanText(cl);
-      }
-    }
+  for (const text of texts) {
+    await scanText(text);
   }
 
   return { forward, reverse };
