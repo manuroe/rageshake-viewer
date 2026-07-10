@@ -21,7 +21,7 @@ interface SaveProgressModalProps {
  */
 export function SaveProgressModal({ phase, current, total, error, onDismiss }: SaveProgressModalProps) {
   return createPortal(
-    <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label="Saving anonymised">
+    <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label={error ? 'Save failed' : 'Saving anonymised'}>
       <div className={styles.panel}>
         <div className={styles.header}>
           <h2 className={styles.title}>{error ? 'Save failed' : 'Saving anonymised…'}</h2>

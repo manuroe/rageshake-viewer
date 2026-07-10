@@ -58,6 +58,7 @@ export function AnonMappingDialog({ dict, buildPreview, onClose }: AnonMappingDi
     setBuilding(true);
     setBuildError(false);
     setPreview(null);
+    setProgress(null);
     const report = (phase: string, current: number, total: number) => {
       if (!cancelled) setProgress({ phase, current, total });
     };

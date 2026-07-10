@@ -146,6 +146,12 @@ export async function buildAnonymizationDictionaryFromTexts(
 
   function register(original: string, alias: string): void {
     if (forward[original] !== undefined) return;
+    // Detect a truncated-hash collision rather than silently overwriting the
+    // reverse entry (which would make unanonymisation restore the wrong value).
+    // Astronomically unlikely for realistic sizes; surfaced loudly if it happens.
+    if (reverse[alias] !== undefined && reverse[alias] !== original) {
+      throw new Error(`anonymisation alias collision: ${alias} maps both ${reverse[alias]} and ${original}`);
+    }
     forward[original] = alias;
     reverse[alias] = original;
   }

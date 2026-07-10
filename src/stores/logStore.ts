@@ -506,11 +506,13 @@ export const useLogStore = create<LogStore>((set, get) => ({
     }
 
     // Large logs: chunk the work across event-loop turns so the browser stays
-    // responsive. Fire-and-forget; isAnonymizing guards against double-clicks.
+    // responsive. isAnonymizing guards against double-clicks. The chunked IIFE is
+    // awaited so `await anonymizeLogs()` resolves only once anonymisation actually
+    // finishes (same completion semantics as the small-log path).
     set({ isAnonymizing: true, anonymizingProgress: 0 });
     const token = { cancelled: false };
     currentCancelToken = token;
-    void (async () => {
+    await (async () => {
       try {
         // Yield first so the loading state renders before any heavy work starts.
         await new Promise<void>((r) => setTimeout(r, 0));
