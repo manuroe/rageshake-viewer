@@ -92,7 +92,7 @@ const lines10k: ParsedLogLine[] = Array.from({ length: LINE_COUNT }, (_, i) =>
 );
 
 /** Dictionary and compiled functions built once and reused across bench runs. */
-const dict10k = buildAnonymizationDictionary(lines10k);
+const dict10k = await buildAnonymizationDictionary(lines10k, '');
 const compiledAnonymizer10k = buildCompiledAnonymizer(dict10k);
 
 /** Pre-anonymized lines for the unanonymizer benchmark. */
@@ -110,8 +110,8 @@ const compiledUnanonymizer10k = buildCompiledUnanonymizer(dict10k);
 // ---------------------------------------------------------------------------
 
 describe('anonymizeUtils Performance (10K lines)', () => {
-  bench('buildAnonymizationDictionary: 10K lines', () => {
-    buildAnonymizationDictionary(lines10k);
+  bench('buildAnonymizationDictionary: 10K lines', async () => {
+    await buildAnonymizationDictionary(lines10k, '');
   });
 
   bench('buildCompiledAnonymizer: compile from 10K-line dictionary', () => {

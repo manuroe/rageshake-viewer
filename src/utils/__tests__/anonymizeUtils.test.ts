@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ANONYMIZED_LOG_MARKER,
   buildAnonymizationDictionary,
+  buildAnonymizationDictionaryFromTexts,
   applyAnonymization,
   applyUnanonymization,
   anonymizeLogLine,
@@ -15,6 +16,19 @@ import { createParsedLogLine } from '../../test/fixtures';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Salt used across tests. Aliases are salt-dependent, so tests assert on the
+ *  hash *format* (and round-trips) rather than exact hash values. */
+const SALT = 'test-salt';
+
+// Alias formats produced by the hash-based builder (see buildAnonymizationDictionary).
+const USER_RE = /^@user-[0-9a-f]{12}:domain-[0-9a-f]{8}\.org$/;
+const ROOM_ALIAS_RE = /^#room_alias-[0-9a-f]{12}:domain-[0-9a-f]{8}\.org$/;
+const ROOM_RE = /^!room-[0-9a-f]{12}:domain-[0-9a-f]{8}\.org$/;
+const ROOM_MODERN_RE = /^!room-[0-9a-f]{12}$/;
+const EVENT_RE = /^\$event-[0-9a-f]{12}:domain-[0-9a-f]{8}\.org$/;
+const EVENT_MODERN_RE = /^\$event-[0-9a-f]{12}$/;
+const DOMAIN_RE = /^domain-[0-9a-f]{8}\.org$/;
 
 /** Build a minimal ParsedLogLine whose rawText contains the given message. */
 function makeLine(lineNumber: number, message: string) {
@@ -31,102 +45,119 @@ function makeLine(lineNumber: number, message: string) {
 // ---------------------------------------------------------------------------
 
 describe('buildAnonymizationDictionary', () => {
-  it('produces empty maps for logs with no Matrix identifiers', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, 'hello world no ids here')]);
+  it('produces empty maps for logs with no Matrix identifiers', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, 'hello world no ids here')], SALT);
     expect(dict.forward).toEqual({});
     expect(dict.reverse).toEqual({});
   });
 
-  it('replaces a user ID consistently with @userN:domainN.org', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:matrix.example.org joined')]);
-    expect(dict.forward['@alice:matrix.example.org']).toBe('@user0:domain0.org');
-    expect(dict.reverse['@user0:domain0.org']).toBe('@alice:matrix.example.org');
+  it('replaces a user ID with the @user-<hash>:domain-<hash>.org format', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:matrix.example.org joined')], SALT);
+    const alias = dict.forward['@alice:matrix.example.org'];
+    expect(alias).toMatch(USER_RE);
+    expect(dict.reverse[alias]).toBe('@alice:matrix.example.org');
   });
 
-  it('assigns the same alias when the same user ID appears multiple times', () => {
-    const dict = buildAnonymizationDictionary([
+  it('assigns the same alias when the same user ID appears multiple times', async () => {
+    const dict = await buildAnonymizationDictionary([
       makeLine(0, '@alice:example.org sent a message'),
       makeLine(1, '@alice:example.org sent another message'),
-    ]);
+    ], SALT);
     const userAliases = Object.values(dict.forward).filter((v) => v.startsWith('@user'));
     expect(userAliases.length).toBe(1);
-    expect(userAliases[0]).toBe('@user0:domain0.org');
+    expect(userAliases[0]).toMatch(USER_RE);
   });
 
-  it('assigns different aliases for different user IDs', () => {
-    const dict = buildAnonymizationDictionary([
+  it('assigns different aliases for different user IDs, sharing the domain', async () => {
+    const dict = await buildAnonymizationDictionary([
       makeLine(0, '@alice:example.org and @bob:example.org'),
-    ]);
-    expect(dict.forward['@alice:example.org']).toBe('@user0:domain0.org');
-    expect(dict.forward['@bob:example.org']).toBe('@user1:domain0.org');
+    ], SALT);
+    const alice = dict.forward['@alice:example.org'];
+    const bob = dict.forward['@bob:example.org'];
+    expect(alice).toMatch(USER_RE);
+    expect(bob).toMatch(USER_RE);
+    expect(alice).not.toBe(bob);
+    // Same server → same domain component.
+    expect(alice.split(':')[1]).toBe(bob.split(':')[1]);
   });
 
-  it('replaces a room alias with #room_alias_N:domainN.org', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '#general:example.org')]);
-    expect(dict.forward['#general:example.org']).toBe('#room_alias_0:domain0.org');
-    expect(dict.reverse['#room_alias_0:domain0.org']).toBe('#general:example.org');
+  it('replaces a room alias with the #room_alias-<hash>:domain-<hash>.org format', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '#general:example.org')], SALT);
+    const alias = dict.forward['#general:example.org'];
+    expect(alias).toMatch(ROOM_ALIAS_RE);
+    expect(dict.reverse[alias]).toBe('#general:example.org');
   });
 
-  it('replaces a room ID (with domain) with !roomN:domainN.org', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '!abc123:example.org')]);
-    expect(dict.forward['!abc123:example.org']).toBe('!room0:domain0.org');
-    expect(dict.reverse['!room0:domain0.org']).toBe('!abc123:example.org');
+  it('replaces a room ID (with domain) with the !room-<hash>:domain-<hash>.org format', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '!abc123:example.org')], SALT);
+    const alias = dict.forward['!abc123:example.org'];
+    expect(alias).toMatch(ROOM_RE);
+    expect(dict.reverse[alias]).toBe('!abc123:example.org');
   });
 
-  it('replaces a modern room ID (no domain, min 10 chars) with !roomN', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '!VkdmKnrz9stD0mzv2QrS3sP joined')]);
-    expect(dict.forward['!VkdmKnrz9stD0mzv2QrS3sP']).toBe('!room0');
-    expect(dict.reverse['!room0']).toBe('!VkdmKnrz9stD0mzv2QrS3sP');
+  it('replaces a modern room ID (no domain, min 10 chars) with !room-<hash>', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '!VkdmKnrz9stD0mzv2QrS3sP joined')], SALT);
+    const alias = dict.forward['!VkdmKnrz9stD0mzv2QrS3sP'];
+    expect(alias).toMatch(ROOM_MODERN_RE);
+    expect(dict.reverse[alias]).toBe('!VkdmKnrz9stD0mzv2QrS3sP');
   });
 
-  it('replaces an event ID (with domain) with $eventN:domainN.org', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '$ev1:example.org')]);
-    expect(dict.forward['$ev1:example.org']).toBe('$event0:domain0.org');
-    expect(dict.reverse['$event0:domain0.org']).toBe('$ev1:example.org');
+  it('replaces an event ID (with domain) with the $event-<hash>:domain-<hash>.org format', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '$ev1:example.org')], SALT);
+    const alias = dict.forward['$ev1:example.org'];
+    expect(alias).toMatch(EVENT_RE);
+    expect(dict.reverse[alias]).toBe('$ev1:example.org');
   });
 
-  it('replaces a modern event ID (no domain, min 10 chars) with $eventN', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '$VkdmKnrz9stD0mzv2QrS3sP redacted')]);
-    expect(dict.forward['$VkdmKnrz9stD0mzv2QrS3sP']).toBe('$event0');
-    expect(dict.reverse['$event0']).toBe('$VkdmKnrz9stD0mzv2QrS3sP');
+  it('replaces a modern event ID (no domain, min 10 chars) with $event-<hash>', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '$VkdmKnrz9stD0mzv2QrS3sP redacted')], SALT);
+    const alias = dict.forward['$VkdmKnrz9stD0mzv2QrS3sP'];
+    expect(alias).toMatch(EVENT_MODERN_RE);
+    expect(dict.reverse[alias]).toBe('$VkdmKnrz9stD0mzv2QrS3sP');
   });
 
-  it('shares the same domain alias across different identifier types', () => {
-    const dict = buildAnonymizationDictionary([
+  it('shares the same domain alias across different identifier types', async () => {
+    const dict = await buildAnonymizationDictionary([
       makeLine(0, '@alice:example.org in !room1:example.org'),
-    ]);
-    // Both @alice and !room1 reference example.org → same domain alias
-    expect(dict.forward['example.org']).toBe('domain0.org');
-    expect(dict.forward['@alice:example.org']).toBe('@user0:domain0.org');
-    expect(dict.forward['!room1:example.org']).toBe('!room0:domain0.org');
+    ], SALT);
+    const domain = dict.forward['example.org'];
+    expect(domain).toMatch(DOMAIN_RE);
+    // Both @alice and !room1 reference example.org → same domain component.
+    expect(dict.forward['@alice:example.org'].split(':')[1]).toBe(domain);
+    expect(dict.forward['!room1:example.org'].split(':')[1]).toBe(domain);
   });
 
-  it('registers the bare domain so standalone occurrences are replaced', () => {
-    const dict = buildAnonymizationDictionary([
+  it('registers the bare domain so standalone occurrences are replaced', async () => {
+    const dict = await buildAnonymizationDictionary([
       makeLine(0, '@alice:matrix.example.org did something on matrix.example.org'),
-    ]);
-    expect(dict.forward['matrix.example.org']).toBe('domain0.org');
+    ], SALT);
+    expect(dict.forward['matrix.example.org']).toMatch(DOMAIN_RE);
   });
 
-  it('handles port-bearing server names with bijective dictionary', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org:8448')]);
-    // Port-bearing variant gets its own forward + reverse entry for bijectivity
-    expect(dict.forward['example.org:8448']).toBe('domain0.org:8448');
-    expect(dict.reverse['domain0.org:8448']).toBe('example.org:8448');
-    // The user ID also gets the port alias
-    expect(dict.forward['@alice:example.org:8448']).toBe('@user0:domain0.org:8448');
-    expect(dict.reverse['@user0:domain0.org:8448']).toBe('@alice:example.org:8448');
-    // The bare domain alias is registered too
-    expect(dict.forward['example.org']).toBe('domain0.org');
+  it('handles port-bearing server names with bijective dictionary', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org:8448')], SALT);
+    const bareDomain = dict.forward['example.org'];
+    expect(bareDomain).toMatch(DOMAIN_RE);
+    // Port-bearing variant gets its own forward + reverse entry for bijectivity.
+    expect(dict.forward['example.org:8448']).toBe(`${bareDomain}:8448`);
+    expect(dict.reverse[`${bareDomain}:8448`]).toBe('example.org:8448');
+    // The user ID also gets the port alias: hashed user token + the ported domain.
+    const userAlias = dict.forward['@alice:example.org:8448'];
+    expect(userAlias).toMatch(/^@user-[0-9a-f]{12}:/);
+    expect(userAlias.endsWith(`:${bareDomain}:8448`)).toBe(true);
+    expect(dict.reverse[userAlias]).toBe('@alice:example.org:8448');
   });
 
-  it('handles user IDs with uppercase letters in the localpart (legacy servers)', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@Bob:matrix.org and @ALICE:matrix.org')]);
-    expect(dict.forward['@Bob:matrix.org']).toBe('@user0:domain0.org');
-    expect(dict.forward['@ALICE:matrix.org']).toBe('@user1:domain0.org');
+  it('handles user IDs with uppercase letters in the localpart (legacy servers)', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@Bob:matrix.org and @ALICE:matrix.org')], SALT);
+    const bob = dict.forward['@Bob:matrix.org'];
+    const alice = dict.forward['@ALICE:matrix.org'];
+    expect(bob).toMatch(USER_RE);
+    expect(alice).toMatch(USER_RE);
+    expect(bob).not.toBe(alice);
   });
 
-  it('scans continuation lines for identifiers', () => {
+  it('scans continuation lines for identifiers', async () => {
     const line = createParsedLogLine({
       lineNumber: 0,
       rawText: '2024-01-15T10:00:00.000000Z ERROR error detail',
@@ -134,8 +165,36 @@ describe('buildAnonymizationDictionary', () => {
       strippedMessage: 'error detail',
       continuationLines: ['  user @alice:example.org was involved'],
     });
-    const dict = buildAnonymizationDictionary([line]);
-    expect(dict.forward['@alice:example.org']).toBe('@user0:domain0.org');
+    const dict = await buildAnonymizationDictionary([line], SALT);
+    expect(dict.forward['@alice:example.org']).toMatch(USER_RE);
+  });
+
+  it('is deterministic: same input + salt yields identical aliases', async () => {
+    const lines = [makeLine(0, '@alice:matrix.org in !room1:matrix.org via #general:matrix.org')];
+    const a = await buildAnonymizationDictionary(lines, 'team-secret');
+    const b = await buildAnonymizationDictionary(lines, 'team-secret');
+    expect(a.forward).toEqual(b.forward);
+    expect(a.reverse).toEqual(b.reverse);
+  });
+
+  it('salt sensitivity: a different salt produces a different alias', async () => {
+    const lines = [makeLine(0, '@alice:matrix.org')];
+    const a = await buildAnonymizationDictionary(lines, 'salt-a');
+    const b = await buildAnonymizationDictionary(lines, 'salt-b');
+    expect(a.forward['@alice:matrix.org']).not.toBe(b.forward['@alice:matrix.org']);
+  });
+
+  it('buildAnonymizationDictionaryFromTexts builds from raw strings across blobs', async () => {
+    const dict = await buildAnonymizationDictionaryFromTexts(
+      ['@alice:matrix.org joined', 'later @bob:matrix.org left'],
+      SALT,
+    );
+    expect(dict.forward['@alice:matrix.org']).toMatch(USER_RE);
+    expect(dict.forward['@bob:matrix.org']).toMatch(USER_RE);
+    // same server → shared domain component
+    expect(dict.forward['@alice:matrix.org'].split(':')[1]).toBe(
+      dict.forward['@bob:matrix.org'].split(':')[1],
+    );
   });
 });
 
@@ -144,80 +203,83 @@ describe('buildAnonymizationDictionary', () => {
 // ---------------------------------------------------------------------------
 
 describe('applyAnonymization', () => {
-  it('replaces known identifiers in text', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+  it('replaces known identifiers in text', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org')], SALT);
+    const alias = dict.forward['@alice:example.org'];
     const result = applyAnonymization('user @alice:example.org logged in', dict);
-    expect(result).toBe('user @user0:domain0.org logged in');
+    expect(result).toBe(`user ${alias} logged in`);
   });
 
-  it('replaces all occurrences in a single string', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+  it('replaces all occurrences in a single string', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org')], SALT);
+    const alias = dict.forward['@alice:example.org'];
     const result = applyAnonymization('@alice:example.org and @alice:example.org', dict);
-    expect(result).toBe('@user0:domain0.org and @user0:domain0.org');
+    expect(result).toBe(`${alias} and ${alias}`);
   });
 
-  it('replaces standalone domain when it was seen inside a Matrix identifier', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+  it('replaces standalone domain when it was seen inside a Matrix identifier', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org')], SALT);
+    const domain = dict.forward['example.org'];
     const result = applyAnonymization('connected to example.org server', dict);
-    expect(result).toBe('connected to domain0.org server');
+    expect(result).toBe(`connected to ${domain} server`);
   });
 
-  it('does not modify text with no known identifiers', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+  it('does not modify text with no known identifiers', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org')], SALT);
     const result = applyAnonymization('nothing relevant here', dict);
     expect(result).toBe('nothing relevant here');
   });
 
-  it('handles empty text', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+  it('handles empty text', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org')], SALT);
     expect(applyAnonymization('', dict)).toBe('');
   });
 });
 
 describe('applyUnanonymization', () => {
-  it('restores original identifiers from aliases', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+  it('restores original identifiers from aliases', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org')], SALT);
     const anonymized = applyAnonymization('@alice:example.org', dict);
     const restored = applyUnanonymization(anonymized, dict);
     expect(restored).toBe('@alice:example.org');
   });
 
-  it('restores multiple different identifiers', () => {
-    const dict = buildAnonymizationDictionary([
+  it('restores multiple different identifiers', async () => {
+    const dict = await buildAnonymizationDictionary([
       makeLine(0, '@alice:example.org in !room1:example.org'),
-    ]);
+    ], SALT);
     const text = '@alice:example.org joined !room1:example.org';
     const anonymized = applyAnonymization(text, dict);
     const restored = applyUnanonymization(anonymized, dict);
     expect(restored).toBe(text);
   });
 
-  it('does not consume URI path when restoring identifiers embedded in URLs', () => {
+  it('does not consume URI path when restoring identifiers embedded in URLs', async () => {
     // Regression: the old regex `(?::[^\s]+)?` consumed the `/messages` suffix,
-    // so `!room0:domain0.org/messages` was treated as one token and not found
-    // in reverse[]. The fixed regex stops at `/`.
-    const dict = buildAnonymizationDictionary([makeLine(0, '!room1:example.org')]);
+    // so `!room-<hash>:domain-<hash>.org/messages` was treated as one token and
+    // not found in reverse[]. The fixed regex stops at `/`.
+    const dict = await buildAnonymizationDictionary([makeLine(0, '!room1:example.org')], SALT);
     const uri = '/_matrix/client/v3/rooms/!room1:example.org/messages';
     const anonymized = applyAnonymization(uri, dict);
     const restored = applyUnanonymization(anonymized, dict);
     expect(restored).toBe(uri);
   });
 
-  it('round-trips port-bearing server names', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org:8448')]);
+  it('round-trips port-bearing server names', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org:8448')], SALT);
     const text = 'connect to @alice:example.org:8448';
     const anonymized = applyAnonymization(text, dict);
     const restored = applyUnanonymization(anonymized, dict);
     expect(restored).toBe(text);
   });
 
-  it('restores identifiers followed by common trailing punctuation', () => {
+  it('restores identifiers followed by common trailing punctuation', async () => {
     // Regression: the old regex excluded `.` from the server suffix, so
-    // `@user0:domain0.org` was matched as only `@user0:domain0` and the reverse
-    // lookup failed, leaving the token partially un-restored.
-    const dict = buildAnonymizationDictionary([
+    // `@user-<hash>:domain-<hash>.org` was matched as only `@user-<hash>:domain-<hash>`
+    // and the reverse lookup failed, leaving the token partially un-restored.
+    const dict = await buildAnonymizationDictionary([
       makeLine(0, '@alice:example.org joined !room1:example.org'),
-    ]);
+    ], SALT);
     const anonymized = applyAnonymization('@alice:example.org, !room1:example.org)', dict);
     const restored = applyUnanonymization(anonymized, dict);
     expect(restored).toBe('@alice:example.org, !room1:example.org)');
@@ -229,27 +291,27 @@ describe('applyUnanonymization', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildCompiledUnanonymizer', () => {
-  it('restores identifiers in plain text', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '@alice:example.org')]);
+  it('restores identifiers in plain text', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '@alice:example.org')], SALT);
     const restore = buildCompiledUnanonymizer(dict);
     const anonymized = applyAnonymization('@alice:example.org', dict);
     expect(restore(anonymized)).toBe('@alice:example.org');
   });
 
-  it('does not consume URI path when restoring identifiers embedded in URLs', () => {
-    const dict = buildAnonymizationDictionary([makeLine(0, '!room1:example.org')]);
+  it('does not consume URI path when restoring identifiers embedded in URLs', async () => {
+    const dict = await buildAnonymizationDictionary([makeLine(0, '!room1:example.org')], SALT);
     const restore = buildCompiledUnanonymizer(dict);
     const anonymized = applyAnonymization('/_matrix/rooms/!room1:example.org/messages', dict);
     expect(restore(anonymized)).toBe('/_matrix/rooms/!room1:example.org/messages');
   });
 
-  it('restores identifiers followed by common trailing punctuation', () => {
+  it('restores identifiers followed by common trailing punctuation', async () => {
     // Regression: `candidateRe` used `[^\s/]+` which included trailing `,` or `)`
-    // in the match, so `@user0:domain0.org,` was not found in reverse[] and the
-    // identifier was left un-restored.
-    const dict = buildAnonymizationDictionary([
+    // in the match, so `@user-<hash>:domain-<hash>.org,` was not found in reverse[]
+    // and the identifier was left un-restored.
+    const dict = await buildAnonymizationDictionary([
       makeLine(0, '@alice:example.org joined !room1:example.org'),
-    ]);
+    ], SALT);
     const restore = buildCompiledUnanonymizer(dict);
     const anonymized = applyAnonymization('@alice:example.org, !room1:example.org)', dict);
     expect(restore(anonymized)).toBe('@alice:example.org, !room1:example.org)');
@@ -261,18 +323,19 @@ describe('buildCompiledUnanonymizer', () => {
 // ---------------------------------------------------------------------------
 
 describe('anonymizeLogLine', () => {
-  it('anonymizes rawText, message, and strippedMessage', () => {
+  it('anonymizes rawText, message, and strippedMessage', async () => {
     const line = makeLine(1, '@alice:example.org joined !room1:example.org');
-    const dict = buildAnonymizationDictionary([line]);
+    const dict = await buildAnonymizationDictionary([line], SALT);
+    const alias = dict.forward['@alice:example.org'];
     const result = anonymizeLogLine(line, dict);
 
-    expect(result.rawText).toContain('@user0:domain0.org');
-    expect(result.message).toContain('@user0:domain0.org');
-    expect(result.strippedMessage).toContain('@user0:domain0.org');
+    expect(result.rawText).toContain(alias);
+    expect(result.message).toContain(alias);
+    expect(result.strippedMessage).toContain(alias);
     expect(result.strippedMessage).not.toContain('@alice:example.org');
   });
 
-  it('anonymizes continuation lines', () => {
+  it('anonymizes continuation lines', async () => {
     const line = createParsedLogLine({
       lineNumber: 0,
       rawText: '2024-01-15T10:00:00.000000Z ERROR error',
@@ -280,12 +343,13 @@ describe('anonymizeLogLine', () => {
       strippedMessage: 'error',
       continuationLines: ['  user @alice:example.org'],
     });
-    const dict = buildAnonymizationDictionary([line]);
+    const dict = await buildAnonymizationDictionary([line], SALT);
+    const alias = dict.forward['@alice:example.org'];
     const result = anonymizeLogLine(line, dict);
-    expect(result.continuationLines?.[0]).toBe('  user @user0:domain0.org');
+    expect(result.continuationLines?.[0]).toBe(`  user ${alias}`);
   });
 
-  it('preserves lineNumber, timestamps, level, filePath, sourceLineNumber unchanged', () => {
+  it('preserves lineNumber, timestamps, level, filePath, sourceLineNumber unchanged', async () => {
     const line = createParsedLogLine({
       lineNumber: 42,
       isoTimestamp: '2024-01-15T10:00:00.000000Z',
@@ -297,7 +361,7 @@ describe('anonymizeLogLine', () => {
       message: '2024-01-15T10:00:00.000000Z WARN @alice:example.org thing',
       strippedMessage: '@alice:example.org thing',
     });
-    const dict = buildAnonymizationDictionary([line]);
+    const dict = await buildAnonymizationDictionary([line], SALT);
     const result = anonymizeLogLine(line, dict);
 
     expect(result.lineNumber).toBe(42);
@@ -310,9 +374,9 @@ describe('anonymizeLogLine', () => {
 });
 
 describe('unanonymizeLogLine', () => {
-  it('restores all text fields round-trip', () => {
+  it('restores all text fields round-trip', async () => {
     const original = makeLine(0, '@alice:example.org in !room1:example.org');
-    const dict = buildAnonymizationDictionary([original]);
+    const dict = await buildAnonymizationDictionary([original], SALT);
     const anonymized = anonymizeLogLine(original, dict);
     const restored = unanonymizeLogLine(anonymized, dict);
 
@@ -379,12 +443,12 @@ describe('stripAnonymizedMarker', () => {
 // ---------------------------------------------------------------------------
 
 describe('round-trip anonymization', () => {
-  it('recovers identical text after anonymize + unanonymize using backup lines', () => {
+  it('recovers identical text after anonymize + unanonymize using backup lines', async () => {
     const lines = [
       makeLine(0, '@alice:matrix.org joined !room1:matrix.org via #general:matrix.org'),
       makeLine(1, '$VkdmKnrz9stD0mzv2QrS3sP was sent in !room1:matrix.org by @alice:matrix.org'),
     ];
-    const dict = buildAnonymizationDictionary(lines);
+    const dict = await buildAnonymizationDictionary(lines, SALT);
     const anonymized = lines.map((l) => anonymizeLogLine(l, dict));
     // Restore using the reverse dict (simulating loaded-from-file scenario)
     const restored = anonymized.map((l) => unanonymizeLogLine(l, dict));
@@ -395,18 +459,22 @@ describe('round-trip anonymization', () => {
     });
   });
 
-  it('different domains get different numbered aliases', () => {
+  it('different domains get different aliases', async () => {
     const lines = [
       makeLine(0, '@alice:server-a.org and @bob:server-b.org'),
     ];
-    const dict = buildAnonymizationDictionary(lines);
-    expect(dict.forward['server-a.org']).toBe('domain0.org');
-    expect(dict.forward['server-b.org']).toBe('domain1.org');
-    expect(dict.forward['@alice:server-a.org']).toBe('@user0:domain0.org');
-    expect(dict.forward['@bob:server-b.org']).toBe('@user1:domain1.org');
+    const dict = await buildAnonymizationDictionary(lines, SALT);
+    const domA = dict.forward['server-a.org'];
+    const domB = dict.forward['server-b.org'];
+    expect(domA).toMatch(DOMAIN_RE);
+    expect(domB).toMatch(DOMAIN_RE);
+    expect(domA).not.toBe(domB);
+    // Each user carries its own server's domain component.
+    expect(dict.forward['@alice:server-a.org'].split(':')[1]).toBe(domA);
+    expect(dict.forward['@bob:server-b.org'].split(':')[1]).toBe(domB);
   });
 
-  it('does not treat single-char or no-dot hostnames as Matrix server names', () => {
+  it('does not treat single-char or no-dot hostnames as Matrix server names', async () => {
     // Identifiers where the server part is a bare digit or single label (no dot)
     // should NOT be recognized as Matrix IDs. Without this guard, a log line
     // containing e.g. "#channel:0" would put "0" into the dictionary as a bare
@@ -415,7 +483,7 @@ describe('round-trip anonymization', () => {
     const lines = [
       makeLine(0, '#channel:0 @service:1 !room_id:localhost something'),
     ];
-    const dict = buildAnonymizationDictionary(lines);
+    const dict = await buildAnonymizationDictionary(lines, SALT);
     expect(dict.forward['0']).toBeUndefined();
     expect(dict.forward['1']).toBeUndefined();
     expect(dict.forward['localhost']).toBeUndefined();

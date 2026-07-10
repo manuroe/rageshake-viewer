@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent, ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildExportText, type ExportContext, type ExportOptions } from '../utils/logExportUtils';
+import { downloadBlob } from '../utils/downloadBlob';
 import type { DisplayItem } from '../utils/logGapManager';
 import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import { useLogStore } from '../stores/logStore';
@@ -157,34 +158,13 @@ export function LogExportDialog({ displayItems, context, onClose }: LogExportDia
 
   const handleSave = () => {
     const text = buildExportText(displayItems, buildOptions(), context);
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'export.log';
-    // Append to DOM so all browsers can find the anchor before it is clicked.
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Revoke after the current event-loop tick so the browser has time to
-    // start the download before the object URL is invalidated.
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBlob(text, 'export.log', 'text/plain;charset=utf-8');
     showConfirmation('save');
   };
 
   const handleSaveDictionary = () => {
     if (!anonymizationDictionary) return;
-    const blob = new Blob([JSON.stringify(anonymizationDictionary, null, 2)], {
-      type: 'application/json;charset=utf-8',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'dictionary.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBlob(JSON.stringify(anonymizationDictionary, null, 2), 'dictionary.json', 'application/json;charset=utf-8');
     showConfirmation('save');
   };
 

@@ -710,37 +710,37 @@ describe('logStore', () => {
       expect(state.originalLogLines).toBeNull();
     });
 
-    it('anonymizeLogs replaces identifiers and sets isAnonymized=true', () => {
+    it('anonymizeLogs replaces identifiers and sets isAnonymized=true', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const state = useLogStore.getState();
       expect(state.isAnonymized).toBe(true);
       expect(state.anonymizationDictionary).not.toBeNull();
       expect(state.originalLogLines).not.toBeNull();
       expect(state.rawLogLines[0].rawText).not.toContain('@alice:example.org');
-      expect(state.rawLogLines[0].rawText).toContain('@user0:domain0.org');
+      expect(state.rawLogLines[0].rawText).toMatch(/@user-[0-9a-f]{12}:domain-[0-9a-f]{8}\.org/);
     });
 
-    it('anonymizeLogs saves original lines for backup', () => {
+    it('anonymizeLogs saves original lines for backup', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const { originalLogLines } = useLogStore.getState();
       expect(originalLogLines).not.toBeNull();
       expect(originalLogLines![0].rawText).toContain('@alice:example.org');
     });
 
-    it('anonymizeLogs is a no-op when already anonymized', () => {
+    it('anonymizeLogs is a no-op when already anonymized', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const firstDict = useLogStore.getState().anonymizationDictionary;
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       // Dictionary should not have changed
       expect(useLogStore.getState().anonymizationDictionary).toBe(firstDict);
     });
 
-    it('unanonymizeLogs restores from in-memory backup when available', () => {
+    it('unanonymizeLogs restores from in-memory backup when available', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       useLogStore.getState().unanonymizeLogs();
       const state = useLogStore.getState();
       expect(state.isAnonymized).toBe(false);
@@ -756,10 +756,10 @@ describe('logStore', () => {
       expect(useLogStore.getState().rawLogLines[0].rawText).toBe(originalLines[0].rawText);
     });
 
-    it('unanonymizeLogs with externalDict works when no backup is available', () => {
+    it('unanonymizeLogs with externalDict works when no backup is available', async () => {
       loadLines();
       // Simulate an imported-anonymized log: anonymize then strip the backup
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const dict = useLogStore.getState().anonymizationDictionary!;
       // Force-remove the backup to simulate a file-loaded scenario
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -769,9 +769,9 @@ describe('logStore', () => {
       expect(useLogStore.getState().rawLogLines[0].rawText).toContain('@alice:example.org');
     });
 
-    it('unanonymizeLogs without dict is a no-op when no backup and no dictionary', () => {
+    it('unanonymizeLogs without dict is a no-op when no backup and no dictionary', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       // Simulate a file-loaded anonymized log where no dict was provided
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (useLogStore as any).setState({ originalLogLines: null, anonymizationDictionary: null });
@@ -780,9 +780,9 @@ describe('logStore', () => {
       expect(useLogStore.getState().isAnonymized).toBe(true);
     });
 
-    it('unanonymizeLogs returns false and leaves isAnonymized=true when external dict does not match', () => {
+    it('unanonymizeLogs returns false and leaves isAnonymized=true when external dict does not match', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (useLogStore as any).setState({ originalLogLines: null });
       // Dict whose reverse keys don't appear in the current log
@@ -795,9 +795,9 @@ describe('logStore', () => {
       expect(useLogStore.getState().isAnonymized).toBe(true);
     });
 
-    it('unanonymizeLogs returns true when external dict matches', () => {
+    it('unanonymizeLogs returns true when external dict matches', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const dict = useLogStore.getState().anonymizationDictionary!;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (useLogStore as any).setState({ originalLogLines: null });
@@ -806,9 +806,9 @@ describe('logStore', () => {
       expect(useLogStore.getState().isAnonymized).toBe(false);
     });
 
-    it('clearData resets anonymization state', () => {
+    it('clearData resets anonymization state', async () => {
       loadLines();
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       useLogStore.getState().clearData();
       const state = useLogStore.getState();
       expect(state.isAnonymized).toBe(false);
@@ -829,7 +829,7 @@ describe('logStore', () => {
       expect(useLogStore.getState().originalLogLines).toBeNull();
     });
 
-    it('anonymizeLogs anonymizes HTTP request URIs containing Matrix room IDs', () => {
+    it('anonymizeLogs anonymizes HTTP request URIs containing Matrix room IDs', async () => {
       useLogStore.getState().loadLogParserResult({
         // Include a SyncRequest so the allRequests.map() callback (line 434) is invoked
         requests: [createSyncRequest({ requestId: 'SYNC-1', connId: 'room-list' })],
@@ -840,13 +840,13 @@ describe('logStore', () => {
         ],
         sentryEvents: [],
       });
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const { allHttpRequests } = useLogStore.getState();
       expect(allHttpRequests[0].uri).not.toContain('!room1:example.org');
       expect(allHttpRequests[0].uri).toContain('!');
     });
 
-    it('anonymizeLogs anonymizes sentryEvent messages', () => {
+    it('anonymizeLogs anonymizes sentryEvent messages', async () => {
       useLogStore.getState().loadLogParserResult({
         requests: [],
         connectionIds: [],
@@ -854,13 +854,13 @@ describe('logStore', () => {
         httpRequests: [],
         sentryEvents: [{ platform: 'ios', lineNumber: 0, message: 'Error involving @alice:example.org' }],
       });
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const { sentryEvents } = useLogStore.getState();
       expect(sentryEvents[0].message).not.toContain('@alice:example.org');
-      expect(sentryEvents[0].message).toContain('@user0:domain0.org');
+      expect(sentryEvents[0].message).toMatch(/@user-[0-9a-f]{12}:domain-[0-9a-f]{8}\.org/);
     });
 
-    it('unanonymizeLogs restores original HTTP request URIs and sentryEvents from in-memory backup', () => {
+    it('unanonymizeLogs restores original HTTP request URIs and sentryEvents from in-memory backup', async () => {
       const originalUri = '/_matrix/client/v3/rooms/!room1:example.org/messages';
       useLogStore.getState().loadLogParserResult({
         requests: [],
@@ -869,7 +869,7 @@ describe('logStore', () => {
         httpRequests: [createHttpRequest({ requestId: 'HTTP-1', uri: originalUri })],
         sentryEvents: [{ platform: 'ios', lineNumber: 0, message: 'Crash for @alice:example.org' }],
       });
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       useLogStore.getState().unanonymizeLogs();
       const state = useLogStore.getState();
       expect(state.allHttpRequests[0].uri).toBe(originalUri);
@@ -879,7 +879,7 @@ describe('logStore', () => {
       expect(state.originalSentryEvents).toBeNull();
     });
 
-    it('unanonymizeLogs with externalDict restores HTTP request URIs', () => {
+    it('unanonymizeLogs with externalDict restores HTTP request URIs', async () => {
       const originalUri = '/_matrix/client/v3/rooms/!room1:example.org/messages';
       useLogStore.getState().loadLogParserResult({
         // Include SyncRequest + sentry event so the unanonymize external-dict path
@@ -890,7 +890,7 @@ describe('logStore', () => {
         httpRequests: [createHttpRequest({ requestId: 'HTTP-1', uri: originalUri })],
         sentryEvents: [{ platform: 'ios', lineNumber: 0, message: 'crash at !room1:example.org' }],
       });
-      useLogStore.getState().anonymizeLogs();
+      await useLogStore.getState().anonymizeLogs();
       const dict = useLogStore.getState().anonymizationDictionary!;
       // Simulate a file-loaded anonymized state: strip all in-memory backups
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -947,7 +947,6 @@ describe('logStore', () => {
     });
 
     it('anonymizeLogs processes large logs and completes asynchronously', async () => {
-      vi.useFakeTimers();
       const manyLines = makeLargeLines();
       useLogStore.getState().loadLogParserResult({
         // Include non-empty arrays so the async completion path's .map() callbacks
@@ -961,11 +960,14 @@ describe('logStore', () => {
         ],
         sentryEvents: [{ platform: 'ios', lineNumber: 0, message: 'Error for @alice:matrix.org' }],
       });
-      useLogStore.getState().anonymizeLogs();
+      void useLogStore.getState().anonymizeLogs();
       expect(useLogStore.getState().isAnonymizing).toBe(true);
 
-      // Flush all scheduled timers / rAF callbacks until the async body finishes
-      await vi.runAllTimersAsync();
+      // Real timers: hashing resolves on the event loop (crypto.subtle runs off
+      // the fake-timer clock), so poll until the async body finishes.
+      await vi.waitFor(() => {
+        expect(useLogStore.getState().isAnonymizing).toBe(false);
+      });
 
       const state = useLogStore.getState();
       expect(state.isAnonymizing).toBe(false);
