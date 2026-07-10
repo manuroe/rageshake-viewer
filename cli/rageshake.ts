@@ -18,7 +18,7 @@ import { mergeLogParserResults, type NamedLogParserResult } from '../src/utils/m
 import { parseDetailsJson } from '../src/utils/detailsJson.ts';
 import { isAnalyzableEntry } from '../src/utils/archiveSummary.ts';
 import { isValidGzipHeader, isValidTextContent, decodeTextBytes } from '../src/utils/fileValidator.ts';
-import { detectAnonymizedLog, stripAnonymizedMarker, MATRIX_IDENTIFIER_RE } from '../src/utils/anonymizeUtils.ts';
+import { detectAnonymizedLog, MATRIX_IDENTIFIER_RE } from '../src/utils/anonymizeUtils.ts';
 import { computeSummaryStats } from '../src/utils/summaryStats.ts';
 import { lastColdStartUs, lastForegroundUs, deriveAppStateSegments } from '../src/utils/lifecycleEvents.ts';
 import { buildLogOverview, type OverviewNode } from '../src/utils/logOverview.ts';
@@ -112,7 +112,9 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
     .sort((a, b) =>
       (extractDateKey(a.name) ?? a.name).localeCompare(extractDateKey(b.name) ?? b.name)
       || a.name.localeCompare(b.name));
-  const files = logs.map((t) => ({ name: t.name, result: parseLogFile(stripAnonymizedMarker(t.text)) }));
+  // Pass the raw text: parseLogFile detects and strips the anonymization marker
+  // itself and sets isAnonymized — pre-stripping here would hide that signal.
+  const files = logs.map((t) => ({ name: t.name, result: parseLogFile(t.text) }));
   return { files, merged: mergeLogParserResults(files), details, textEntries };
 }
 
@@ -190,7 +192,11 @@ export function resolveRange(merged: LogParserResult, flags: Flags, warn: (msg: 
   }
 
   if (startUs === null && endUs === null) return null;
-  return { startUs: startUs ?? min, endUs: endUs ?? max };
+  const range = { startUs: startUs ?? min, endUs: endUs ?? max };
+  if (range.startUs > range.endUs) {
+    throw new Error(`empty time window: start ${microsToISO(range.startUs as TimestampMicros)} is after end ${microsToISO(range.endUs as TimestampMicros)}`);
+  }
+  return range;
 }
 
 function intFlag(v: string | undefined, def: number): number {
@@ -364,8 +370,8 @@ export function cmdSummary(ing: Ingest): string {
   const { merged, details, files } = ing;
   const lineIndex = new Map(merged.rawLogLines.map((l) => [l.lineNumber, l]));
   const stats = computeSummaryStats(
-    merged.rawLogLines, [...merged.httpRequests], [...merged.requests], [...merged.connectionIds],
-    [...merged.sentryEvents], null, null, null, lineIndex, merged.lifecycleEvents ?? [],
+    merged.rawLogLines, merged.httpRequests, merged.requests, merged.connectionIds,
+    merged.sentryEvents, null, null, null, lineIndex, merged.lifecycleEvents ?? [],
   );
   const events = merged.lifecycleEvents ?? [];
   const lifecycleCounts: Record<string, number> = {};
@@ -555,7 +561,9 @@ export function cmdSlice(ing: Ingest, flags: Flags): string {
 // ---------------------------------------------------------------------------
 
 function isFailed(r: HttpRequest): boolean {
-  return !!r.clientError || Number(r.status) >= 400;
+  // status may carry a reason phrase ("404 Not Found"), so parse the numeric
+  // prefix rather than Number(), which returns NaN for the whole string.
+  return !!r.clientError || parseInt(r.status, 10) >= 400;
 }
 
 export function cmdHttp(ing: Ingest, flags: Flags): string {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { gzipSync, strToU8 } from 'fflate';
 import { buildTar } from '../src/utils/tarWriter';
-import { ingest, cmdPrecheck, cmdSummary, cmdGrep, cmdSlice, cmdOverview, run } from './rageshake';
+import { ingest, cmdPrecheck, cmdSummary, cmdGrep, cmdSlice, cmdOverview, cmdHttp, run } from './rageshake';
 
 const RAW_LOG = [
   '2026-01-15T10:00:00.000000Z  INFO [matrix-rust-sdk] Sentry configured (enabled: true)',
@@ -103,6 +103,30 @@ describe('rageshake CLI', () => {
     const firstNode = full.split('\n').find((l) => !l.startsWith('#'));
     expect(firstNode).toBeDefined();
     expect(offset.split('\n')).not.toContain(firstNode);
+  });
+
+  it('preserves the anonymized flag through ingest (marker not pre-stripped)', () => {
+    expect(ingest(buildArchive(ANON_LOG), 'anon.tar.gz').merged.isAnonymized).toBe(true);
+  });
+
+  it('throws a clear error when the resolved time window is inverted', () => {
+    const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
+    expect(() => cmdSlice(ing, { from: '2026-01-15T10:00:02Z', to: '2026-01-15T10:00:00Z' }))
+      .toThrow(/empty time window/);
+  });
+
+  it('http --errors selects failed requests by numeric status', () => {
+    const httpLog = [
+      '# [rageshake-viewer-anonymized]',
+      '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0"}',
+      '2026-01-15T10:00:00.500000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0" status=200 response_size="100" request_duration=500ms}',
+      '2026-01-15T10:00:01.000000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10"}',
+      '2026-01-15T10:00:01.500000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10" status=500 response_size="20" request_duration=500ms}',
+    ].join('\n');
+    const out = cmdHttp(ingest(buildArchive(httpLog), 'anon.tar.gz'), { errors: true });
+    expect(out).toContain('# 1 requests (failures only)');
+    expect(out).toContain('/upload');
+    expect(out).not.toContain('/sync');
   });
 
   it('run returns usage on missing args', () => {
