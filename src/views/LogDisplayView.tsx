@@ -98,9 +98,15 @@ interface LogDisplayViewProps {
    * Only the `/logs` route passes this prop; request-detail panels do not.
    */
   showAnonymizeButton?: boolean;
+  /**
+   * When set, the line with this `lineNumber` is highlighted and scrolled to
+   * the center on mount. Used by the overview drilldown to point at the exact
+   * occurrence the user clicked.
+   */
+  highlightLineNumber?: number;
 }
 
-export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false }: LogDisplayViewProps) {
+export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false, highlightLineNumber }: LogDisplayViewProps) {
   const { rawLogLines, sentryEvents, lifecycleEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs, logFileName, loadedEntryNames } = useLogStore();
   // Colour lines by process only when several distinct processes are merged
   // (e.g. console + nse); a single process needs no differentiation. The app
@@ -275,10 +281,15 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       return { visibleLines: filteredLines, collapseGroupsMap: collapseGroups };
     }
     return {
-      visibleLines: filteredLines.filter(({ index }) => !collapsedIndices.has(index)),
+      // Never collapse the highlighted line (overview drilldown / ?line=N
+      // target); if it got folded away, the highlight + scroll-to-center would
+      // silently no-op because it wouldn't be in the display list.
+      visibleLines: filteredLines.filter(
+        ({ line, index }) => !collapsedIndices.has(index) || line.lineNumber === highlightLineNumber
+      ),
       collapseGroupsMap: collapseGroups,
     };
-  }, [filteredLines, collapseEnabled]);
+  }, [filteredLines, collapseEnabled, highlightLineNumber]);
 
   // Build display items with gap indicators
   const displayItems = useMemo(() => {
@@ -437,6 +448,27 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
     rowVirtualizer.measurementsCache = [];
     rowVirtualizer.measure();
   }, [rowVirtualizer, lineWrap, contextLines, searchQuery, displayItems.length, forcedRanges, filterQuery]);
+
+  // Scroll the highlighted line (overview drilldown target) to center — once
+  // per target line, when it first appears in the display list. Guarding on the
+  // line value (not just mount) means an unrelated filter/search change later
+  // won't keep yanking the scroll position back.
+  const scrolledForLine = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (highlightLineNumber === undefined) return;
+    if (scrolledForLine.current === highlightLineNumber) return;
+    const pos = displayItems.findIndex((item) => item.data.line.lineNumber === highlightLineNumber);
+    if (pos === -1) return; // not in the display list yet; retry when it changes
+    // Defer so the virtualizer has a measured scroll element to work with.
+    // Mark done only *inside* the callback: if displayItems settles across a
+    // couple of renders, the effect's cleanup cancels this frame and re-runs;
+    // setting the flag early would skip the reschedule and never scroll.
+    const id = requestAnimationFrame(() => {
+      rowVirtualizer.scrollToIndex(pos, { align: 'center' });
+      scrolledForLine.current = highlightLineNumber;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [rowVirtualizer, displayItems, highlightLineNumber]);
 
   // Auto-scroll to current search match
   useEffect(() => {
@@ -921,7 +953,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 ref={(el) => {
                   if (el) rowVirtualizer.measureElement(el);
                 }}
-                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${patternTemplateIndices.has(index) ? styles.patternTemplateLine : ''} ${lineWrap ? styles.wrap : styles.nowrap} ${hoveredLineIndex === index ? 'log-row-hovered' : ''}`}
+                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${line.lineNumber === highlightLineNumber ? styles.highlightLine : ''} ${patternTemplateIndices.has(index) ? styles.patternTemplateLine : ''} ${lineWrap ? styles.wrap : styles.nowrap} ${hoveredLineIndex === index ? 'log-row-hovered' : ''}`}
                 onMouseEnter={() => setHoveredLineIndex(index)}
                 onMouseLeave={() => setHoveredLineIndex(null)}
                 onFocus={() => setHoveredLineIndex(index)}

@@ -227,6 +227,17 @@
     background: var(--log-match-bg);
 }
 
+/* Line targeted by the overview drilldown — persistent blue accent (distinct
+   from the amber search-match) so the reader can spot the exact occurrence
+   they clicked. Declared BEFORE .currentMatch so that, when a row is both the
+   drilldown target and the active search match, the amber current-match
+   affordance wins (same specificity + !important → later rule applies). */
+.highlightLine {
+    background: var(--log-highlight-bg) !important;
+    border-left-color: var(--color-primary) !important;
+    border-left-width: 4px !important;
+}
+
 .currentMatch {
     background: var(--log-current-match-bg) !important;
     border-left-color: var(--color-warning) !important;

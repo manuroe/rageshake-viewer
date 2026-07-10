@@ -78,13 +78,19 @@ export function BurgerMenu() {
           >
             Summary
           </button>
-          <button 
+          <button
             className={`${styles.burgerItem} ${isActive('/logs') ? styles.active : ''}`}
             onClick={() => handleNavigate('/logs')}
           >
-            All Logs
+            Logs
           </button>
-          <button 
+          <button
+            className={`${styles.burgerItem} ${isActive('/triaged') ? styles.active : ''}`}
+            onClick={() => handleNavigate('/triaged')}
+          >
+            Triaged Logs
+          </button>
+          <button
             className={`${styles.burgerItem} ${isActive('/http_requests') ? styles.active : ''}`}
             onClick={() => handleNavigate('/http_requests')}
           >

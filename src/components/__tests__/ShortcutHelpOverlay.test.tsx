@@ -107,7 +107,8 @@ describe('ShortcutHelpOverlay', () => {
   it('shows navigation shortcuts in the overlay', () => {
     renderWithCtx(makeCtx({ showHelp: true }), <ShortcutHelpOverlay />);
     expect(screen.getByText('Go to Summary')).toBeInTheDocument();
-    expect(screen.getByText('Go to All Logs')).toBeInTheDocument();
+    expect(screen.getByText('Go to Logs')).toBeInTheDocument();
+    expect(screen.getByText('Go to Triaged Logs')).toBeInTheDocument();
     expect(screen.getByText('Go to HTTP Requests')).toBeInTheDocument();
     expect(screen.getByText('Go to Sync Requests')).toBeInTheDocument();
   });
