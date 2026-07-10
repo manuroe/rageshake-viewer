@@ -46,12 +46,16 @@ export function extractTarget(rawText: string): string | null {
 }
 
 /**
- * A log location (`filePath:line`, or the target when the path is unknown)
- * directly under a target node, holding every occurrence that maps to it.
- * Exists so the tree can drill from a target down to the exact source site.
+ * A log location directly under a target node, holding every occurrence that
+ * maps to it. Exists so the tree can drill from a target down to the exact
+ * source site. See `location` for how the key is derived.
  */
 export interface OverviewLeaf {
-  /** Source location ("native.rs:214") when known, else the target. */
+  /**
+   * Leaf key derived from the source file: `basename:line` when the line
+   * number is known ("native.rs:214"), the bare `basename` when only a path
+   * is present ("native.rs"), or the target when the line carries no path.
+   */
   readonly location: string;
   readonly occurrences: readonly ParsedLogLine[];
   readonly errorCount: number;

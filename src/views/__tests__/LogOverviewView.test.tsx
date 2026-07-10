@@ -240,6 +240,23 @@ describe('LogOverviewView', () => {
     expect(panel.style.height).toBe('350px');
   });
 
+  it('tears down an in-progress drag on unmount', () => {
+    useLogStore.setState({ rawLogLines: seedLines() });
+    document.body.style.userSelect = 'text';
+    const { container, unmount } = render(<LogOverviewView />);
+    expandAll(container);
+    act(() => { fireEvent.click(container.querySelector('button[class*="occurrence"]') as HTMLElement); });
+
+    const resizer = container.querySelector('[class*="resizer"]') as HTMLElement;
+    act(() => { fireEvent.mouseDown(resizer, { clientY: 500 }); });
+    expect(document.body.style.userSelect).toBe('none');
+
+    act(() => { unmount(); }); // unmount mid-drag → stop() runs via effect cleanup
+    expect(document.body.style.userSelect).toBe('text'); // restored, listeners gone
+
+    document.body.style.userSelect = '';
+  });
+
   it('renders without crashing when there are no logs', () => {
     useLogStore.setState({ rawLogLines: [] });
     render(<LogOverviewView />);

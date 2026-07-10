@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLogStore } from '../stores/logStore';
 import { BurgerMenu } from '../components/BurgerMenu';
@@ -24,14 +24,23 @@ const MIN_PANEL_HEIGHT = 120;
 const MIN_TREE_HEIGHT = 160;
 const PANEL_RESIZE_STEP = 24;
 
-/** Max drilldown-panel height that still leaves MIN_TREE_HEIGHT for the tree. */
-function maxPanelHeight(): number {
-  return window.innerHeight - MIN_TREE_HEIGHT;
+/**
+ * Max drilldown-panel height that still leaves MIN_TREE_HEIGHT for the tree.
+ * The tree and panel share one flex area, so `treeHeight + currentPanelHeight`
+ * is that area's height regardless of the current split — basing the max on it
+ * (rather than the full viewport) means the header/toolbar are already
+ * accounted for and the panel can't shrink the tree below its floor. Falls
+ * back to the viewport before the tree is laid out (first paint / jsdom).
+ */
+function maxPanelHeight(treeEl: HTMLElement | null, currentPanelHeight: number): number {
+  const treeHeight = treeEl?.clientHeight ?? 0;
+  const flexArea = treeHeight > 0 ? treeHeight + currentPanelHeight : window.innerHeight;
+  return flexArea - MIN_TREE_HEIGHT;
 }
 
 /** Clamp a proposed panel height to the draggable/resizable range. */
-function clampPanelHeight(height: number): number {
-  return Math.max(MIN_PANEL_HEIGHT, Math.min(maxPanelHeight(), height));
+function clampPanelHeight(height: number, maxHeight: number): number {
+  return Math.max(MIN_PANEL_HEIGHT, Math.min(maxHeight, height));
 }
 
 function levelClass(level: LogLevel): string {
@@ -128,15 +137,28 @@ export function LogOverviewView() {
   const debouncedText = useDebouncedValue(textFilter, 300);
   const [selected, setSelected] = useState<ParsedLogLine | null>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_PANEL_HEIGHT);
+  const treeRef = useRef<HTMLDivElement>(null);
+  // Teardown for an in-progress drag, so an unmount mid-drag can stop it.
+  const dragStopRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragStopRef.current?.(), []);
+
+  // Layout-derived resize ceiling, mirrored into state for the separator's
+  // aria-valuemax (refs can't be read during render). The handlers read the
+  // ref directly for the live clamp.
+  const [ariaMaxHeight, setAriaMaxHeight] = useState(() => window.innerHeight - MIN_TREE_HEIGHT);
+  useEffect(() => {
+    if (selected) setAriaMaxHeight(maxPanelHeight(treeRef.current, panelHeight));
+  }, [selected, panelHeight]);
 
   // Drag the divider between the tree and the drilldown panel to resize.
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startY = e.clientY;
     const startHeight = panelHeight;
+    const maxHeight = maxPanelHeight(treeRef.current, startHeight);
     const prevUserSelect = document.body.style.userSelect;
     const onMove = (ev: MouseEvent) => {
-      setPanelHeight(clampPanelHeight(startHeight + (startY - ev.clientY))); // drag up → taller
+      setPanelHeight(clampPanelHeight(startHeight + (startY - ev.clientY), maxHeight)); // drag up → taller
     };
     // Listen on window and also stop on blur, so a mouseup outside the page
     // (or the window losing focus mid-drag) still tears the drag down.
@@ -145,7 +167,9 @@ export function LogOverviewView() {
       window.removeEventListener('mouseup', stop);
       window.removeEventListener('blur', stop);
       document.body.style.userSelect = prevUserSelect; // restore prior value, not ''
+      dragStopRef.current = null;
     };
+    dragStopRef.current = stop;
     document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', stop);
@@ -154,13 +178,12 @@ export function LogOverviewView() {
 
   // Keyboard resize for the separator (Arrow Up/Down grow/shrink the panel).
   const onResizeKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setPanelHeight((h) => clampPanelHeight(h + PANEL_RESIZE_STEP));
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setPanelHeight((h) => clampPanelHeight(h - PANEL_RESIZE_STEP));
-    }
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    setPanelHeight((h) => {
+      const step = e.key === 'ArrowUp' ? PANEL_RESIZE_STEP : -PANEL_RESIZE_STEP;
+      return clampPanelHeight(h + step, maxPanelHeight(treeRef.current, h));
+    });
   }, []);
 
   const openInLogsView = useCallback((line: ParsedLogLine) => {
@@ -246,7 +269,7 @@ export function LogOverviewView() {
           </div>
         </div>
 
-        <div className={styles.tree}>
+        <div className={styles.tree} ref={treeRef}>
           {hasContent ? (
             overview.children.map((child) => (
               <TreeNode key={child.fullTarget} node={child} onSelect={setSelected} />
@@ -267,7 +290,7 @@ export function LogOverviewView() {
               aria-label="Resize log panel"
               aria-valuenow={Math.round(panelHeight)}
               aria-valuemin={MIN_PANEL_HEIGHT}
-              aria-valuemax={Math.round(maxPanelHeight())}
+              aria-valuemax={Math.round(ariaMaxHeight)}
               tabIndex={0}
             />
             <div className={styles.bottomPanel} style={{ height: panelHeight }}>
