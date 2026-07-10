@@ -34,6 +34,7 @@ import { wrapError, type AppError } from '../utils/errorHandling';
 import { DEFAULT_MS_PER_PIXEL } from '../utils/timelineUtils';
 import { filterSyncRequests, filterHttpRequests } from '../utils/requestFilters';
 import { buildAnonymizationDictionary, buildCompiledAnonymizer, buildCompiledUnanonymizer } from '../utils/anonymizeUtils';
+import { useAnonSaltStore } from './anonSaltStore';
 import { mergeLogParserResults, type NamedLogParserResult } from '../utils/mergeLogParserResults';
 import { stripEntryPrefix } from '../utils/listingEntries';
 
@@ -171,7 +172,7 @@ interface LogStore {
   
   // Anonymization actions
   /** Anonymize the currently loaded log in-place, saving a backup. */
-  anonymizeLogs: () => void;
+  anonymizeLogs: () => Promise<void>;
   /**
    * Abort an in-progress async anonymization and restore the original state.
    * No-op if no anonymization is running.
@@ -455,44 +456,52 @@ export const useLogStore = create<LogStore>((set, get) => ({
     });
   },
 
-  anonymizeLogs: () => {
+  anonymizeLogs: async () => {
     const { rawLogLines, isAnonymized, isAnonymizing } = get();
     if (isAnonymized || isAnonymizing) return;
 
-    // Small logs are processed synchronously so callers (and tests) can read
-    // updated state immediately without awaiting.
+    const salt = useAnonSaltStore.getState().salt;
+
+    // Small logs are processed in one shot (awaited by the caller) so state is
+    // ready as soon as anonymizeLogs resolves.
     const SYNC_THRESHOLD = 500;
     if (rawLogLines.length <= SYNC_THRESHOLD) {
-      const dict = buildAnonymizationDictionary(rawLogLines);
-      const apply = buildCompiledAnonymizer(dict);
-      const anonymizedLines = rawLogLines.map((l) => ({
-        ...l,
-        rawText: apply(l.rawText),
-        message: apply(l.message),
-        strippedMessage: apply(l.strippedMessage),
-        continuationLines: l.continuationLines?.map(apply),
-      }));
-      const newIndex = buildLineNumberIndex(anonymizedLines);
-      const { allRequests, allHttpRequests, sentryEvents } = get();
-      // Apply anonymizer to derived data shown on other screens (/http_requests, /summary, etc.)
-      const anonAllRequests = allRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
-      const anonAllHttpRequests = allHttpRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
-      const anonSentryEvents = sentryEvents.map((e) => ({ ...e, message: apply(e.message) }));
-      set({
-        rawLogLines: anonymizedLines,
-        lineNumberIndex: newIndex,
-        isAnonymized: true,
-        anonymizationDictionary: dict,
-        originalLogLines: rawLogLines,
-        allRequests: anonAllRequests,
-        allHttpRequests: anonAllHttpRequests,
-        sentryEvents: anonSentryEvents,
-        originalAllRequests: allRequests,
-        originalAllHttpRequests: allHttpRequests,
-        originalSentryEvents: sentryEvents,
-      });
-      get().filterRequests();
-      get().filterHttpRequests();
+      try {
+        const dict = await buildAnonymizationDictionary(rawLogLines, salt);
+        const apply = buildCompiledAnonymizer(dict);
+        const anonymizedLines = rawLogLines.map((l) => ({
+          ...l,
+          rawText: apply(l.rawText),
+          message: apply(l.message),
+          strippedMessage: apply(l.strippedMessage),
+          continuationLines: l.continuationLines?.map(apply),
+        }));
+        const newIndex = buildLineNumberIndex(anonymizedLines);
+        const { allRequests, allHttpRequests, sentryEvents } = get();
+        // Apply anonymizer to derived data shown on other screens (/http_requests, /summary, etc.)
+        const anonAllRequests = allRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
+        const anonAllHttpRequests = allHttpRequests.map((r) => ({ ...r, uri: apply(r.uri) }));
+        const anonSentryEvents = sentryEvents.map((e) => ({ ...e, message: apply(e.message) }));
+        set({
+          rawLogLines: anonymizedLines,
+          lineNumberIndex: newIndex,
+          isAnonymized: true,
+          anonymizationDictionary: dict,
+          originalLogLines: rawLogLines,
+          allRequests: anonAllRequests,
+          allHttpRequests: anonAllHttpRequests,
+          sentryEvents: anonSentryEvents,
+          originalAllRequests: allRequests,
+          originalAllHttpRequests: allHttpRequests,
+          originalSentryEvents: sentryEvents,
+        });
+        get().filterRequests();
+        get().filterHttpRequests();
+      } catch (error) {
+        // crypto.subtle is unavailable outside secure contexts (e.g. plain http,
+        // non-localhost). Surface it instead of leaving the promise rejected.
+        set({ error: wrapError(error, 'Failed to anonymize logs') });
+      }
       return;
     }
 
@@ -506,7 +515,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
         // Yield first so the loading state renders before any heavy work starts.
         await new Promise<void>((r) => setTimeout(r, 0));
         if (token.cancelled) return;
-        const dict = buildAnonymizationDictionary(rawLogLines);
+        const dict = await buildAnonymizationDictionary(rawLogLines, salt);
         // Compile the regex once — reused across all chunks so the pattern is
         // built only once regardless of how many lines are processed.
         const apply = buildCompiledAnonymizer(dict);
