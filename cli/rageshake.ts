@@ -227,8 +227,11 @@ function buildDisplayEntries(lines: readonly ParsedLogLine[], selected: readonly
   let i = 0;
   while (i < selected.length) {
     const line = lines[selected[i]];
-    const prevIdx = i > 0 ? selected[i - 1] : null;
-    const gapBefore = prevIdx !== null ? line.lineNumber - lines[prevIdx].lineNumber - 1 : 0;
+    // Gap = raw lines skipped between the two displayed entries. Measure it from
+    // the selected timeline positions, not lineNumber: merged logs are sorted by
+    // timestamp (mergeLogParserResults) so lineNumber is not monotonic in array
+    // order and its delta would report phantom gaps when processes interleave.
+    const gapBefore = i > 0 ? selected[i] - selected[i - 1] - 1 : 0;
     const baseText = stripLogPrefix(line.rawText);
     let dupCount = 0;
     let j = i + 1;
@@ -270,7 +273,11 @@ function emitEntries(out: string[], entries: readonly DisplayEntry[], flags: Fla
   }
   const remaining = entries.length - offset - page.length;
   if (remaining > 0) out.push(`# ${remaining} more entries — next: --offset ${offset + page.length}`);
-  if (page.length === 0) out.push('# no matching lines');
+  if (page.length === 0) {
+    out.push(entries.length === 0
+      ? '# no matching lines'
+      : `# --offset ${offset} is past the end (${entries.length} entries) — lower --offset`);
+  }
 }
 
 /** Select line indices by range/level/file filters. */
@@ -415,9 +422,23 @@ export function cmdSummary(ing: Ingest): string {
 // overview / spans trees
 // ---------------------------------------------------------------------------
 
-interface TreeFlags {
-  depth: number;
-  budget: number;
+/**
+ * Paginate pre-rendered tree lines the same way as line output: slice the body
+ * by --offset/--limit and emit a footer. The tree is generated in full (bounded
+ * by --depth), so --offset can page past the noisiest nodes into the rest.
+ */
+function emitTreeBody(out: string[], body: readonly string[], flags: Flags): void {
+  const limit = intFlag(flags.limit, 100);
+  const offset = intFlag(flags.offset, 0);
+  const page = body.slice(offset, offset + limit);
+  out.push(...page);
+  const remaining = body.length - offset - page.length;
+  if (remaining > 0) out.push(`# ${remaining} more nodes — next: --offset ${offset + page.length}`);
+  if (page.length === 0) {
+    out.push(body.length === 0
+      ? '# no matching nodes'
+      : `# --offset ${offset} is past the end (${body.length} nodes) — lower --offset`);
+  }
 }
 
 function overviewTotal(node: OverviewNode, memo: Map<OverviewNode, number>): number {
@@ -436,31 +457,28 @@ export function cmdOverview(ing: Ingest, flags: Flags): string {
   const indices = selectIndices(ing.merged, range, flags);
   const root = buildLogOverview(indices.map((i) => ing.merged.rawLogLines[i]));
   const memo = new Map<OverviewNode, number>();
-  const tf: TreeFlags = { depth: intFlag(flags.depth, 3), budget: intFlag(flags.limit, 100) };
+  const depth = intFlag(flags.depth, 3);
+  const body: string[] = [];
 
-  const visit = (node: OverviewNode, depth: number): void => {
+  const visit = (node: OverviewNode, level: number): void => {
     const children = [...node.children].sort((a, b) =>
       (b.errorCount + b.warnCount) - (a.errorCount + a.warnCount) || overviewTotal(b, memo) - overviewTotal(a, memo));
     for (const child of children) {
-      if (tf.budget <= 0) return;
-      tf.budget--;
-      const indent = '  '.repeat(depth);
+      const indent = '  '.repeat(level);
       const marks = child.errorCount || child.warnCount ? ` — ${child.errorCount} err, ${child.warnCount} warn` : '';
-      out.push(`${indent}${child.segment} (${overviewTotal(child, memo)})${marks}`);
-      if (depth + 1 < tf.depth) visit(child, depth + 1);
-      else if (child.children.length > 0) out.push(`${indent}  … deeper levels hidden — use --depth ${tf.depth + 1}`);
+      body.push(`${indent}${child.segment} (${overviewTotal(child, memo)})${marks}`);
+      if (level + 1 < depth) visit(child, level + 1);
+      else if (child.children.length > 0) body.push(`${indent}  … deeper levels hidden — use --depth ${depth + 1}`);
       // Show where errors/warns come from: top offending leaves only.
       const noisyLeaves = child.leaves.filter((l) => l.errorCount + l.warnCount > 0)
         .sort((a, b) => (b.errorCount + b.warnCount) - (a.errorCount + a.warnCount)).slice(0, 5);
       for (const leaf of noisyLeaves) {
-        if (tf.budget <= 0) return;
-        tf.budget--;
-        out.push(`${indent}  @ ${leaf.location} — ${leaf.errorCount} err, ${leaf.warnCount} warn (${leaf.occurrences.length} lines)`);
+        body.push(`${indent}  @ ${leaf.location} — ${leaf.errorCount} err, ${leaf.warnCount} warn (${leaf.occurrences.length} lines)`);
       }
     }
   };
   visit(root, 0);
-  if (tf.budget <= 0) out.push(`# output truncated at ${intFlag(flags.limit, 100)} nodes — raise --limit or narrow the time window`);
+  emitTreeBody(out, body, flags);
   return out.join('\n');
 }
 
@@ -470,27 +488,26 @@ export function cmdSpans(ing: Ingest, flags: Flags): string {
   rangeHeader(out, range, ing.merged);
   const indices = selectIndices(ing.merged, range, flags);
   const root = buildSpanOverview(indices.map((i) => ing.merged.rawLogLines[i]));
-  const tf: TreeFlags = { depth: intFlag(flags.depth, 3), budget: intFlag(flags.limit, 100) };
+  const depth = intFlag(flags.depth, 3);
+  const body: string[] = [];
 
   const spanTotal = (node: SpanNode): number =>
     node.leaves.reduce((s, l) => s + l.occurrences.length, 0) + node.children.reduce((s, c) => s + spanTotal(c), 0);
 
-  const visit = (node: SpanNode, depth: number): void => {
+  const visit = (node: SpanNode, level: number): void => {
     const children = [...node.children].sort((a, b) => (b.errorCount + b.warnCount) - (a.errorCount + a.warnCount));
     for (const child of children) {
-      if (tf.budget <= 0) return;
-      tf.budget--;
-      const indent = '  '.repeat(depth);
+      const indent = '  '.repeat(level);
       const fields = child.fields.slice(0, 2)
         .map((f) => `${f.key}=${f.values.join('|')}${f.truncated ? '|…' : ''}`).join(' ');
       const marks = child.errorCount || child.warnCount ? ` — ${child.errorCount} err, ${child.warnCount} warn` : '';
-      out.push(`${indent}${child.name}${fields ? ` {${fields}}` : ''} (${spanTotal(child)})${marks}`);
-      if (depth + 1 < tf.depth) visit(child, depth + 1);
-      else if (child.children.length > 0) out.push(`${indent}  … deeper levels hidden — use --depth ${tf.depth + 1}`);
+      body.push(`${indent}${child.name}${fields ? ` {${fields}}` : ''} (${spanTotal(child)})${marks}`);
+      if (level + 1 < depth) visit(child, level + 1);
+      else if (child.children.length > 0) body.push(`${indent}  … deeper levels hidden — use --depth ${depth + 1}`);
     }
   };
   visit(root, 0);
-  if (tf.budget <= 0) out.push(`# output truncated at ${intFlag(flags.limit, 100)} nodes — raise --limit or narrow the time window`);
+  emitTreeBody(out, body, flags);
   return out.join('\n');
 }
 
