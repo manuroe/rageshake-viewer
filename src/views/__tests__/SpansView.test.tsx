@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, act } from '@testing-library/react';
 import { screen } from '@testing-library/dom';
 import { useLogStore } from '../../stores/logStore';
-import { LogOverviewView } from '../LogOverviewView';
+import { SpansView } from '../SpansView';
 import { createParsedLogLine } from '../../test/fixtures';
 import type { ParsedLogLine } from '../../types/log.types';
 
@@ -29,36 +29,34 @@ vi.mock('../LogDisplayView', () => ({
   ),
 }));
 
-// A representative set of lines: two Rust targets (http_client with a source
-// location, send_queue without) plus a bracket-tag INFO line and an
-// untargeted UNKNOWN line.
+// Lines carrying `spans:` chains: an ERROR + WARN under `root` (with a source
+// location on the ERROR line), an INFO line under a distinct top-level span
+// (`background_task`, so it's absent by default), and an UNKNOWN line with no
+// spans (buckets under "(no span)").
 function seedLines(): ParsedLogLine[] {
+  const tail = (chain: string) => `crates/matrix-sdk/src/x.rs:1 | spans: ${chain}`;
   return [
     createParsedLogLine({
       lineNumber: 1,
       level: 'ERROR',
-      rawText: 'ERROR matrix_sdk::http_client: request failed',
-      message: 'errmsg-one',
+      rawText: `ERROR matrix_sdk::http_client: request failed | ${tail('root > send{request_id="req-1" method=GET}')}`,
       filePath: 'crates/matrix-sdk/src/http_client/native.rs',
       sourceLineNumber: 10,
     }),
     createParsedLogLine({
       lineNumber: 2,
       level: 'WARN',
-      rawText: 'WARN matrix_sdk::send_queue: retrying request_id="req-1" method=GET',
-      message: 'retrying request_id="req-1" method=GET',
+      rawText: `WARN matrix_sdk::sliding_sync: slow | ${tail('root > sync_once{conn_id="encryption"}')}`,
     }),
     createParsedLogLine({
       lineNumber: 3,
       level: 'INFO',
-      rawText: 'INFO [matrix-rust-sdk] hello world',
-      message: 'hello world',
+      rawText: `INFO matrix_sdk::client: built | ${tail('background_task > build')}`,
     }),
     createParsedLogLine({
       lineNumber: 4,
       level: 'UNKNOWN',
-      rawText: 'plain line with no level keyword',
-      message: 'plain-unknown',
+      rawText: 'plain line with no level keyword and no spans suffix',
     }),
   ];
 }
@@ -80,7 +78,7 @@ function expandAll(container: HTMLElement) {
   }
 }
 
-describe('LogOverviewView', () => {
+describe('SpansView', () => {
   beforeEach(() => {
     useLogStore.getState().clearData();
     mockNavigate.mockClear();
@@ -91,9 +89,9 @@ describe('LogOverviewView', () => {
 
   it('renders the header and defaults to only WARN + ERROR', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
-    render(<LogOverviewView />);
+    render(<SpansView />);
 
-    expect(screen.getByText('Logs by target')).toBeInTheDocument();
+    expect(screen.getByText('Logs by span')).toBeInTheDocument();
     expect(screen.getByTestId('burger-menu')).toBeInTheDocument();
 
     // 2 WARN/ERROR + 1 UNKNOWN (never filtered) shown; the INFO line is hidden.
@@ -105,43 +103,43 @@ describe('LogOverviewView', () => {
     expect((screen.getByRole('checkbox', { name: 'WARN' }) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole('checkbox', { name: 'INFO' }) as HTMLInputElement).checked).toBe(false);
 
-    // matrix_sdk branch is present; the INFO-only bracket target is not.
-    expect(screen.getByText('matrix_sdk')).toBeInTheDocument();
-    expect(screen.queryByText('matrix-rust-sdk')).not.toBeInTheDocument();
+    // The `root` chain is present; the INFO-only `background_task` chain is not.
+    expect(screen.getByText('root')).toBeInTheDocument();
+    expect(screen.queryByText('background_task')).not.toBeInTheDocument();
   });
 
   it('adds a level to the tree when its checkbox is toggled on', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
-    render(<LogOverviewView />);
+    render(<SpansView />);
 
     act(() => {
       fireEvent.click(screen.getByRole('checkbox', { name: 'INFO' }));
     });
 
     expect(screen.getByText('4', { selector: '#shown-count' })).toBeInTheDocument();
-    expect(screen.getByText('matrix-rust-sdk')).toBeInTheDocument();
+    expect(screen.getByText('background_task')).toBeInTheDocument();
   });
 
   it('prunes the tree with the text filter (debounced)', () => {
     vi.useFakeTimers();
     useLogStore.setState({ rawLogLines: seedLines() });
-    render(<LogOverviewView />);
+    render(<SpansView />);
 
-    const input = screen.getByPlaceholderText('Filter by target or text...');
-    act(() => { fireEvent.change(input, { target: { value: 'send_queue' } }); });
+    const input = screen.getByPlaceholderText('Filter by span or text...');
+    act(() => { fireEvent.change(input, { target: { value: 'sync_once' } }); });
     act(() => { vi.advanceTimersByTime(400); });
 
-    // Only the send_queue WARN line matches.
+    // Only the sync_once WARN line matches.
     expect(screen.getByText('1', { selector: '#shown-count' })).toBeInTheDocument();
     vi.useRealTimers();
   });
 
   it('clears the text filter via the clear button', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
-    render(<LogOverviewView />);
+    render(<SpansView />);
 
-    const input = screen.getByPlaceholderText('Filter by target or text...') as HTMLInputElement;
-    act(() => { fireEvent.change(input, { target: { value: 'send_queue' } }); });
+    const input = screen.getByPlaceholderText('Filter by span or text...') as HTMLInputElement;
+    act(() => { fireEvent.change(input, { target: { value: 'sync_once' } }); });
     act(() => { fireEvent.click(screen.getByLabelText('Clear input')); });
 
     expect(input.value).toBe('');
@@ -150,9 +148,9 @@ describe('LogOverviewView', () => {
   it('shows the empty state when nothing matches the filter', () => {
     vi.useFakeTimers();
     useLogStore.setState({ rawLogLines: seedLines() });
-    render(<LogOverviewView />);
+    render(<SpansView />);
 
-    const input = screen.getByPlaceholderText('Filter by target or text...');
+    const input = screen.getByPlaceholderText('Filter by span or text...');
     act(() => { fireEvent.change(input, { target: { value: 'zzz-no-match' } }); });
     act(() => { vi.advanceTimersByTime(400); });
 
@@ -160,9 +158,18 @@ describe('LogOverviewView', () => {
     vi.useRealTimers();
   });
 
+  it('surfaces distinct field values on a span node', () => {
+    useLogStore.setState({ rawLogLines: seedLines() });
+    const { container } = render(<SpansView />);
+    expandAll(container);
+
+    // The sync_once node annotates its recorded conn_id value.
+    expect(screen.getByText('{conn_id=encryption}')).toBeInTheDocument();
+  });
+
   it('drills into an occurrence, highlights it, opens in Logs view, and closes', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
-    const { container } = render(<LogOverviewView />);
+    const { container } = render(<SpansView />);
 
     expandAll(container);
 
@@ -190,7 +197,7 @@ describe('LogOverviewView', () => {
       startTime: '2024-01-15T10:00:00Z',
       endTime: '2024-01-15T11:00:00Z',
     });
-    const { container } = render(<LogOverviewView />);
+    const { container } = render(<SpansView />);
     expandAll(container);
 
     act(() => { fireEvent.click(container.querySelector('button[class*="occurrence"]') as HTMLElement); });
@@ -205,7 +212,7 @@ describe('LogOverviewView', () => {
   it('resizes the drilldown panel by dragging the divider and restores user-select', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
     document.body.style.userSelect = 'text'; // pre-existing value to preserve
-    const { container } = render(<LogOverviewView />);
+    const { container } = render(<SpansView />);
     expandAll(container);
     act(() => { fireEvent.click(container.querySelector('button[class*="occurrence"]') as HTMLElement); });
 
@@ -225,7 +232,7 @@ describe('LogOverviewView', () => {
 
   it('resizes the drilldown panel with the keyboard on the separator', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
-    const { container } = render(<LogOverviewView />);
+    const { container } = render(<SpansView />);
     expandAll(container);
     act(() => { fireEvent.click(container.querySelector('button[class*="occurrence"]') as HTMLElement); });
 
@@ -243,7 +250,7 @@ describe('LogOverviewView', () => {
   it('tears down an in-progress drag on unmount', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
     document.body.style.userSelect = 'text';
-    const { container, unmount } = render(<LogOverviewView />);
+    const { container, unmount } = render(<SpansView />);
     expandAll(container);
     act(() => { fireEvent.click(container.querySelector('button[class*="occurrence"]') as HTMLElement); });
 
@@ -259,7 +266,7 @@ describe('LogOverviewView', () => {
 
   it('renders without crashing when there are no logs', () => {
     useLogStore.setState({ rawLogLines: [] });
-    render(<LogOverviewView />);
+    render(<SpansView />);
     expect(screen.getByText('0', { selector: '#shown-count' })).toBeInTheDocument();
     expect(screen.getByText('No log lines match the current filters.')).toBeInTheDocument();
   });

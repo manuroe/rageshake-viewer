@@ -216,6 +216,20 @@ describe('KeyboardShortcutProvider', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/logs');
   });
 
+  it('g+t chord navigates to /triaged', () => {
+    renderProvider();
+    act(() => { fireKey('g'); });
+    act(() => { fireKey('t'); });
+    expect(mockNavigate).toHaveBeenCalledWith('/triaged');
+  });
+
+  it('g+n chord navigates to /spans', () => {
+    renderProvider();
+    act(() => { fireKey('g'); });
+    act(() => { fireKey('n'); });
+    expect(mockNavigate).toHaveBeenCalledWith('/spans');
+  });
+
   it('g+h chord navigates to /http_requests', () => {
     renderProvider();
     act(() => { fireKey('g'); });

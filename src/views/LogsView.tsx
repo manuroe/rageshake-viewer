@@ -64,7 +64,7 @@ export function LogsView() {
         <div className="header-left">
           <BurgerMenu />
           <h1 className="header-title">
-            All Logs
+            Logs
           </h1>
         </div>
         

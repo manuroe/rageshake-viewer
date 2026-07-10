@@ -1,0 +1,295 @@
+.overview {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* Match LogDisplayView's column widths so occurrence rows line up visually
+     with rows in /logs. */
+  --col-line-number: 60px;
+  --col-timestamp: 140px;
+  --col-level: 60px;
+  /* Per-level indentation step for the tree. */
+  --tree-indent: 18px;
+  /* Count-pill text colors (theme-independent: pills sit on saturated
+     error/warn backgrounds regardless of app theme). */
+  --badge-fg-error: #fff;
+  --badge-fg-warn: #000;
+}
+
+.toolbar {
+  composes: logToolbar from './LogDisplayView.module.css';
+}
+
+.toolbarLeft {
+  composes: logToolbarLeft from './LogDisplayView.module.css';
+}
+
+.toolbarRight {
+  composes: logToolbarRight from './LogDisplayView.module.css';
+}
+
+.levelToggle {
+  composes: checkboxLabel from '../components/Form.module.css';
+}
+
+/* Dark, monospace content pane — same treatment as LogDisplayView's
+   .logContentWrapper so the tree reads as the same "log surface". */
+.tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--log-bg);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+/* Draggable divider between the tree and the drilldown panel. */
+.resizer {
+  height: 6px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: var(--border-default);
+  transition: background-color var(--transition-fast);
+}
+
+.resizer:hover,
+.resizer:focus-visible {
+  background: var(--color-primary);
+  outline: none;
+}
+
+/* Drilldown log viewer docked at the bottom, like /http_requests' expanded
+   request log — but height is user-resizable (see .resizer), so it holds an
+   explicit inline height instead of the fixed max-height that view uses. */
+.bottomPanel {
+  flex-shrink: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border-default);
+}
+
+.empty {
+  color: var(--log-text-muted);
+  padding: 24px 16px;
+}
+
+.tree::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.tree::-webkit-scrollbar-track {
+  background: var(--log-bg);
+}
+
+.tree::-webkit-scrollbar-thumb {
+  background: var(--log-scrollbar);
+  border-radius: var(--radius-lg);
+}
+
+.tree::-webkit-scrollbar-thumb:hover {
+  background: var(--log-scrollbar-hover);
+}
+
+/* Tree branch / leaf header rows */
+.nodeSummary,
+.leafSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px;
+  color: var(--log-text);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.nodeSummary:hover,
+.leafSummary:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Disclosure triangle — the native <summary> marker is suppressed by the
+   display:flex above, so draw our own (CSS triangle, no glyph dependency)
+   and rotate it when the node is open. */
+.nodeSummary::before,
+.leafSummary::before {
+  content: '';
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--log-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.node[open] > .nodeSummary::before,
+.leaf[open] > .leafSummary::before {
+  transform: rotate(90deg);
+}
+
+.segment {
+  font-weight: 600;
+}
+
+/* Distinct span-field values recorded at a node, e.g. {conn_id=encryption|room-list}.
+   Muted and ellipsized so it annotates the name without dominating the row. */
+.fields {
+  color: var(--log-text-muted);
+  font-size: 0.85em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location {
+  color: var(--log-timestamp);
+}
+
+.occCount {
+  color: var(--log-text-muted);
+  font-size: 0.85em;
+}
+
+/* Indent each level and draw a vertical guide line so the nesting reads as a
+   tree. */
+.nodeChildren {
+  margin-left: var(--tree-indent);
+  border-left: 1px solid var(--border-default);
+}
+
+/* Count badges */
+.errorBadge,
+.warnBadge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 0.8em;
+  font-weight: 600;
+  text-align: center;
+}
+
+.errorBadge {
+  background: var(--log-level-error);
+  color: var(--badge-fg-error);
+}
+
+.warnBadge {
+  background: var(--log-level-warn);
+  color: var(--badge-fg-warn);
+}
+
+/* Occurrence rows — same column layout as LogDisplayView's .logLine */
+.occurrences {
+  margin-left: var(--tree-indent);
+  border-left: 1px solid var(--border-default);
+}
+
+.occurrence {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 2px 12px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-base);
+  color: var(--log-text);
+  border-left: 3px solid transparent;
+}
+
+.occurrence:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.occLineNumber {
+  flex-shrink: 0;
+  width: var(--col-line-number);
+  text-align: right;
+  color: var(--log-text-muted);
+  padding-right: 12px;
+}
+
+.occTime {
+  flex-shrink: 0;
+  width: var(--col-timestamp);
+  color: var(--log-timestamp);
+  padding-right: 12px;
+}
+
+.occLevel {
+  flex-shrink: 0;
+  width: var(--col-level);
+  font-weight: 600;
+  text-align: center;
+  padding: 0 8px;
+}
+
+/* Message column. min-width:0 lets this flex item shrink below its content so
+   the ellipsis kicks in instead of forcing the row wider (which caused the
+   horizontal scroll). */
+.rowText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Log level colors — same tokens and row/chip split LogDisplayView uses
+   (muted row text per level, distinct chip color) so a level reads
+   identically whether it's in /logs or /spans. */
+.levelTrace {
+  color: var(--log-level-trace);
+}
+
+.levelTrace .occLevel {
+  color: var(--log-level-trace);
+}
+
+.levelDebug {
+  color: var(--log-level-debug-text);
+}
+
+.levelDebug .occLevel {
+  color: var(--log-level-debug);
+}
+
+.levelInfo {
+  color: var(--log-text);
+}
+
+.levelInfo .occLevel {
+  color: var(--log-level-info);
+}
+
+.levelWarn {
+  color: var(--log-level-warn-text);
+}
+
+.levelWarn .occLevel {
+  color: var(--log-level-warn);
+}
+
+.levelError {
+  color: var(--log-level-error-text);
+}
+
+.levelError .occLevel {
+  color: var(--log-level-error);
+}
+
+.levelUnknown {
+  color: var(--log-text);
+}
+
+.levelUnknown .occLevel {
+  color: var(--log-text-muted);
+}

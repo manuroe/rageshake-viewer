@@ -181,6 +181,31 @@ async function main(): Promise<void> {
   await setTheme('dark');
   await shot('logs-dark');
 
+  // Spans (logs grouped by tracing span). Include INFO/DEBUG since most SDK
+  // spans are on DEBUG lines, then expand the branch nodes so the hierarchy is
+  // visible (leaves stay closed to avoid occurrence spam). Children mount lazily
+  // on the toggle event, so run several passes.
+  await page.goto(`${BASE_URL}/#/spans`);
+  await page.waitForTimeout(600);
+  for (const level of ['INFO', 'DEBUG']) {
+    await page.getByRole('checkbox', { name: level }).check();
+  }
+  await page.waitForTimeout(300);
+  for (let i = 0; i < 6; i++) {
+    await page.evaluate(() => {
+      document.querySelectorAll('details[class*="node"]:not([open])').forEach((d) => {
+        const details = d as HTMLDetailsElement;
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+      });
+    });
+    await page.waitForTimeout(150);
+  }
+  await setTheme('light');
+  await shot('spans-light');
+  await setTheme('dark');
+  await shot('spans-dark');
+
   // HTTP requests
   await page.goto(`${BASE_URL}/#/http_requests`);
   await page.waitForTimeout(600);

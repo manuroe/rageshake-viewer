@@ -7,9 +7,9 @@ import { SearchInput } from '../components/SearchInput';
 import { LogDisplayView } from './LogDisplayView';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateTimeRangeMicros, getMinMaxTimestamps } from '../utils/timeUtils';
-import { buildLogOverview, type OverviewNode, type OverviewLeaf } from '../utils/logOverview';
+import { buildSpanOverview, type SpanNode, type SpanLeaf, type SpanFieldSummary } from '../utils/spanOverview';
 import type { ParsedLogLine, LogLevel } from '../types/log.types';
-import styles from './LogOverviewView.module.css';
+import styles from './SpansView.module.css';
 
 // Toggleable levels. UNKNOWN is intentionally omitted so lines that failed
 // level detection are never hidden by the level filter.
@@ -42,7 +42,9 @@ function maxPanelHeight(treeEl: HTMLElement | null, currentPanelHeight: number):
 
 /** Clamp a proposed panel height to the draggable/resizable range. */
 function clampPanelHeight(height: number, maxHeight: number): number {
-  return Math.max(MIN_PANEL_HEIGHT, Math.min(maxHeight, height));
+  // maxHeight wins on a very short viewport (maxHeight < MIN_PANEL_HEIGHT), so
+  // the panel never grows past the space the tree can spare.
+  return Math.min(maxHeight, Math.max(MIN_PANEL_HEIGHT, height));
 }
 
 function levelClass(level: LogLevel): string {
@@ -65,6 +67,15 @@ function CountBadges({ errorCount, warnCount }: { errorCount: number; warnCount:
   );
 }
 
+/** Compact `{k=v|v… …}` summary of the field values recorded at a span node. */
+function FieldSummary({ fields }: { fields: readonly SpanFieldSummary[] }) {
+  if (fields.length === 0) return null;
+  const text = fields
+    .map((f) => `${f.key}=${f.values.join('|')}${f.truncated ? '|…' : ''}`)
+    .join(' ');
+  return <span className={styles.fields}>{`{${text}}`}</span>;
+}
+
 function Occurrence({ line, onSelect }: { line: ParsedLogLine; onSelect: (l: ParsedLogLine) => void }) {
   return (
     <button
@@ -82,7 +93,7 @@ function Occurrence({ line, onSelect }: { line: ParsedLogLine; onSelect: (l: Par
   );
 }
 
-function Leaf({ leaf, onSelect }: { leaf: OverviewLeaf; onSelect: (l: ParsedLogLine) => void }) {
+function Leaf({ leaf, onSelect }: { leaf: SpanLeaf; onSelect: (l: ParsedLogLine) => void }) {
   // Collapsed <details> still render their children into the DOM, so eagerly
   // rendering every occurrence would build the whole log's worth of nodes up
   // front. Only render occurrences once the leaf is actually opened.
@@ -90,7 +101,8 @@ function Leaf({ leaf, onSelect }: { leaf: OverviewLeaf; onSelect: (l: ParsedLogL
   return (
     <details className={styles.leaf} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className={styles.leafSummary}>
-        <span className={styles.location}>{leaf.location}</span>
+        {/* location is the full file path (unique key); show only the basename. */}
+        <span className={styles.location}>{leaf.location.slice(leaf.location.lastIndexOf('/') + 1)}</span>
         <span className={styles.occCount}>{leaf.occurrences.length}</span>
         <CountBadges errorCount={leaf.errorCount} warnCount={leaf.warnCount} />
       </summary>
@@ -105,20 +117,21 @@ function Leaf({ leaf, onSelect }: { leaf: OverviewLeaf; onSelect: (l: ParsedLogL
   );
 }
 
-function TreeNode({ node, onSelect }: { node: OverviewNode; onSelect: (l: ParsedLogLine) => void }) {
+function TreeNode({ node, onSelect }: { node: SpanNode; onSelect: (l: ParsedLogLine) => void }) {
   // Lazily mount the subtree so a collapsed node costs one <summary>, not its
   // whole descendant tree (see the note in Leaf).
   const [open, setOpen] = useState(false);
   return (
     <details className={styles.node} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className={styles.nodeSummary}>
-        <span className={styles.segment}>{node.segment}</span>
+        <span className={styles.segment}>{node.name}</span>
+        <FieldSummary fields={node.fields} />
         <CountBadges errorCount={node.errorCount} warnCount={node.warnCount} />
       </summary>
       {open && (
         <div className={styles.nodeChildren}>
           {node.children.map((child) => (
-            <TreeNode key={child.fullTarget} node={child} onSelect={onSelect} />
+            <TreeNode key={child.path} node={child} onSelect={onSelect} />
           ))}
           {node.leaves.map((leaf) => (
             <Leaf key={leaf.location} leaf={leaf} onSelect={onSelect} />
@@ -129,7 +142,7 @@ function TreeNode({ node, onSelect }: { node: OverviewNode; onSelect: (l: Parsed
   );
 }
 
-export function LogOverviewView() {
+export function SpansView() {
   const { rawLogLines, startTime, endTime } = useLogStore();
   const navigate = useNavigate();
   // Triage-first: start with only the actionable levels; the reader re-adds
@@ -151,6 +164,16 @@ export function LogOverviewView() {
   useEffect(() => {
     if (selected) setAriaMaxHeight(maxPanelHeight(treeRef.current, panelHeight));
   }, [selected, panelHeight]);
+
+  // A shorter window can push the fixed panel height past its ceiling (tree
+  // squeezed below its floor); re-clamp on resize while the panel is open.
+  useEffect(() => {
+    if (!selected) return;
+    const onResize = () =>
+      setPanelHeight((h) => clampPanelHeight(h, maxPanelHeight(treeRef.current, h)));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [selected]);
 
   // Drag the divider between the tree and the drilldown panel to resize.
   const startResize = useCallback((e: React.MouseEvent) => {
@@ -214,7 +237,7 @@ export function LogOverviewView() {
     });
   }, [rawLogLines, startTime, endTime, enabledLevels, debouncedText]);
 
-  const overview = useMemo(() => buildLogOverview(filteredLines), [filteredLines]);
+  const overview = useMemo(() => buildSpanOverview(filteredLines), [filteredLines]);
 
   const toggleLevel = (level: LogLevel) => {
     setEnabledLevels((prev) => {
@@ -225,8 +248,8 @@ export function LogOverviewView() {
     });
   };
 
-  // The root only holds children (every target has >=1 segment, so lines
-  // always attach to a child node, never directly to the root).
+  // The root only holds children (every line attaches under >=1 span name,
+  // "(no span)" included, so lines never sit directly on the root).
   const hasContent = overview.children.length > 0;
 
   return (
@@ -234,7 +257,7 @@ export function LogOverviewView() {
       <div className="header-compact">
         <div className="header-left">
           <BurgerMenu />
-          <h1 className="header-title">Logs by target</h1>
+          <h1 className="header-title">Logs by span</h1>
         </div>
         <div className="header-center">
           <div className="stats-compact">
@@ -253,8 +276,8 @@ export function LogOverviewView() {
               value={textFilter}
               onChange={setTextFilter}
               onClear={() => setTextFilter('')}
-              placeholder="Filter by target or text..."
-              aria-label="Filter overview by target or text"
+              placeholder="Filter by span or text..."
+              aria-label="Filter spans by name or text"
             />
           </div>
           <div className={styles.toolbarRight}>
@@ -274,7 +297,7 @@ export function LogOverviewView() {
         <div className={styles.tree} ref={treeRef}>
           {hasContent ? (
             overview.children.map((child) => (
-              <TreeNode key={child.fullTarget} node={child} onSelect={setSelected} />
+              <TreeNode key={child.path} node={child} onSelect={setSelected} />
             ))
           ) : (
             <div className={styles.empty}>No log lines match the current filters.</div>

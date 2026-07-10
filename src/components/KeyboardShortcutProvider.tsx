@@ -117,6 +117,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
         case 's': navigateTo('/summary'); break;
         case 'l': navigateTo('/logs'); break;
         case 't': navigateTo('/triaged'); break;
+        case 'n': navigateTo('/spans'); break;
         case 'h': navigateTo('/http_requests'); break;
         case 'y': navigateTo('/http_requests/sync'); break;
         default: break;
