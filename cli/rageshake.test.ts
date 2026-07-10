@@ -72,6 +72,21 @@ describe('rageshake CLI', () => {
     expect(summary.files[0].errors).toBe(1);
     expect(summary.totals.warnings).toBe(1);
     expect(summary.lifecycle.lastColdStart).toContain('2026-01-15T10:00:00');
+    // Identity fields are omitted to avoid leaking a stable device_id (which the
+    // anonymizer never rewrites) into LLM-bound output.
+    expect(summary.details.deviceId).toBeUndefined();
+    expect(summary.details.userId).toBeUndefined();
+  });
+
+  it('rejects binary (null-byte) input as not a text log', () => {
+    const binary = new Uint8Array([0x41, 0x00, 0x42, 0x00]);
+    expect(() => ingest(binary, 'weird.log')).toThrow(/not a valid text log/);
+  });
+
+  it('clamps --last to the first log timestamp, not epoch', () => {
+    const out = cmdSlice(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), { last: '999d' });
+    expect(out).toContain('2026-01-15T10:00:00');
+    expect(out).not.toContain('1970');
   });
 
   it('grep finds matching lines with line numbers', () => {

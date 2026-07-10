@@ -85,6 +85,17 @@ function isTarBytes(bytes: Uint8Array): boolean {
     && bytes[259] === 0x74 && bytes[260] === 0x61 && bytes[261] === 0x72;
 }
 
+/**
+ * Validate bytes as text and decode with the detected encoding (UTF-8, or the
+ * ISO-8859-1 fallback the rest of the app uses). Returns null for binary /
+ * null-byte content so callers can skip or reject it.
+ */
+function decodeIfText(data: Uint8Array): string | null {
+  const validation = isValidTextContent(data);
+  if (!validation.isValid) return null;
+  return decodeTextBytes(data, validation.metadata?.encoding as string | undefined);
+}
+
 /** Ingest raw file bytes: decompress, unpack, parse, merge. */
 export function ingest(rawBytes: Uint8Array, name: string): Ingest {
   const bytes = isValidGzipHeader(rawBytes) ? gunzipSync(rawBytes) : rawBytes;
@@ -98,13 +109,15 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
         if (!isValidGzipHeader(data)) continue;
         data = gunzipSync(data);
       }
-      if (!isValidTextContent(data).isValid) continue;
-      const text = decodeTextBytes(data);
+      const text = decodeIfText(data);
+      if (text === null) continue;
       textEntries.push({ name: entry.name, text });
       if (basename(entry.name) === 'details.json') details = parseDetailsJson(text);
     }
   } else {
-    textEntries.push({ name, text: decodeTextBytes(bytes) });
+    const text = decodeIfText(bytes);
+    if (text === null) throw new Error(`${name} is not a valid text log file (binary or unsupported encoding)`);
+    textEntries.push({ name, text });
   }
 
   const logs = textEntries
@@ -194,7 +207,10 @@ export function resolveRange(merged: LogParserResult, flags: Flags, warn: (msg: 
     const m = flags.last.match(DUR_RE);
     if (!m) throw new Error(`invalid --last duration "${flags.last}" (e.g. 30s, 10m, 1h, 2d)`);
     const durUs = Number(m[1]) * DUR_US[m[2]];
-    startUs = Math.max(startUs ?? 0, (endUs ?? max) - durUs);
+    // Clamp to the first log timestamp (min), not epoch, so a duration longer
+    // than the log span doesn't render a misleading 1970 range header. An
+    // explicit --from still wins via its own startUs.
+    startUs = Math.max(startUs ?? min, (endUs ?? max) - durUs);
   }
 
   if (startUs === null && endUs === null) return null;
@@ -348,7 +364,10 @@ export function cmdPrecheck(ing: Ingest): { ok: boolean; report: string } {
   for (const { name, text } of ing.textEntries) {
     if (detectAnonymizedLog(text)) markerCount++;
     if (DOMAIN_ALIAS_RE.test(text)) aliasCount++;
-    const re = new RegExp(MATRIX_IDENTIFIER_RE.source, 'g');
+    // Preserve the exported regex's own flags (add global for exec-loop scanning)
+    // so precheck can't drift from the anonymizer if those flags ever change.
+    const flags = MATRIX_IDENTIFIER_RE.flags.includes('g') ? MATRIX_IDENTIFIER_RE.flags : `${MATRIX_IDENTIFIER_RE.flags}g`;
+    const re = new RegExp(MATRIX_IDENTIFIER_RE.source, flags);
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
       if (ALIAS_RE.test(m[0])) {
@@ -408,13 +427,15 @@ export function cmdSummary(ing: Ingest): string {
   });
 
   return JSON.stringify({
+    // Identity fields (user_id, device_id) are deliberately omitted: device_id
+    // is not a Matrix identifier so the anonymizer never rewrites it, and precheck
+    // doesn't catch it — echoing it would leak a stable id into LLM-bound output.
+    // user_id is already an alias in the anonymized log lines, so it adds nothing.
     details: details && {
       userText: details.userText,
       app: details.appId,
       version: details.version,
       sdkSha: details.sdkSha,
-      userId: details.userId,
-      deviceId: details.deviceId,
     },
     files: perFile,
     timeSpan: stats.timeSpan,
