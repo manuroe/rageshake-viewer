@@ -175,7 +175,9 @@ export function LogOverviewView() {
     });
   };
 
-  const hasContent = overview.children.length > 0 || overview.leaves.length > 0;
+  // The root only holds children (every target has >=1 segment, so lines
+  // always attach to a child node, never directly to the root).
+  const hasContent = overview.children.length > 0;
 
   return (
     <div className="app">
@@ -221,14 +223,9 @@ export function LogOverviewView() {
 
         <div className={styles.tree}>
           {hasContent ? (
-            <>
-              {overview.children.map((child) => (
-                <TreeNode key={child.fullTarget} node={child} onSelect={setSelected} />
-              ))}
-              {overview.leaves.map((leaf) => (
-                <Leaf key={leaf.location} leaf={leaf} onSelect={setSelected} />
-              ))}
-            </>
+            overview.children.map((child) => (
+              <TreeNode key={child.fullTarget} node={child} onSelect={setSelected} />
+            ))
           ) : (
             <div className={styles.empty}>No log lines match the current filters.</div>
           )}

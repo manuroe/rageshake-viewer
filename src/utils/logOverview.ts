@@ -99,7 +99,8 @@ function makeBuildNode(segment: string, fullTarget: string): BuildNode {
 function leafKeyFor(line: ParsedLogLine, target: string): string {
   if (line.filePath) {
     // Basename only — the full path is redundant with the target and long.
-    const base = line.filePath.split('/').pop() ?? line.filePath;
+    // lastIndexOf('/') === -1 (no slash) → slice(0) returns the whole string.
+    const base = line.filePath.slice(line.filePath.lastIndexOf('/') + 1);
     return line.sourceLineNumber !== undefined ? `${base}:${line.sourceLineNumber}` : base;
   }
   return target;
