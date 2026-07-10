@@ -18,6 +18,7 @@ import { buildProcessColorMap } from '../utils/processColors';
 import { deriveAppStateSegments } from '../utils/lifecycleEvents';
 import { makeRowStripeColorer } from '../utils/laneStripe';
 import { getMinMaxTimestamps } from '../utils/timeUtils';
+import { spanSegments, spanFilterValue, SPANS_MARKER } from '../utils/spansParser';
 import { ProcessLegend } from '../components/ProcessLegend';
 import { LogExportDialog } from '../components/LogExportDialog';
 import { UnanonymizeDialog } from '../components/UnanonymizeDialog';
@@ -512,6 +513,8 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       readonly title: string;
       readonly keyPrefix: string;
       readonly onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+      /** When set, the span renders as a click-to-filter button (not an <a>). */
+      readonly filterValue?: string;
     };
 
     const linkSpecs: LinkSpec[] = [];
@@ -551,6 +554,28 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       }
     }
 
+    // Rust SDK span segments in the `| spans: …` tail become click-to-filter
+    // chips. Search only within the tail (from the spans marker) and advance a
+    // cursor so a span name that also appears earlier in the message isn't
+    // matched, and repeated segment texts each land on their own occurrence.
+    const spansAt = displayText.lastIndexOf(SPANS_MARKER);
+    if (spansAt >= 0) {
+      let cursor = spansAt;
+      for (const segment of spanSegments(line.rawText)) {
+        const idx = displayText.indexOf(segment, cursor);
+        if (idx < 0) continue;
+        linkSpecs.push({
+          start: idx,
+          end: idx + segment.length,
+          href: '',
+          title: `Click to filter the logs to lines under this span: ${segment}`,
+          keyPrefix: 'span',
+          filterValue: spanFilterValue(segment),
+        });
+        cursor = idx + segment.length;
+      }
+    }
+
     if (linkSpecs.length > 0) {
       linkSpecs.sort((a, b) => a.start - b.start);
       const renderedParts: React.ReactNode[] = [];
@@ -568,19 +593,37 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
         }
 
         const linkedText = displayText.slice(spec.start, spec.end);
-        renderedParts.push(
-          <a
-            key={`line-${originalIndex}-${spec.keyPrefix}-link-${i}`}
-            href={spec.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={isHovered ? styles.sourceLink : styles.sourceLinkInactive}
-            title={isHovered ? spec.title : undefined}
-            onClick={spec.onClick}
-          >
-            {renderWithSearchHighlights(linkedText, `${spec.keyPrefix}-text-${i}`)}
-          </a>
-        );
+        if (spec.filterValue !== undefined) {
+          const filterValue = spec.filterValue;
+          renderedParts.push(
+            <button
+              type="button"
+              key={`line-${originalIndex}-${spec.keyPrefix}-link-${i}`}
+              className={styles.spanFilterLink}
+              title={spec.title}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFilterQueryInput(filterValue);
+              }}
+            >
+              {renderWithSearchHighlights(linkedText, `${spec.keyPrefix}-text-${i}`)}
+            </button>
+          );
+        } else {
+          renderedParts.push(
+            <a
+              key={`line-${originalIndex}-${spec.keyPrefix}-link-${i}`}
+              href={spec.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={isHovered ? styles.sourceLink : styles.sourceLinkInactive}
+              title={isHovered ? spec.title : undefined}
+              onClick={spec.onClick}
+            >
+              {renderWithSearchHighlights(linkedText, `${spec.keyPrefix}-text-${i}`)}
+            </a>
+          );
+        }
 
         cursor = spec.end;
       }

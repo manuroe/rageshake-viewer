@@ -319,6 +319,27 @@
     cursor: text;
 }
 
+/* Click-to-filter span segment in the `spans:` tail. Inherits the row text
+   colour so it doesn't dominate; a dotted underline marks it as interactive,
+   turning solid + primary on hover. */
+.spanFilterLink {
+    display: inline;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--log-text-muted);
+    text-underline-offset: 2px;
+}
+
+.spanFilterLink:hover {
+    color: var(--color-primary);
+    text-decoration-style: solid;
+}
+
 /* Log Level Colors */
 .levelTrace {
     color: var(--log-level-trace);
