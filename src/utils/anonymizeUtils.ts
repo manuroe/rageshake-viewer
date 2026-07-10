@@ -229,19 +229,27 @@ export async function buildAnonymizationDictionaryFromTexts(
     }
   }
 
-  // Fresh regex instance: we await inside the scan loop, so sharing the module
-  // global's lastIndex could be corrupted by any interleaved use of it.
+  // Phase 1 — synchronous scan collecting unique identifiers in first-seen order.
+  // Hashing is async, so scanning synchronously first avoids an await per *match*
+  // (there are far more occurrences than unique ids) — we only await once per
+  // unique identifier in phase 2. Fresh regex instance so its lastIndex is ours.
   const scanRe = new RegExp(MATRIX_IDENTIFIER_RE.source, 'g');
-  async function scanText(text: string): Promise<void> {
+  const uniqueIds: string[] = [];
+  const seen = new Set<string>();
+  for (const text of texts) {
     scanRe.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = scanRe.exec(text)) !== null) {
-      await processIdentifier(m[0]);
+      if (!seen.has(m[0])) {
+        seen.add(m[0]);
+        uniqueIds.push(m[0]);
+      }
     }
   }
 
-  for (const text of texts) {
-    await scanText(text);
+  // Phase 2 — hash each unique identifier (order-independent, so dedup is safe).
+  for (const id of uniqueIds) {
+    await processIdentifier(id);
   }
 
   return { forward, reverse };
