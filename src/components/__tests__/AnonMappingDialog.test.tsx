@@ -79,7 +79,11 @@ describe('AnonMappingDialog', () => {
       forward: { '@carol:matrix.org': '@user-cccccccccccc:domain-33333333.org' },
       reverse: { '@user-cccccccccccc:domain-33333333.org': '@carol:matrix.org' },
     };
-    render(<AnonMappingDialog dict={null} buildPreview={() => Promise.resolve(previewDict)} onClose={vi.fn()} />);
+    const buildPreview = (onProgress: (p: string, c: number, t: number) => void) => {
+      onProgress('Reading files', 1, 1); // exercise the progress reporter path
+      return Promise.resolve(previewDict);
+    };
+    render(<AnonMappingDialog dict={null} buildPreview={buildPreview} onClose={vi.fn()} />);
     expect(await screen.findByText('@carol:matrix.org')).toBeInTheDocument();
     expect(screen.getByText(/preview/i)).toBeInTheDocument();
   });
@@ -143,5 +147,18 @@ describe('AnonMappingDialog', () => {
     last.focus();
     fireEvent.keyDown(panel, { key: 'Tab' });
     expect(document.activeElement).toBe(first);
+  });
+
+  it('leaves focus alone when Tab is pressed away from a boundary', () => {
+    render(<AnonMappingDialog dict={dict} onClose={vi.fn()} />);
+    const panel = screen.getByRole('dialog');
+    const input = screen.getByRole('textbox');
+    // Typing reveals the clear button so there is a focusable element after the input.
+    fireEvent.change(input, { target: { value: 'a' } });
+    input.focus();
+    fireEvent.keyDown(panel, { key: 'Tab' });
+    expect(document.activeElement).toBe(input);
+    fireEvent.keyDown(panel, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(input);
   });
 });

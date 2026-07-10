@@ -37,6 +37,23 @@ describe('buildTar', () => {
     expect(entry.name).toBe(name);
   });
 
+  it('throws for a >100-char path with no usable "/" split', () => {
+    const name = 'x'.repeat(120); // no slash, too long for the name field
+    expect(() => buildTar([{ name, data: enc.encode('x') }])).toThrow(/too long/);
+  });
+
+  it('throws when the only "/" split leaves the prefix too long (>155)', () => {
+    const name = `${'a'.repeat(160)}/f.log`; // prefix 160 > 155, no other split
+    expect(() => buildTar([{ name, data: enc.encode('x') }])).toThrow(/too long/);
+  });
+
+  it('handles a file whose size is an exact multiple of 512 (no pad block)', () => {
+    const data = new Uint8Array(512).fill(65); // exactly one block, remainder 0
+    const [entry] = parseTar(buildTar([{ name: 'block.bin', data }]));
+    expect(entry.data.length).toBe(512);
+    expect(Array.from(entry.data)).toEqual(Array.from(data));
+  });
+
   it('writes a self-consistent ustar checksum', () => {
     const header = buildTar([{ name: 'a.log', data: enc.encode('hello') }]).subarray(0, 512);
     const stored = parseInt(dec.decode(header.subarray(148, 154)).trim(), 8);

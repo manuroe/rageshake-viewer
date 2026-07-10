@@ -72,6 +72,19 @@ describe('buildAnonymisedArchiveGz', () => {
     expect(Array.from(byName['coredump'].data)).toEqual(Array.from(binary));
   });
 
+  it('passes a .gz member through unchanged when decompression throws', async () => {
+    // Valid gzip magic (1f 8b) but a truncated/corrupt body → decompressSync throws.
+    const corruptGz = new Uint8Array([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0]);
+    const entries = [
+      { name: 'a.log', data: strToU8('@alice:matrix.org') },
+      { name: 'broken.log.gz', data: corruptGz },
+    ];
+    const tar = parseTar(decompressSync(await buildAnonymisedArchiveGz(entries, SALT)));
+    const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
+    expect(strFromU8(byName['a.log'].data)).not.toContain('@alice:matrix.org');
+    expect(Array.from(byName['broken.log.gz'].data)).toEqual(Array.from(corruptGz));
+  });
+
   it('reports progress reaching the total', async () => {
     const entries = [
       { name: 'a.log', data: strToU8('@alice:matrix.org') },

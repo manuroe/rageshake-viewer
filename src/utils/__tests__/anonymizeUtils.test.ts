@@ -141,9 +141,10 @@ describe('buildAnonymizationDictionary', () => {
     // Port-bearing variant gets its own forward + reverse entry for bijectivity.
     expect(dict.forward['example.org:8448']).toBe(`${bareDomain}:8448`);
     expect(dict.reverse[`${bareDomain}:8448`]).toBe('example.org:8448');
-    // The user ID also gets the port alias.
+    // The user ID also gets the port alias: hashed user token + the ported domain.
     const userAlias = dict.forward['@alice:example.org:8448'];
-    expect(userAlias).toBe(`@user-${userAlias.match(/^@user-([0-9a-f]{12}):/)![1]}:${bareDomain}:8448`);
+    expect(userAlias).toMatch(/^@user-[0-9a-f]{12}:/);
+    expect(userAlias.endsWith(`:${bareDomain}:8448`)).toBe(true);
     expect(dict.reverse[userAlias]).toBe('@alice:example.org:8448');
   });
 
