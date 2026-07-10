@@ -7,10 +7,13 @@ import { createParsedLogLines, createParsedLogLine } from '../../test/fixtures';
 import * as TimeUtils from '../../utils/timeUtils';
 import logDisplayStyles from '../LogDisplayView.module.css';
 
-// Mock react-router-dom for useSearchParams
-const mockSetSearchParams = vi.fn();
+// Mock react-router-dom for useSearchParams (params are settable per test).
+const { mockSetSearchParams, routerState } = vi.hoisted(() => ({
+  mockSetSearchParams: vi.fn(),
+  routerState: { searchParams: new URLSearchParams() },
+}));
 vi.mock('react-router-dom', () => ({
-  useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
+  useSearchParams: () => [routerState.searchParams, mockSetSearchParams],
 }));
 
 // Mock react-virtual to simplify rendering in tests
@@ -21,6 +24,7 @@ vi.mock('@tanstack/react-virtual', () => {
       getVirtualItems: () => Array.from({ length: opts.count }, (_, i) => ({ index: i, key: i, start: i * 24 })),
       measureElement: () => {},
       measure: () => {},
+      scrollToIndex: () => {},
       measurementsCache: [],
     }),
   };
@@ -39,6 +43,7 @@ describe('LogsView', () => {
   beforeEach(() => {
     useLogStore.getState().clearData();
     mockSetSearchParams.mockClear();
+    routerState.searchParams = new URLSearchParams();
   });
   
   afterEach(() => {
@@ -105,6 +110,27 @@ describe('LogsView', () => {
 
     const totalCount = screen.getByText('50', { selector: '#total-count' });
     expect(totalCount).toBeInTheDocument();
+  });
+
+  it('highlights the line named by the ?line= param', () => {
+    const logs = createParsedLogLines(10);
+    useLogStore.setState({ rawLogLines: logs });
+    routerState.searchParams = new URLSearchParams('line=5');
+
+    const { container } = render(<LogsView />);
+
+    // The row whose lineNumber matches gets the highlight class.
+    expect(container.querySelector(`.${logDisplayStyles.highlightLine}`)).toBeInTheDocument();
+  });
+
+  it('does not highlight any line for a non-numeric ?line= param', () => {
+    const logs = createParsedLogLines(10);
+    useLogStore.setState({ rawLogLines: logs });
+    routerState.searchParams = new URLSearchParams('line=abc');
+
+    const { container } = render(<LogsView />);
+
+    expect(container.querySelector(`.${logDisplayStyles.highlightLine}`)).not.toBeInTheDocument();
   });
 
   it('handles empty logs gracefully', () => {

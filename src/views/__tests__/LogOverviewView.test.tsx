@@ -136,6 +136,17 @@ describe('LogOverviewView', () => {
     vi.useRealTimers();
   });
 
+  it('clears the text filter via the clear button', () => {
+    useLogStore.setState({ rawLogLines: seedLines() });
+    render(<LogOverviewView />);
+
+    const input = screen.getByPlaceholderText('Filter by target or text...') as HTMLInputElement;
+    act(() => { fireEvent.change(input, { target: { value: 'send_queue' } }); });
+    act(() => { fireEvent.click(screen.getByLabelText('Clear input')); });
+
+    expect(input.value).toBe('');
+  });
+
   it('shows the empty state when nothing matches the filter', () => {
     vi.useFakeTimers();
     useLogStore.setState({ rawLogLines: seedLines() });

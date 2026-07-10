@@ -72,4 +72,15 @@ describe('buildLogOverview', () => {
     const bracket = findNode(tree, 'matrix-rust-sdk');
     expect(bracket?.errorCount).toBe(0);
   });
+
+  it('keys a leaf by bare basename when filePath has no slash or source line', () => {
+    const tree = buildLogOverview([createParsedLogLine({
+      lineNumber: 1,
+      level: 'ERROR',
+      rawText: RUST,
+      filePath: 'native.rs', // no slash, no sourceLineNumber
+    })]);
+    const native = findNode(findNode(findNode(tree, 'matrix_sdk')!, 'http_client')!, 'native');
+    expect(native?.leaves[0].location).toBe('native.rs');
+  });
 });
