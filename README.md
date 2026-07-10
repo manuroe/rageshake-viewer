@@ -12,6 +12,9 @@ Live at **https://manuroe.github.io/rageshake-viewer/**
 ![Logs view](public/demo/screenshot-logs-light.png#gh-light-mode-only)
 ![Logs view](public/demo/screenshot-logs-dark.png#gh-dark-mode-only)
 
+![Logs by span](public/demo/screenshot-spans-light.png#gh-light-mode-only)
+![Logs by span](public/demo/screenshot-spans-dark.png#gh-dark-mode-only)
+
 ![Sync waterfall](public/demo/screenshot-sync-light.png#gh-light-mode-only)
 ![Sync waterfall](public/demo/screenshot-sync-dark.png#gh-dark-mode-only)
 
