@@ -207,12 +207,13 @@ export function BurgerMenu() {
             <>
           <div className={styles.burgerDivider} />
           <div className={styles.burgerSectionTitle}>Views</div>
-          <button 
+          <button
             className={`${styles.burgerItem} ${isActive('/summary') ? styles.active : ''}`}
             onClick={() => handleNavigate('/summary')}
           >
             Summary
           </button>
+          <div className={styles.burgerDivider} />
           <button
             className={`${styles.burgerItem} ${isActive('/logs') ? styles.active : ''}`}
             onClick={() => handleNavigate('/logs')}
@@ -220,22 +221,29 @@ export function BurgerMenu() {
             Logs
           </button>
           <button
-            className={`${styles.burgerItem} ${isActive('/triaged') ? styles.active : ''}`}
+            className={`${styles.burgerItem} ${styles.burgerSubItem} ${isActive('/triaged') ? styles.active : ''}`}
             onClick={() => handleNavigate('/triaged')}
           >
-            Triaged Logs
+            By target
           </button>
+          <button
+            className={`${styles.burgerItem} ${styles.burgerSubItem} ${isActive('/spans') ? styles.active : ''}`}
+            onClick={() => handleNavigate('/spans')}
+          >
+            By span
+          </button>
+          <div className={styles.burgerDivider} />
           <button
             className={`${styles.burgerItem} ${isActive('/http_requests') ? styles.active : ''}`}
             onClick={() => handleNavigate('/http_requests')}
           >
             HTTP Requests
           </button>
-          <button 
-            className={`${styles.burgerItem} ${isActive('/http_requests/sync') ? styles.active : ''}`}
+          <button
+            className={`${styles.burgerItem} ${styles.burgerSubItem} ${isActive('/http_requests/sync') ? styles.active : ''}`}
             onClick={() => handleNavigate('/http_requests/sync')}
           >
-            Sync Requests
+            Sync
           </button>
           {canSelectLogs && (
             <>

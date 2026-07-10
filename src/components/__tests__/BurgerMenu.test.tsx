@@ -311,27 +311,27 @@ describe('BurgerMenu', () => {
     });
   });
 
-  describe('Sync Requests Navigation', () => {
-    it('navigates to /http_requests/sync when Sync Requests is clicked', () => {
+  describe('Sync Navigation', () => {
+    it('navigates to /http_requests/sync when Sync is clicked', () => {
       render(
         <MemoryRouter>
           <BurgerMenu />
         </MemoryRouter>
       );
       fireEvent.click(screen.getByRole('button', { name: /menu/i }));
-      fireEvent.click(screen.getByText('Sync Requests'));
+      fireEvent.click(screen.getByText('Sync'));
       expect(navigateMock).toHaveBeenCalledWith('/http_requests/sync');
     });
 
-    it('closes menu after navigating to Sync Requests', () => {
+    it('closes menu after navigating to Sync', () => {
       render(
         <MemoryRouter>
           <BurgerMenu />
         </MemoryRouter>
       );
       fireEvent.click(screen.getByRole('button', { name: /menu/i }));
-      fireEvent.click(screen.getByText('Sync Requests'));
-      expect(screen.queryByText('Sync Requests')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText('Sync'));
+      expect(screen.queryByText('Sync')).not.toBeInTheDocument();
     });
   });
 

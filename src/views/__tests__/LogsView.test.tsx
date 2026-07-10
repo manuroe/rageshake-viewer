@@ -56,7 +56,7 @@ describe('LogsView', () => {
 
     render(<LogsView />);
 
-    expect(screen.getByText('All Logs')).toBeInTheDocument();
+    expect(screen.getByText('Logs')).toBeInTheDocument();
     expect(screen.getByTestId('burger-menu')).toBeInTheDocument();
     expect(screen.getByTestId('time-range-selector')).toBeInTheDocument();
   });

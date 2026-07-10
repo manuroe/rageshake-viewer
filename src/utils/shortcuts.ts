@@ -55,7 +55,13 @@ export const SHORTCUTS = {
   },
   goTriaged: {
     label: 'g → t',
-    description: 'Go to Triaged Logs',
+    description: 'Go to logs by target',
+    category: 'navigation',
+    requiresNoInputFocus: true,
+  },
+  goSpans: {
+    label: 'g → n',
+    description: 'Go to logs by span',
     category: 'navigation',
     requiresNoInputFocus: true,
   },

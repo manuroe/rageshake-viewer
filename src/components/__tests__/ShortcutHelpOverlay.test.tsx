@@ -108,7 +108,8 @@ describe('ShortcutHelpOverlay', () => {
     renderWithCtx(makeCtx({ showHelp: true }), <ShortcutHelpOverlay />);
     expect(screen.getByText('Go to Summary')).toBeInTheDocument();
     expect(screen.getByText('Go to Logs')).toBeInTheDocument();
-    expect(screen.getByText('Go to Triaged Logs')).toBeInTheDocument();
+    expect(screen.getByText('Go to logs by target')).toBeInTheDocument();
+    expect(screen.getByText('Go to logs by span')).toBeInTheDocument();
     expect(screen.getByText('Go to HTTP Requests')).toBeInTheDocument();
     expect(screen.getByText('Go to Sync Requests')).toBeInTheDocument();
   });

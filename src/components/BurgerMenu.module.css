@@ -62,6 +62,14 @@
     font-weight: 500;
 }
 
+/* Sub-item indented under its parent view (e.g. "By target"/"By span" under
+   "Logs", "Sync" under "HTTP Requests"). */
+.burgerSubItem {
+    padding-left: 32px;
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
+}
+
 .burgerDivider {
     height: 1px;
     background: var(--border-light);

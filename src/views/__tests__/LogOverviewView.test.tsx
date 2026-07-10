@@ -93,7 +93,7 @@ describe('LogOverviewView', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
     render(<LogOverviewView />);
 
-    expect(screen.getByText('Triaged Logs')).toBeInTheDocument();
+    expect(screen.getByText('Logs by target')).toBeInTheDocument();
     expect(screen.getByTestId('burger-menu')).toBeInTheDocument();
 
     // 2 WARN/ERROR + 1 UNKNOWN (never filtered) shown; the INFO line is hidden.

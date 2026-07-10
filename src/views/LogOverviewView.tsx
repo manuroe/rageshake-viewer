@@ -232,7 +232,7 @@ export function LogOverviewView() {
       <div className="header-compact">
         <div className="header-left">
           <BurgerMenu />
-          <h1 className="header-title">Triaged Logs</h1>
+          <h1 className="header-title">Logs by target</h1>
         </div>
         <div className="header-center">
           <div className="stats-compact">
