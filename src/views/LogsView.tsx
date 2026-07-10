@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLogStore } from '../stores/logStore';
 import { useURLParams } from '../hooks/useURLParams';
 import { LogDisplayView } from './LogDisplayView';
@@ -9,9 +10,16 @@ import { calculateTimeRangeMicros, getMinMaxTimestamps } from '../utils/timeUtil
 export function LogsView() {
   const { rawLogLines, startTime, endTime, logFilter } = useLogStore();
   const { setLogFilter } = useURLParams();
-  
+  const [searchParams] = useSearchParams();
+
   // Get filter from store (synced from URL via App.tsx)
   const filterPrefill = logFilter ?? '';
+
+  // Optional `line` param: highlight and scroll to a specific line, e.g. when
+  // arriving from the overview drilldown's "Open in Logs view" button.
+  const lineParam = searchParams.get('line');
+  const parsedLine = lineParam !== null ? parseInt(lineParam, 10) : NaN;
+  const highlightLineNumber = Number.isNaN(parsedLine) ? undefined : parsedLine;
 
   // Callback to update URL when filter changes
   const handleFilterChange = useCallback((filter: string) => {
@@ -68,12 +76,13 @@ export function LogsView() {
       </div>
 
       <div className="logs-view-container">
-        <LogDisplayView 
+        <LogDisplayView
           logLines={filteredLines}
           requestFilter={filterPrefill}
           onFilterChange={handleFilterChange}
           prevRequestLineRange={prevRequestLineRange}
           nextRequestLineRange={nextRequestLineRange}
+          highlightLineNumber={highlightLineNumber}
           showAnonymizeButton
         />
       </div>
