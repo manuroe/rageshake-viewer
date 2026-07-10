@@ -111,7 +111,7 @@ describe('ShortcutHelpOverlay', () => {
     expect(screen.getByText('Go to logs by target')).toBeInTheDocument();
     expect(screen.getByText('Go to logs by span')).toBeInTheDocument();
     expect(screen.getByText('Go to HTTP Requests')).toBeInTheDocument();
-    expect(screen.getByText('Go to Sync Requests')).toBeInTheDocument();
+    expect(screen.getByText('Go to Sync')).toBeInTheDocument();
   });
 
   it('shows theme, session, and help shortcuts', () => {

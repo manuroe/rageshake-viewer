@@ -35,7 +35,9 @@ const PANEL_RESIZE_STEP = 24;
 function maxPanelHeight(treeEl: HTMLElement | null, currentPanelHeight: number): number {
   const treeHeight = treeEl?.clientHeight ?? 0;
   const flexArea = treeHeight > 0 ? treeHeight + currentPanelHeight : window.innerHeight;
-  return flexArea - MIN_TREE_HEIGHT;
+  // Never below MIN_PANEL_HEIGHT: on a very short viewport a smaller (or negative)
+  // ceiling would make the separator's aria-valuemax drop under aria-valuemin.
+  return Math.max(MIN_PANEL_HEIGHT, flexArea - MIN_TREE_HEIGHT);
 }
 
 /** Clamp a proposed panel height to the draggable/resizable range. */
@@ -158,7 +160,7 @@ export function SpansView() {
   // Layout-derived resize ceiling, mirrored into state for the separator's
   // aria-valuemax (refs can't be read during render). The handlers read the
   // ref directly for the live clamp.
-  const [ariaMaxHeight, setAriaMaxHeight] = useState(() => window.innerHeight - MIN_TREE_HEIGHT);
+  const [ariaMaxHeight, setAriaMaxHeight] = useState(() => Math.max(MIN_PANEL_HEIGHT, window.innerHeight - MIN_TREE_HEIGHT));
   useEffect(() => {
     if (selected) setAriaMaxHeight(maxPanelHeight(treeRef.current, panelHeight));
   }, [selected, panelHeight]);

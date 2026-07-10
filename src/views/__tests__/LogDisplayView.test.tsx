@@ -1926,3 +1926,43 @@ describe('LogDisplayView process colours (merged multi-process logs)', () => {
   });
 });
 
+describe('LogDisplayView span filter chips', () => {
+  beforeEach(() => {
+    useLogStore.getState().clearData();
+  });
+
+  it('renders each span segment as a chip and filters by the span on click', async () => {
+    const onFilterChange = vi.fn();
+    // strippedMessage carries the `| spans:` tail (it's what's shown with the
+    // default strip-prefix on); rawText is the full physical line.
+    const stripped =
+      'matrix_sdk::http_client::native: Sending request | crates/matrix-sdk/src/http_client/native.rs:88 | spans: root > send{request_id="REQ-0" method=GET}';
+    useLogStore.setState({
+      rawLogLines: [
+        createParsedLogLine({
+          lineNumber: 1,
+          level: 'DEBUG',
+          rawText: `2026-04-12T20:16:41.614009Z DEBUG ${stripped}`,
+          message: stripped,
+          strippedMessage: stripped,
+        }),
+      ],
+    });
+
+    render(<LogDisplayView onFilterChange={onFilterChange} />);
+
+    // Every span segment renders as its own click-to-filter chip.
+    expect(screen.getByRole('button', { name: 'root' })).toBeInTheDocument();
+    const sendChip = screen.getByRole('button', { name: 'send{request_id="REQ-0" method=GET}' });
+    // Chips are non-tabbable (match the row) to avoid flooding the tab order.
+    expect(sendChip).toHaveAttribute('tabindex', '-1');
+
+    // Clicking filters by the span's stable identity (name + first field, no
+    // closing brace) so it survives progressively-recorded fields.
+    await userEvent.click(sendChip);
+    await waitFor(() => {
+      expect(onFilterChange).toHaveBeenCalledWith('send{request_id="REQ-0"');
+    });
+  });
+});
+

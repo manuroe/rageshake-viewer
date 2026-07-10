@@ -100,9 +100,10 @@ export function spanFilterValue(segment: string): string {
 
 /**
  * Return the raw span-chain segments (the whole span, still quoted/braced, as
- * it appears in the line), or [] when there is no `spans:` suffix. Each segment
- * doubles as a click-to-filter value in `/logs`: filtering by the whole span
- * scopes to that exact instance (e.g. the specific `sync_once` with this `pos`).
+ * it appears in the line), or [] when there is no `spans:` suffix. In `/logs`
+ * each segment is the clickable chip's text; the value it actually filters by
+ * is derived separately via `spanFilterValue` (the stable name+first-field
+ * prefix, so it survives a span's progressively-recorded fields).
  *
  * ponytail: split on the literal ` > ` — no span field value in the wild
  * contains `>` (values are quoted or paren-wrapped). Make this quote-aware if

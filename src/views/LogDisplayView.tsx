@@ -601,6 +601,9 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
               key={`line-${originalIndex}-${spec.keyPrefix}-link-${i}`}
               className={styles.spanFilterLink}
               title={spec.title}
+              // Match the log row (tabIndex -1): with up to 7 spans per line
+              // across many rows, tabbable chips would flood the tab order.
+              tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
                 setFilterQueryInput(filterValue);

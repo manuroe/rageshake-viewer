@@ -73,7 +73,7 @@ export const SHORTCUTS = {
   },
   goSync: {
     label: 'g → y',
-    description: 'Go to Sync Requests',
+    description: 'Go to Sync',
     category: 'navigation',
     requiresNoInputFocus: true,
   },
