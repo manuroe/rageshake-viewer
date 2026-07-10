@@ -5,6 +5,8 @@ import { BurgerMenu } from '../BurgerMenu';
 import { useLogStore } from '../../stores/logStore';
 import { useArchiveStore } from '../../stores/archiveStore';
 import { useListingStore } from '../../stores/listingStore';
+import { createParsedLogLine } from '../../test/fixtures';
+import { fetchExtensionFileBytes } from '../../utils/extensionFileLoader';
 import { KeyboardShortcutContext } from '../KeyboardShortcutContext';
 import type { KeyboardShortcutContextValue } from '../KeyboardShortcutContext';
 
@@ -14,6 +16,28 @@ vi.mock('../LogSelectionDialog', () => ({
       <button onClick={onClose}>close-mock</button>
     </div>
   ),
+}));
+
+vi.mock('../AnonMappingDialog', () => ({
+  AnonMappingDialog: ({
+    buildPreview,
+    onClose,
+  }: {
+    buildPreview?: (onProgress: (p: string, c: number, t: number) => void) => Promise<unknown>;
+    onClose: () => void;
+  }) => {
+    // Exercise the preview builder the way the real dialog would.
+    if (buildPreview) void buildPreview(() => {});
+    return (
+      <div data-testid="anon-mapping-dialog">
+        <button onClick={onClose}>close-mapping-mock</button>
+      </div>
+    );
+  },
+}));
+
+vi.mock('../../utils/extensionFileLoader', () => ({
+  fetchExtensionFileBytes: vi.fn(),
 }));
 
 // Bypass zustand persist middleware to avoid localStorage issues in tests
@@ -45,6 +69,7 @@ describe('BurgerMenu', () => {
     useLogStore.getState().clearData();
     useArchiveStore.getState().clearArchive();
     useListingStore.getState().clearListing();
+    vi.mocked(fetchExtensionFileBytes).mockReset();
   });
 
   describe('Cross-View Navigation Param Preservation', () => {
@@ -380,6 +405,267 @@ describe('BurgerMenu', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /menu/i }));
       expect(screen.queryByText(/select logs/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Anonymisation submenu', () => {
+    const dict = {
+      forward: { '@alice:matrix.org': '@user-aaaaaaaaaaaa:domain-11111111.org' },
+      reverse: { '@user-aaaaaaaaaaaa:domain-11111111.org': '@alice:matrix.org' },
+    };
+
+    it('expands to reveal the salt input and edits the salt', () => {
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      // Salt input is hidden until the submenu is expanded.
+      expect(screen.queryByLabelText('Anonymisation salt')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+      const input = screen.getByLabelText('Anonymisation salt');
+      expect(input).toBeInTheDocument();
+
+      fireEvent.change(input, { target: { value: 'team-salt' } });
+      expect(input).toHaveValue('team-salt');
+    });
+
+    it('shows "View mapping" even before anonymisation and opens the dialog', () => {
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+      fireEvent.click(screen.getByText(/view mapping/i));
+      expect(screen.getByTestId('anon-mapping-dialog')).toBeInTheDocument();
+    });
+
+    it('hides "Save anonymised log" when no logs are loaded', () => {
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+      expect(screen.queryByText(/save anonymised/i)).not.toBeInTheDocument();
+    });
+
+    it('saves an anonymised log file with a -anonym filename', () => {
+      const origCreate = URL.createObjectURL;
+      const origRevoke = URL.revokeObjectURL;
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+      URL.revokeObjectURL = vi.fn();
+      let downloadName = '';
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(function (this: HTMLAnchorElement) { downloadName = this.download; });
+      try {
+        useLogStore.setState({
+          rawLogLines: [createParsedLogLine({ lineNumber: 0, rawText: '@alice:matrix.org hi' })],
+          isAnonymized: true,
+          logFileName: 'console.log',
+        });
+        render(
+          <MemoryRouter initialEntries={['/logs']}>
+            <BurgerMenu />
+          </MemoryRouter>
+        );
+        fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+        fireEvent.click(screen.getByText(/save anonymised/i));
+
+        expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+        expect(clickSpy).toHaveBeenCalledTimes(1);
+        expect(downloadName).toBe('console-anonym.log');
+      } finally {
+        clickSpy.mockRestore();
+        URL.createObjectURL = origCreate;
+        URL.revokeObjectURL = origRevoke;
+      }
+    });
+
+    it('anonymises and saves a not-yet-anonymised log on the fly', async () => {
+      const origCreate = URL.createObjectURL;
+      const origRevoke = URL.revokeObjectURL;
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+      URL.revokeObjectURL = vi.fn();
+      let downloadName = '';
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(function (this: HTMLAnchorElement) { downloadName = this.download; });
+      try {
+        useLogStore.setState({
+          rawLogLines: [createParsedLogLine({ lineNumber: 0, rawText: '@alice:matrix.org hi' })],
+          isAnonymized: false,
+          logFileName: 'console.log',
+        });
+        render(
+          <MemoryRouter initialEntries={['/logs']}>
+            <BurgerMenu />
+          </MemoryRouter>
+        );
+        fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+        fireEvent.click(screen.getByText(/save anonymised/i));
+
+        await vi.waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+        expect(downloadName).toBe('console-anonym.log');
+      } finally {
+        clickSpy.mockRestore();
+        URL.createObjectURL = origCreate;
+        URL.revokeObjectURL = origRevoke;
+      }
+    });
+
+    it('saves an anonymised archive from the /listing screen', async () => {
+      vi.mocked(fetchExtensionFileBytes).mockImplementation(
+        async (_url, name) => new TextEncoder().encode(`@alice:matrix.org in ${name}`),
+      );
+      const origCreate = URL.createObjectURL;
+      const origRevoke = URL.revokeObjectURL;
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+      URL.revokeObjectURL = vi.fn();
+      let downloadName = '';
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(function (this: HTMLAnchorElement) { downloadName = this.download; });
+      try {
+        useListingStore.getState().loadListing('https://host/api/listing/session42', [
+          { name: 'a.log', url: 'https://host/a.log' },
+        ]);
+        render(
+          <MemoryRouter initialEntries={['/listing']}>
+            <BurgerMenu />
+          </MemoryRouter>
+        );
+        fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+        fireEvent.click(screen.getByText(/save anonymised/i));
+
+        await vi.waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+        expect(downloadName).toBe('session42-anonym.tar.gz');
+        expect(fetchExtensionFileBytes).toHaveBeenCalled();
+      } finally {
+        clickSpy.mockRestore();
+        URL.createObjectURL = origCreate;
+        URL.revokeObjectURL = origRevoke;
+      }
+    });
+
+    it('shows a "Save failed" message when the export throws', async () => {
+      vi.mocked(fetchExtensionFileBytes).mockResolvedValue(null);
+      useListingStore.getState().loadListing('https://host/api/listing/s', [
+        { name: 'a.log', url: 'https://host/a.log' },
+      ]);
+      render(
+        <MemoryRouter initialEntries={['/listing']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+      fireEvent.click(screen.getByText(/save anonymised/i));
+
+      expect(await screen.findByText('Save failed')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /close/i }));
+      expect(screen.queryByText('Save failed')).not.toBeInTheDocument();
+    });
+
+    it('builds a preview when View mapping is opened on the /listing screen', async () => {
+      vi.mocked(fetchExtensionFileBytes).mockImplementation(
+        async (_url, name) => new TextEncoder().encode(`@alice:matrix.org ${name}`),
+      );
+      useListingStore.getState().loadListing('https://host/api/listing/s', [
+        { name: 'a.log', url: 'https://host/a.log' },
+      ]);
+      render(
+        <MemoryRouter initialEntries={['/listing']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+      fireEvent.click(screen.getByText(/view mapping/i));
+
+      expect(screen.getByTestId('anon-mapping-dialog')).toBeInTheDocument();
+      await vi.waitFor(() => expect(fetchExtensionFileBytes).toHaveBeenCalled());
+    });
+
+    it('saves an anonymised archive (-anonym.tar.gz) on the /archive screen', async () => {
+      const origCreate = URL.createObjectURL;
+      const origRevoke = URL.revokeObjectURL;
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+      URL.revokeObjectURL = vi.fn();
+      let downloadName = '';
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(function (this: HTMLAnchorElement) { downloadName = this.download; });
+      try {
+        useArchiveStore.getState().loadArchive('rageshake.tar.gz', [
+          { name: 'a.log', data: new TextEncoder().encode('@alice:matrix.org') },
+        ]);
+        render(
+          <MemoryRouter initialEntries={['/archive']}>
+            <BurgerMenu />
+          </MemoryRouter>
+        );
+        fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+        fireEvent.click(screen.getByText(/save anonymised/i));
+
+        await vi.waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+        expect(downloadName).toBe('rageshake-anonym.tar.gz');
+        expect(URL.createObjectURL).toHaveBeenCalled();
+      } finally {
+        clickSpy.mockRestore();
+        URL.createObjectURL = origCreate;
+        URL.revokeObjectURL = origRevoke;
+        useArchiveStore.getState().clearArchive();
+      }
+    });
+
+    it('shows "View mapping" on the /archive screen and opens the dialog', () => {
+      useArchiveStore.getState().loadArchive('rageshake.tar.gz', [
+        { name: 'a.log', data: new TextEncoder().encode('@alice:matrix.org') },
+      ]);
+      try {
+        render(
+          <MemoryRouter initialEntries={['/archive']}>
+            <BurgerMenu />
+          </MemoryRouter>
+        );
+        fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+        fireEvent.click(screen.getByText(/view mapping/i));
+        expect(screen.getByTestId('anon-mapping-dialog')).toBeInTheDocument();
+      } finally {
+        useArchiveStore.getState().clearArchive();
+      }
+    });
+
+    it('opens and closes the mapping dialog when a dictionary exists', () => {
+      useLogStore.setState({ isAnonymized: true, anonymizationDictionary: dict });
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+      fireEvent.click(screen.getByText(/view mapping/i));
+
+      expect(screen.getByTestId('anon-mapping-dialog')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('close-mapping-mock'));
+      expect(screen.queryByTestId('anon-mapping-dialog')).not.toBeInTheDocument();
     });
   });
 });

@@ -21,6 +21,7 @@ import { getMinMaxTimestamps } from '../utils/timeUtils';
 import { ProcessLegend } from '../components/ProcessLegend';
 import { LogExportDialog } from '../components/LogExportDialog';
 import { UnanonymizeDialog } from '../components/UnanonymizeDialog';
+import { AnonMappingDialog } from '../components/AnonMappingDialog';
 import type { ExportContext } from '../utils/logExportUtils';
 import { removeTabLog, storeTabLog } from '../utils/tabLogUtils';
 import { TAB_LOG_PARAM } from '../hooks/useTabLog';
@@ -107,7 +108,7 @@ interface LogDisplayViewProps {
 }
 
 export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false, highlightLineNumber }: LogDisplayViewProps) {
-  const { rawLogLines, sentryEvents, lifecycleEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizeLogs, unanonymizeLogs, logFileName, loadedEntryNames } = useLogStore();
+  const { rawLogLines, sentryEvents, lifecycleEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizationDictionary, anonymizeLogs, unanonymizeLogs, logFileName, loadedEntryNames } = useLogStore();
   // Colour lines by process only when several distinct processes are merged
   // (e.g. console + nse); a single process needs no differentiation. The app
   // (console) stream is instead striped by app-state shade — see makeRowStripeColorer.
@@ -207,6 +208,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   const [collapseEnabled, setCollapseEnabled] = useState(true);
   const [showExport, setShowExport] = useState(false);
   const [showUnanonymizeDialog, setShowUnanonymizeDialog] = useState(false);
+  const [showMapping, setShowMapping] = useState(false);
 
   // Cmd/Ctrl+S → open export; w/p → toggle line wrap and strip prefix (when no input focused)
   useEffect(() => {
@@ -840,7 +842,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                       setShowUnanonymizeDialog(true);
                     }
                   } else {
-                    anonymizeLogs();
+                    void anonymizeLogs();
                   }
                 }}
                 aria-label={isAnonymizing ? 'Anonymising…' : isAnonymized ? 'Unanonymise logs' : 'Anonymise logs'}
@@ -859,6 +861,19 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                   <circle cx="11" cy="11.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
                   {/* Bridge */}
                   <path d="M7 11.5h2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+            {isAnonymized && anonymizationDictionary && (
+              <button
+                className={`${styles.btnToolbar} ${styles.btnIcon}`}
+                onClick={() => setShowMapping(true)}
+                aria-label="View anonymisation mapping"
+                title="View anonymisation mapping"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 4h5M2 8h5M2 12h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  <path d="M9 4h5M9 8h5M9 12h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                 </svg>
               </button>
             )}
@@ -1100,6 +1115,13 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       {showUnanonymizeDialog && (
         <UnanonymizeDialog
           onClose={() => setShowUnanonymizeDialog(false)}
+        />
+      )}
+
+      {showMapping && anonymizationDictionary && (
+        <AnonMappingDialog
+          dict={anonymizationDictionary}
+          onClose={() => setShowMapping(false)}
         />
       )}
 

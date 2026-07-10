@@ -124,6 +124,80 @@
     cursor: not-allowed;
 }
 
+/* Full-width text input (e.g. anonymisation salt) */
+.textInput {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-md);
+    font-family: var(--font-mono, monospace);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    box-sizing: border-box;
+    transition: border-color var(--transition-default);
+}
+
+.textInput:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-muted);
+}
+
+/* -------------------------------------------------------------------------
+   Anonymisation mapping viewer (AnonMappingDialog)
+   ------------------------------------------------------------------------- */
+
+.mappingCount {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin: 12px 0 6px;
+}
+
+.mappingList {
+    display: flex;
+    flex-direction: column;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.mappingRow {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+    padding: 3px 4px;
+    border-radius: var(--radius-sm);
+}
+
+.mappingRow:nth-child(even) {
+    background: var(--bg-secondary);
+}
+
+.mappingCell {
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    color: var(--text-primary);
+}
+
+.mappingAlias {
+    text-align: right;
+    color: var(--text-secondary);
+}
+
+.mappingArrow {
+    color: var(--text-muted);
+}
+
+.mappingEmpty {
+    padding: 16px 4px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
 /* Divider between options and export actions */
 .divider {
     border: none;

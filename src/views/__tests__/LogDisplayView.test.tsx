@@ -1858,6 +1858,40 @@ describe('LogDisplayView anonymize button', () => {
     await user.click(screen.getByRole('button', { name: /unanonymise logs/i }));
     expect(screen.getByRole('dialog', { name: /unanonymise logs/i })).toBeInTheDocument();
   });
+
+  const sampleDict = {
+    forward: { '@alice:matrix.org': '@user-aaaaaaaaaaaa:domain-11111111.org' },
+    reverse: { '@user-aaaaaaaaaaaa:domain-11111111.org': '@alice:matrix.org' },
+  };
+
+  it('does not render the mapping button when not anonymized', () => {
+    useLogStore.setState({ rawLogLines: [createParsedLogLine({ lineNumber: 1 })], isAnonymized: false });
+    render(<LogDisplayView showAnonymizeButton />);
+    expect(screen.queryByRole('button', { name: /view anonymisation mapping/i })).not.toBeInTheDocument();
+  });
+
+  it('does not render the mapping button when anonymized but no dictionary (file-loaded)', () => {
+    useLogStore.setState({
+      rawLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      isAnonymized: true,
+      anonymizationDictionary: null,
+    });
+    render(<LogDisplayView showAnonymizeButton />);
+    expect(screen.queryByRole('button', { name: /view anonymisation mapping/i })).not.toBeInTheDocument();
+  });
+
+  it('renders the mapping button and opens the dialog when anonymized with a dictionary', () => {
+    useLogStore.setState({
+      rawLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      isAnonymized: true,
+      originalLogLines: [createParsedLogLine({ lineNumber: 1 })],
+      anonymizationDictionary: sampleDict,
+    });
+    render(<LogDisplayView showAnonymizeButton />);
+    fireEvent.click(screen.getByRole('button', { name: /view anonymisation mapping/i }));
+    expect(screen.getByRole('dialog', { name: /anonymisation mapping/i })).toBeInTheDocument();
+    expect(screen.getByText('@alice:matrix.org')).toBeInTheDocument();
+  });
 });
 
 describe('LogDisplayView process colours (merged multi-process logs)', () => {
