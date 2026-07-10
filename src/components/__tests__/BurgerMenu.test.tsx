@@ -559,6 +559,39 @@ describe('BurgerMenu', () => {
       }
     });
 
+    it('still saves the listing when one file fetch rejects', async () => {
+      vi.mocked(fetchExtensionFileBytes).mockImplementation(async (_url, name) => {
+        if (name === 'bad.log') throw new Error('sendMessage rejected');
+        return new TextEncoder().encode(`@alice:matrix.org ${name}`);
+      });
+      const origCreate = URL.createObjectURL;
+      const origRevoke = URL.revokeObjectURL;
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+      URL.revokeObjectURL = vi.fn();
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      try {
+        useListingStore.getState().loadListing('https://host/api/listing/s', [
+          { name: 'good.log', url: 'https://host/good.log' },
+          { name: 'bad.log', url: 'https://host/bad.log' },
+        ]);
+        render(
+          <MemoryRouter initialEntries={['/listing']}>
+            <BurgerMenu />
+          </MemoryRouter>
+        );
+        fireEvent.click(screen.getByRole('button', { name: /menu/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+        fireEvent.click(screen.getByText(/save anonymised/i));
+
+        await vi.waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+        expect(screen.queryByText('Save failed')).not.toBeInTheDocument();
+      } finally {
+        clickSpy.mockRestore();
+        URL.createObjectURL = origCreate;
+        URL.revokeObjectURL = origRevoke;
+      }
+    });
+
     it('shows a "Save failed" message when the export throws', async () => {
       vi.mocked(fetchExtensionFileBytes).mockResolvedValue(null);
       useListingStore.getState().loadListing('https://host/api/listing/s', [

@@ -53,7 +53,11 @@ export function AnonMappingDialog({ dict, buildPreview, onClose }: AnonMappingDi
   useEffect(() => {
     if (!isPreview) return;
     let cancelled = false;
+    // Reset per-run so a re-build (salt/logs change) never shows a stale error or
+    // stale rows from a previous attempt.
     setBuilding(true);
+    setBuildError(false);
+    setPreview(null);
     const report = (phase: string, current: number, total: number) => {
       if (!cancelled) setProgress({ phase, current, total });
     };

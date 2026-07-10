@@ -8,7 +8,20 @@ import { persist } from 'zustand/middleware';
  * string into the other install's salt dialog.
  */
 export function generateAnonSalt(): string {
-  return crypto.randomUUID();
+  // crypto.randomUUID is secure-context-only and can be missing/throw in
+  // restricted environments; fall back to getRandomValues, then Math.random,
+  // so store init never crashes.
+  try {
+    return crypto.randomUUID();
+  } catch {
+    try {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      return `salt-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+    }
+  }
 }
 
 interface AnonSaltStore {

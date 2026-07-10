@@ -97,7 +97,12 @@ export function BurgerMenu() {
     onProgress('Fetching files', 0, total);
     const fetched = await Promise.all(
       listingEntries.map(async (e) => {
-        const data = await fetchExtensionFileBytes(e.url, e.name);
+        let data: Uint8Array | null = null;
+        try {
+          data = await fetchExtensionFileBytes(e.url, e.name);
+        } catch {
+          data = null; // one bad entry (rejected fetch / bad base64) must not abort the export
+        }
         done += 1;
         onProgress('Fetching files', done, total);
         return data ? { name: e.name, data } : null;

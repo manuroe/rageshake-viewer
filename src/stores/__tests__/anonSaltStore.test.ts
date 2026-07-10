@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { useAnonSaltStore, generateAnonSalt } from '../anonSaltStore';
 
 describe('anonSaltStore', () => {
@@ -21,5 +21,31 @@ describe('anonSaltStore', () => {
 
   it('generateAnonSalt returns distinct values', () => {
     expect(generateAnonSalt()).not.toBe(generateAnonSalt());
+  });
+
+  describe('generateAnonSalt fallbacks', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('falls back to getRandomValues when randomUUID throws (insecure context)', () => {
+      vi.spyOn(crypto, 'randomUUID').mockImplementation(() => {
+        throw new Error('randomUUID unavailable');
+      });
+      const salt = generateAnonSalt();
+      expect(salt).not.toBe('');
+      expect(generateAnonSalt()).not.toBe(salt);
+    });
+
+    it('falls back to Math.random when both crypto sources throw', () => {
+      vi.spyOn(crypto, 'randomUUID').mockImplementation(() => {
+        throw new Error('no randomUUID');
+      });
+      vi.spyOn(crypto, 'getRandomValues').mockImplementation(() => {
+        throw new Error('no getRandomValues');
+      });
+      const salt = generateAnonSalt();
+      expect(salt).toMatch(/^salt-/);
+    });
   });
 });
