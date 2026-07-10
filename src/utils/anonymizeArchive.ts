@@ -1,7 +1,7 @@
 import { decompressSync, gzipSync, strToU8 } from 'fflate';
 import type { AnonymizationDictionary } from '../types/log.types';
 import { buildAnonymizationDictionaryFromTexts, buildCompiledAnonymizer } from './anonymizeUtils';
-import { decodeTextBytes, isValidGzipHeader } from './fileValidator';
+import { decodeTextBytes, isValidGzipHeader, isValidTextContent } from './fileValidator';
 import { buildTar, type TarFile } from './tarWriter';
 
 /**
@@ -43,6 +43,10 @@ function decodeEntryText(entry: { name: string; data: Uint8Array }): string | nu
     const isGz = entry.name.toLowerCase().endsWith('.gz');
     if (isGz && !isValidGzipHeader(entry.data)) return null;
     const bytes = isGz ? decompressSync(entry.data) : entry.data;
+    // Guard the lenient decode: binary payloads (null bytes / undecodable) would
+    // otherwise decode to a lossy string and be re-encoded, corrupting the file.
+    // This matters most for extensionless and gzipped-binary members.
+    if (!isValidTextContent(bytes).isValid) return null;
     return decodeTextBytes(bytes);
   } catch {
     return null;

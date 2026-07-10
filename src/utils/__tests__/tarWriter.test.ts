@@ -31,6 +31,12 @@ describe('buildTar', () => {
     expect(entry.name).toBe(name);
   });
 
+  it('round-trips latin1 (non-ASCII) names through parseTar', () => {
+    const name = 'café-log.txt';
+    const [entry] = parseTar(buildTar([{ name, data: enc.encode('x') }]));
+    expect(entry.name).toBe(name);
+  });
+
   it('writes a self-consistent ustar checksum', () => {
     const header = buildTar([{ name: 'a.log', data: enc.encode('hello') }]).subarray(0, 512);
     const stored = parseInt(dec.decode(header.subarray(148, 154)).trim(), 8);

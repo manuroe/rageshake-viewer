@@ -60,6 +60,18 @@ describe('buildAnonymisedArchiveGz', () => {
     expect(Array.from(byName['weird.gz'].data)).toEqual(Array.from(notGz));
   });
 
+  it('passes an extensionless binary member through unchanged (no text corruption)', async () => {
+    const binary = new Uint8Array([0, 1, 2, 0, 255, 100]); // null bytes → binary
+    const entries = [
+      { name: 'a.log', data: strToU8('@alice:matrix.org') },
+      { name: 'coredump', data: binary }, // extensionless, would otherwise decode as text
+    ];
+    const tar = parseTar(decompressSync(await buildAnonymisedArchiveGz(entries, SALT)));
+    const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
+    expect(strFromU8(byName['a.log'].data)).not.toContain('@alice:matrix.org');
+    expect(Array.from(byName['coredump'].data)).toEqual(Array.from(binary));
+  });
+
   it('reports progress reaching the total', async () => {
     const entries = [
       { name: 'a.log', data: strToU8('@alice:matrix.org') },

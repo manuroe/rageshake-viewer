@@ -5,22 +5,23 @@
  * 512-byte blocks, and two trailing zero blocks. Names longer than 100 chars are
  * split into the ustar `prefix` (155) + `name` (100) fields at a '/' boundary.
  *
- * ponytail: ascii/latin1 filenames only (rageshake members are), and no support
- * for GNU long names — a path with no usable '/' split under 100/155 throws.
- * Enough to round-trip through `parseTar`.
+ * ponytail: names are written as latin1 (one byte per char) to match parseTar's
+ * `TextDecoder('latin1')` reader, so any code point 0x00–0xFF round-trips exactly;
+ * code points above 0xFF are truncated (rageshake members are ASCII). No GNU long
+ * name support — a path with no usable '/' split under 100/155 throws.
  */
 
 const BLOCK_SIZE = 512;
-const encoder = new TextEncoder();
 
 export interface TarFile {
   readonly name: string;
   readonly data: Uint8Array;
 }
 
+/** Write `str` as latin1 bytes (one byte per char) — matches parseTar's reader. */
 function writeStr(block: Uint8Array, offset: number, maxLen: number, str: string): void {
-  const bytes = encoder.encode(str);
-  block.set(bytes.subarray(0, Math.min(bytes.length, maxLen)), offset);
+  const n = Math.min(str.length, maxLen);
+  for (let i = 0; i < n; i++) block[offset + i] = str.charCodeAt(i) & 0xff;
 }
 
 /** Write a null-terminated octal number into a fixed-width field. */
@@ -31,11 +32,12 @@ function writeOctal(block: Uint8Array, offset: number, len: number, value: numbe
 
 /** Split a path into ustar { name<=100, prefix<=155 } fields. */
 function splitName(path: string): { name: string; prefix: string } {
-  if (encoder.encode(path).length <= 100) return { name: path, prefix: '' };
+  // latin1: one byte per char, so byte length === string length.
+  if (path.length <= 100) return { name: path, prefix: '' };
   for (let idx = path.indexOf('/'); idx !== -1; idx = path.indexOf('/', idx + 1)) {
     const prefix = path.slice(0, idx);
     const name = path.slice(idx + 1);
-    if (encoder.encode(prefix).length <= 155 && encoder.encode(name).length <= 100) {
+    if (prefix.length <= 155 && name.length <= 100) {
       return { name, prefix };
     }
   }

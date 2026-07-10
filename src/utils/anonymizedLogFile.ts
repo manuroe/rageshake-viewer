@@ -27,8 +27,8 @@ export function buildAnonymizedFileText(lines: readonly ParsedLogLine[]): string
  * before the extension, e.g. `console.log` → `console-anonym.log`.
  *
  * A trailing `.gz` is dropped first (the in-memory content is already
- * decompressed plain text). Falls back to `logs-anonym.log` when there is no
- * usable name (null, or a synthetic "N files" summary with no extension).
+ * decompressed plain text). A name with no extension becomes `<name>-anonym.log`;
+ * only a null/empty name falls back to `logs-anonym.log`.
  */
 export function deriveAnonymizedFilename(logFileName: string | null): string {
   const raw = (logFileName ?? '').trim() || 'logs.log';
