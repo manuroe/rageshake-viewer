@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { gzipSync, strToU8 } from 'fflate';
 import { buildTar } from '../src/utils/tarWriter';
-import { ingest, cmdPrecheck, cmdSummary, cmdGrep, cmdSlice, cmdOverview, cmdHttp, run } from './rageshake';
+import { ingest, cmdPrecheck, cmdSummary, cmdGrep, cmdSlice, cmdOverview, cmdHttp, cmdCycles, resolveRange, run } from './rageshake';
+import type { LogParserResult } from '../src/types/log.types';
 
 const RAW_LOG = [
   '2026-01-15T10:00:00.000000Z  INFO [matrix-rust-sdk] Sentry configured (enabled: true)',
@@ -14,6 +15,24 @@ const ANON_LOG = [
   '2026-01-15T10:00:00.000000Z  INFO [matrix-rust-sdk] Sentry configured (enabled: true)',
   '2026-01-15T10:00:01.000000Z ERROR [matrix-rust-sdk] Failed to send to @user-0123456789ab:domain-01234567.org in !room-0123456789ab:domain-01234567.org',
   '2026-01-15T10:00:02.000000Z  WARN [matrix-rust-sdk] retry scheduled',
+].join('\n');
+
+const HTTP_LOG = [
+  '# [rageshake-viewer-anonymized]',
+  '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0"}',
+  '2026-01-15T10:00:00.500000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0" status=200 response_size="100" request_duration=500ms}',
+  '2026-01-15T10:00:01.000000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10"}',
+  '2026-01-15T10:00:01.500000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10" status=500 response_size="20" request_duration=500ms}',
+].join('\n');
+
+// iOS lifecycle markers: cold start + two foreground/background cycles (5 events).
+const CYCLE_LOG = [
+  '# [rageshake-viewer-anonymized]',
+  '2026-01-15T10:00:00.000000Z INFO [MXLog] Sentry configured (enabled: true)',
+  '2026-01-15T10:00:01.000000Z INFO [MXLog] Application did become active',
+  '2026-01-15T10:00:02.000000Z INFO [MXLog] Application will resign active',
+  '2026-01-15T10:00:03.000000Z INFO [MXLog] Application did become active',
+  '2026-01-15T10:00:04.000000Z INFO [MXLog] Application will resign active',
 ].join('\n');
 
 const DETAILS = JSON.stringify({
@@ -116,17 +135,47 @@ describe('rageshake CLI', () => {
   });
 
   it('http --errors selects failed requests by numeric status', () => {
-    const httpLog = [
-      '# [rageshake-viewer-anonymized]',
-      '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0"}',
-      '2026-01-15T10:00:00.500000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0" status=200 response_size="100" request_duration=500ms}',
-      '2026-01-15T10:00:01.000000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10"}',
-      '2026-01-15T10:00:01.500000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10" status=500 response_size="20" request_duration=500ms}',
-    ].join('\n');
-    const out = cmdHttp(ingest(buildArchive(httpLog), 'anon.tar.gz'), { errors: true });
+    const out = cmdHttp(ingest(buildArchive(HTTP_LOG), 'anon.tar.gz'), { errors: true });
     expect(out).toContain('# 1 requests (failures only)');
     expect(out).toContain('/upload');
     expect(out).not.toContain('/sync');
+  });
+
+  it('rejects a time window when the log has no parseable timestamps', () => {
+    const merged = {
+      rawLogLines: [], httpRequests: [], requests: [], connectionIds: [], sentryEvents: [], lifecycleEvents: [],
+    } as unknown as LogParserResult;
+    expect(() => resolveRange(merged, { last: '10m' }, () => {})).toThrow(/no parseable timestamps/);
+  });
+
+  it('warns that --since is ignored (not "full range") when the anchor is missing', () => {
+    // ANON_LOG has a cold start but no background event.
+    const out = cmdSlice(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), { since: 'last-background' });
+    expect(out).toContain('ignoring --since');
+    expect(out).not.toContain('showing the full range');
+  });
+
+  it('http distinguishes no requests from an offset past the end', () => {
+    const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz'); // ANON_LOG has no HTTP requests
+    expect(cmdHttp(ing, {})).toContain('# 0 requests');
+    const demo = ingest(buildArchive(HTTP_LOG), 'anon.tar.gz');
+    expect(cmdHttp(demo, { offset: '99' })).toContain('past the end');
+  });
+
+  it('cmdCycles pages events with --offset', () => {
+    // 5 events on lines 1–5 (cold start line 1 … last resign-active line 5).
+    // Assert on the unique [line N] tag, not timestamps — the range header
+    // always prints the full min→max span, which would match either endpoint.
+    const ing = ingest(buildArchive(CYCLE_LOG), 'anon.tar.gz');
+    const recent = cmdCycles(ing, { limit: '2' });
+    expect(recent).toContain('[line 5]');
+    expect(recent).not.toContain('[line 1]'); // cold start is off the recent page
+    // Page one step back: older events appear, newest drop off.
+    const older = cmdCycles(ing, { limit: '2', offset: '2' });
+    expect(older).toContain('[line 2]');
+    expect(older).not.toContain('[line 5]');
+    // Offset beyond the end is reported, not silently blank.
+    expect(cmdCycles(ing, { limit: '2', offset: '99' })).toContain('past the end');
   });
 
   it('run returns usage on missing args', () => {

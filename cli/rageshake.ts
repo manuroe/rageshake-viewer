@@ -163,6 +163,12 @@ function parseIsoFlag(iso: string, flag: string): number {
 /** Resolve --from/--to/--since/--last into a µs range; null = whole log. */
 export function resolveRange(merged: LogParserResult, flags: Flags, warn: (msg: string) => void): Range | null {
   const { min, max } = getMinMaxTimestamps(merged.rawLogLines);
+  // A log with no parseable timestamps yields {min:0,max:0}; every time flag
+  // resolves against that and produces a meaningless [0,0] window, so reject
+  // them up front rather than silently filtering everything out.
+  if ((flags.from || flags.to || flags.since || flags.last) && max === 0) {
+    throw new Error('cannot apply a time window: the log has no parseable timestamps');
+  }
   let startUs: number | null = null;
   let endUs: number | null = null;
 
@@ -178,7 +184,7 @@ export function resolveRange(merged: LogParserResult, flags: Flags, warn: (msg: 
       for (const e of events) if (e.kind === 'background' && (anchor === null || e.timestampUs > anchor)) anchor = e.timestampUs;
     } else throw new Error(`unknown --since anchor "${flags.since}" (use last-cold-start | last-foreground | last-background)`);
     if (anchor === null) {
-      warn(`# warning: no "${flags.since}" event found — showing the full range; run "cycles" to see what exists`);
+      warn(`# warning: no "${flags.since}" event found — ignoring --since; run "cycles" to see what exists`);
     } else {
       startUs = Math.max(startUs ?? 0, anchor);
     }
@@ -204,6 +210,18 @@ function intFlag(v: string | undefined, def: number): number {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 0) throw new Error(`invalid numeric flag value "${v}"`);
   return n;
+}
+
+/**
+ * Page a list from the end: --offset 0 shows the last `limit` items, higher
+ * offsets step further back. Returns the page and how many older items precede
+ * it. Used by `cycles`, where the newest activity is what matters first.
+ */
+function tailPage<T>(items: readonly T[], limit: number, offset: number): { page: readonly T[]; older: number } {
+  const end = items.length - offset;
+  if (end <= 0) return { page: [], older: items.length };
+  const start = Math.max(0, end - limit);
+  return { page: items.slice(start, end), older: start };
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +617,9 @@ export function cmdHttp(ing: Ingest, flags: Flags): string {
   }
   const remaining = reqs.length - offset - page.length;
   if (remaining > 0) out.push(`# ${remaining} more — next: --offset ${offset + page.length}`);
+  if (page.length === 0 && reqs.length > 0) {
+    out.push(`# --offset ${offset} is past the end (${reqs.length} requests) — lower --offset`);
+  }
   return out.join('\n');
 }
 
@@ -614,20 +635,34 @@ export function cmdCycles(ing: Ingest, flags: Flags): string {
   const events = range ? all.filter((e) => e.timestampUs >= range.startUs && e.timestampUs <= range.endUs) : all;
 
   const limit = intFlag(flags.limit, 100);
-  // Most recent events matter most: show the tail by default.
-  const tail = events.slice(-limit);
-  if (tail.length < events.length) out.push(`# showing last ${tail.length} of ${events.length} events — use --limit to widen`);
-  for (const e of tail) {
-    out.push(`${microsToISO(e.timestampUs)} ${e.kind} (${e.platform}) [line ${e.lineNumber}]`);
+  const offset = intFlag(flags.offset, 0);
+  // Most recent activity matters most, so page backwards from the end.
+  const { page: eventsPage, older: olderEvents } = tailPage(events, limit, offset);
+  if (events.length === 0) {
+    out.push('# no lifecycle events detected');
+  } else if (eventsPage.length === 0) {
+    out.push(`# --offset ${offset} is past the end (${events.length} events) — lower --offset`);
+  } else {
+    if (olderEvents > 0) out.push(`# ${olderEvents} earlier events — next: --offset ${offset + eventsPage.length}`);
+    for (const e of eventsPage) {
+      out.push(`${microsToISO(e.timestampUs)} ${e.kind} (${e.platform}) [line ${e.lineNumber}]`);
+    }
   }
-  if (events.length === 0) out.push('# no lifecycle events detected');
 
   const { min, max } = getMinMaxTimestamps(ing.merged.rawLogLines);
   if (min > 0) {
     const segments = deriveAppStateSegments(all, range?.startUs ?? min, range?.endUs ?? max);
     out.push('# app-state segments:');
-    for (const s of segments.slice(-limit)) {
-      out.push(`  ${s.state} ${microsToISO(s.startUs as TimestampMicros)} → ${microsToISO(s.endUs as TimestampMicros)} (${formatDuration((s.endUs - s.startUs) / 1000)})`);
+    const { page: segPage, older: olderSegs } = tailPage(segments, limit, offset);
+    if (segments.length === 0) {
+      out.push('  # none');
+    } else if (segPage.length === 0) {
+      out.push(`  # --offset ${offset} is past the end (${segments.length} segments) — lower --offset`);
+    } else {
+      if (olderSegs > 0) out.push(`  # ${olderSegs} earlier segments — next: --offset ${offset + segPage.length}`);
+      for (const s of segPage) {
+        out.push(`  ${s.state} ${microsToISO(s.startUs as TimestampMicros)} → ${microsToISO(s.endUs as TimestampMicros)} (${formatDuration((s.endUs - s.startUs) / 1000)})`);
+      }
     }
   }
   const coldStart = lastColdStartUs(all);
