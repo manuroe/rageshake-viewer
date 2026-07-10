@@ -202,8 +202,9 @@ describe('LogOverviewView', () => {
     expect(url).toContain('end=');
   });
 
-  it('resizes the drilldown panel by dragging the divider', () => {
+  it('resizes the drilldown panel by dragging the divider and restores user-select', () => {
     useLogStore.setState({ rawLogLines: seedLines() });
+    document.body.style.userSelect = 'text'; // pre-existing value to preserve
     const { container } = render(<LogOverviewView />);
     expandAll(container);
     act(() => { fireEvent.click(container.querySelector('button[class*="occurrence"]') as HTMLElement); });
@@ -213,10 +214,30 @@ describe('LogOverviewView', () => {
 
     const resizer = container.querySelector('[class*="resizer"]') as HTMLElement;
     act(() => { fireEvent.mouseDown(resizer, { clientY: 500 }); });
-    act(() => { fireEvent.mouseMove(document, { clientY: 300 }); }); // drag up 200px → taller
-    act(() => { fireEvent.mouseUp(document); });
+    expect(document.body.style.userSelect).toBe('none'); // disabled during drag
+    act(() => { fireEvent.mouseMove(window, { clientY: 300 }); }); // drag up 200px → taller
+    act(() => { fireEvent.mouseUp(window); });
 
     expect(panel.style.height).toBe('550px');
+    expect(document.body.style.userSelect).toBe('text'); // prior value restored, not ''
+    document.body.style.userSelect = '';
+  });
+
+  it('resizes the drilldown panel with the keyboard on the separator', () => {
+    useLogStore.setState({ rawLogLines: seedLines() });
+    const { container } = render(<LogOverviewView />);
+    expandAll(container);
+    act(() => { fireEvent.click(container.querySelector('button[class*="occurrence"]') as HTMLElement); });
+
+    const resizer = container.querySelector('[class*="resizer"]') as HTMLElement;
+    expect(resizer).toHaveAttribute('aria-valuenow', '350');
+    expect(resizer).toHaveAttribute('tabindex', '0');
+    const panel = container.querySelector('[class*="bottomPanel"]') as HTMLElement;
+
+    act(() => { fireEvent.keyDown(resizer, { key: 'ArrowUp' }); }); // +PANEL_RESIZE_STEP (24)
+    expect(panel.style.height).toBe('374px');
+    act(() => { fireEvent.keyDown(resizer, { key: 'ArrowDown' }); });
+    expect(panel.style.height).toBe('350px');
   });
 
   it('renders without crashing when there are no logs', () => {

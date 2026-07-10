@@ -16,10 +16,14 @@ export function LogsView() {
   const filterPrefill = logFilter ?? '';
 
   // Optional `line` param: highlight and scroll to a specific line, e.g. when
-  // arriving from the overview drilldown's "Open in Logs view" button.
+  // arriving from the overview drilldown's "Open in Logs view" button. Accept
+  // only a strictly positive integer — reject '', '12abc', '0', '-1', '1.5'
+  // (parseInt would silently accept partial/zero/negative values).
   const lineParam = searchParams.get('line');
-  const parsedLine = lineParam !== null ? parseInt(lineParam, 10) : NaN;
-  const highlightLineNumber = Number.isNaN(parsedLine) ? undefined : parsedLine;
+  const highlightLineNumber =
+    lineParam !== null && /^\d+$/.test(lineParam) && Number(lineParam) > 0
+      ? Number(lineParam)
+      : undefined;
 
   // Callback to update URL when filter changes
   const handleFilterChange = useCallback((filter: string) => {

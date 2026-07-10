@@ -123,15 +123,18 @@ describe('LogsView', () => {
     expect(container.querySelector(`.${logDisplayStyles.highlightLine}`)).toBeInTheDocument();
   });
 
-  it('does not highlight any line for a non-numeric ?line= param', () => {
-    const logs = createParsedLogLines(10);
-    useLogStore.setState({ rawLogLines: logs });
-    routerState.searchParams = new URLSearchParams('line=abc');
+  it.each(['abc', '5abc', '0', '-1', '1.5', ''])(
+    'does not highlight for an invalid ?line= param (%s)',
+    (value) => {
+      const logs = createParsedLogLines(10);
+      useLogStore.setState({ rawLogLines: logs });
+      routerState.searchParams = new URLSearchParams(`line=${value}`);
 
-    const { container } = render(<LogsView />);
+      const { container } = render(<LogsView />);
 
-    expect(container.querySelector(`.${logDisplayStyles.highlightLine}`)).not.toBeInTheDocument();
-  });
+      expect(container.querySelector(`.${logDisplayStyles.highlightLine}`)).not.toBeInTheDocument();
+    }
+  );
 
   it('handles empty logs gracefully', () => {
     useLogStore.setState({ rawLogLines: [] });

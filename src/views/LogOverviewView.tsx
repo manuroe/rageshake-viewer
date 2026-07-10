@@ -18,10 +18,21 @@ const TOGGLEABLE_LEVELS: LogLevel[] = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'
 // Raw lines shown around a drilled-into occurrence.
 const DRILLDOWN_CONTEXT = 30;
 
-// Drilldown panel sizing (px): initial height and drag clamps.
+// Drilldown panel sizing (px): initial height, drag clamps, keyboard step.
 const DEFAULT_PANEL_HEIGHT = 350;
 const MIN_PANEL_HEIGHT = 120;
 const MIN_TREE_HEIGHT = 160;
+const PANEL_RESIZE_STEP = 24;
+
+/** Max drilldown-panel height that still leaves MIN_TREE_HEIGHT for the tree. */
+function maxPanelHeight(): number {
+  return window.innerHeight - MIN_TREE_HEIGHT;
+}
+
+/** Clamp a proposed panel height to the draggable/resizable range. */
+function clampPanelHeight(height: number): number {
+  return Math.max(MIN_PANEL_HEIGHT, Math.min(maxPanelHeight(), height));
+}
 
 function levelClass(level: LogLevel): string {
   const map: Partial<Record<LogLevel, string>> = {
@@ -123,20 +134,34 @@ export function LogOverviewView() {
     e.preventDefault();
     const startY = e.clientY;
     const startHeight = panelHeight;
+    const prevUserSelect = document.body.style.userSelect;
     const onMove = (ev: MouseEvent) => {
-      const delta = startY - ev.clientY; // drag up → taller panel
-      const max = window.innerHeight - MIN_TREE_HEIGHT;
-      setPanelHeight(Math.max(MIN_PANEL_HEIGHT, Math.min(max, startHeight + delta)));
+      setPanelHeight(clampPanelHeight(startHeight + (startY - ev.clientY))); // drag up → taller
     };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.userSelect = '';
+    // Listen on window and also stop on blur, so a mouseup outside the page
+    // (or the window losing focus mid-drag) still tears the drag down.
+    const stop = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('blur', stop);
+      document.body.style.userSelect = prevUserSelect; // restore prior value, not ''
     };
     document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('blur', stop);
   }, [panelHeight]);
+
+  // Keyboard resize for the separator (Arrow Up/Down grow/shrink the panel).
+  const onResizeKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setPanelHeight((h) => clampPanelHeight(h + PANEL_RESIZE_STEP));
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setPanelHeight((h) => clampPanelHeight(h - PANEL_RESIZE_STEP));
+    }
+  }, []);
 
   const openInLogsView = useCallback((line: ParsedLogLine) => {
     const params = new URLSearchParams();
@@ -236,9 +261,14 @@ export function LogOverviewView() {
             <div
               className={styles.resizer}
               onMouseDown={startResize}
+              onKeyDown={onResizeKeyDown}
               role="separator"
               aria-orientation="horizontal"
               aria-label="Resize log panel"
+              aria-valuenow={Math.round(panelHeight)}
+              aria-valuemin={MIN_PANEL_HEIGHT}
+              aria-valuemax={Math.round(maxPanelHeight())}
+              tabIndex={0}
             />
             <div className={styles.bottomPanel} style={{ height: panelHeight }}>
               <LogDisplayView

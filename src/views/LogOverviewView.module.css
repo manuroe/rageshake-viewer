@@ -56,8 +56,10 @@
   transition: background-color var(--transition-fast);
 }
 
-.resizer:hover {
+.resizer:hover,
+.resizer:focus-visible {
   background: var(--color-primary);
+  outline: none;
 }
 
 /* Drilldown log viewer docked at the bottom, like /http_requests' expanded
