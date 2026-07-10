@@ -12,6 +12,7 @@ import { SummaryView } from './views/SummaryView';
 import { SyncView } from './views/SyncView';
 import { HttpRequestsView } from './views/HttpRequestsView';
 import { LogsView } from './views/LogsView';
+import { LogOverviewView } from './views/LogOverviewView';
 import { ArchiveView } from './views/ArchiveView';
 import { ListingView, LISTING_URL_PARAM } from './views/ListingView';
 import { useLogStore } from './stores/logStore';
@@ -114,6 +115,7 @@ function AppContent() {
         <Route path="/listing" element={<ListingView />} />
         <Route path="/summary" element={<SummaryView />} />
         <Route path="/logs" element={<LogsView />} />
+        <Route path="/triaged" element={<LogOverviewView />} />
         <Route path="/http_requests" element={<HttpRequestsView />} />
         <Route path="/http_requests/sync" element={<SyncView />} />
       </Routes>

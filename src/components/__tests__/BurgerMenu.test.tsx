@@ -60,8 +60,8 @@ describe('BurgerMenu', () => {
       // Open menu
       fireEvent.click(screen.getByRole('button', { name: /menu/i }));
 
-      // Click on "All Logs"
-      fireEvent.click(screen.getByText('All Logs'));
+      // Click on "Logs"
+      fireEvent.click(screen.getByText('Logs'));
 
       expect(navigateMock).toHaveBeenCalledWith(
         '/logs?start=2025-01-01T00%3A00%3A00Z&end=2025-01-01T12%3A00%3A00Z'
@@ -107,8 +107,8 @@ describe('BurgerMenu', () => {
       // Open menu
       fireEvent.click(screen.getByRole('button', { name: /menu/i }));
 
-      // Click on "All Logs"
-      fireEvent.click(screen.getByText('All Logs'));
+      // Click on "Logs"
+      fireEvent.click(screen.getByText('Logs'));
 
       // Should navigate to plain path without query string
       expect(navigateMock).toHaveBeenCalledWith('/logs');
