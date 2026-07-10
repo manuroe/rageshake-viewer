@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { AnonMappingDialog } from '../AnonMappingDialog';
+import { KeyboardShortcutContext } from '../KeyboardShortcutContext';
+import type { KeyboardShortcutContextValue } from '../KeyboardShortcutContext';
 import { useLogStore } from '../../stores/logStore';
 import { createParsedLogLine } from '../../test/fixtures';
 import type { AnonymizationDictionary } from '../../types/log.types';
@@ -160,5 +162,41 @@ describe('AnonMappingDialog', () => {
     expect(document.activeElement).toBe(input);
     fireEvent.keyDown(panel, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(input);
+  });
+
+  it('registers dismiss and defers Escape to the central shortcut handler when present', () => {
+    const registerDismiss = vi.fn(() => vi.fn());
+    const onClose = vi.fn();
+    const ctx: KeyboardShortcutContextValue = {
+      showHelp: false,
+      toggleHelp: vi.fn(),
+      pendingChord: null,
+      registerFocusSearch: vi.fn(() => vi.fn()),
+      registerFocusFilter: vi.fn(() => vi.fn()),
+      registerDismiss,
+    };
+    render(
+      <KeyboardShortcutContext.Provider value={ctx}>
+        <AnonMappingDialog dict={dict} onClose={onClose} />
+      </KeyboardShortcutContext.Provider>,
+    );
+    expect(registerDismiss).toHaveBeenCalledWith(onClose);
+    // Escape is owned by the central handler, so the local fallback must not close.
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('ignores a preview build that resolves after the dialog unmounts', async () => {
+    let resolveBuild!: (d: AnonymizationDictionary) => void;
+    const buildPreview = () => new Promise<AnonymizationDictionary>((r) => { resolveBuild = r; });
+    const { unmount } = render(
+      <AnonMappingDialog dict={null} buildPreview={buildPreview} onClose={vi.fn()} />,
+    );
+    unmount();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Resolving after unmount must hit the cancelled guards without throwing.
+    resolveBuild({ forward: {}, reverse: {} });
+    await Promise.resolve();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

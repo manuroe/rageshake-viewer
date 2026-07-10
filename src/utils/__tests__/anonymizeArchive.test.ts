@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { decompressSync, gzipSync, strToU8, strFromU8 } from 'fflate';
 import { parseTar } from '../tarParser';
 import { buildAnonymisedArchiveGz, buildArchiveDictionary, deriveAnonymizedArchiveName } from '../anonymizeArchive';
@@ -83,6 +83,24 @@ describe('buildAnonymisedArchiveGz', () => {
     const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
     expect(strFromU8(byName['a.log'].data)).not.toContain('@alice:matrix.org');
     expect(Array.from(byName['broken.log.gz'].data)).toEqual(Array.from(corruptGz));
+  });
+
+  it('yields to the event loop when the frame budget is exceeded', async () => {
+    // Force each maybeYield() over the ~50ms budget so the await/yield path runs.
+    let t = 0;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => (t += 100));
+    try {
+      const dict = await buildArchiveDictionary(
+        [
+          { name: 'a.log', data: strToU8('@alice:matrix.org') },
+          { name: 'b.log', data: strToU8('@bob:matrix.org') },
+        ],
+        SALT,
+      );
+      expect(dict.forward['@alice:matrix.org']).toMatch(/^@user-[0-9a-f]{12}:/);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it('reports progress reaching the total', async () => {
