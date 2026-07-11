@@ -43,8 +43,11 @@ const SERVER_NAME_PAT =
  *
  * Patterns are ordered longest-first (identifiers with domain before bare
  * event/room IDs) so that `$id:domain` is captured before `$id`.
+ *
+ * Exported for the CLI `precheck` command, which scans archives for raw
+ * (non-anonymized) identifiers before an analysis session starts.
  */
-const MATRIX_IDENTIFIER_RE = new RegExp(
+export const MATRIX_IDENTIFIER_RE = new RegExp(
   [
     // User ID:  @localpart:server_name
     // The Matrix spec requires lowercase localparts in modern IDs, but
