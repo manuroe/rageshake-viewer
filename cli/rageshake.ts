@@ -44,7 +44,7 @@ Commands:
 Time window (grep, slice, http, overview, spans, cycles):
   --from <ISO>                 Start timestamp, e.g. 2026-01-15T10:00:00Z
   --to <ISO>                   End timestamp
-  --since <anchor>             last-cold-start | last-foreground | last-background
+  --since <anchor|ISO>         last-cold-start | last-foreground | last-background, or an ISO timestamp
   --last <dur>                 Window ending at the last log line, e.g. 10m, 1h, 30s
 
 Filters:
@@ -53,6 +53,7 @@ Filters:
   --file <name>                Only lines from this source log file (grep, slice)
   --errors                     Only failed requests: HTTP >= 400 or transport error (http)
   --slowest <N>                N slowest requests, sorted by duration (http)
+  --top <N|all>                Per-file table: N noisiest files or "all" (summary, default 20)
 
 Pagination (all line/tree output is capped, never unbounded):
   --limit <N>                  Max lines / tree nodes (default 200 lines, 100 nodes)
@@ -165,6 +166,7 @@ interface Flags {
   depth?: string;
   errors?: boolean;
   slowest?: string;
+  top?: string;
 }
 
 const DUR_RE = /^(\d+)(s|m|h|d)$/;
@@ -208,7 +210,13 @@ export function resolveRange(merged: LogParserResult, flags: Flags, warn: (msg: 
     else if (flags.since === 'last-foreground') anchor = lastForegroundUs(events);
     else if (flags.since === 'last-background') {
       for (const e of events) if (e.kind === 'background' && (anchor === null || e.timestampUs > anchor)) anchor = e.timestampUs;
-    } else throw new Error(`unknown --since anchor "${flags.since}" (use last-cold-start | last-foreground | last-background)`);
+    } else {
+      // Accept an absolute ISO timestamp too (equivalent to --from), so an
+      // explicit time doesn't force the caller to switch flags.
+      const us = isoToMicros(flags.since as ISODateTimeString);
+      if (us !== 0) anchor = us as TimestampMicros;
+      else throw new Error(`invalid --since "${flags.since}" — use an anchor (last-cold-start | last-foreground | last-background) or an ISO timestamp like 2026-01-15T10:00:00Z`);
+    }
     if (anchor === null) {
       warn(`# warning: no "${flags.since}" event found — ignoring --since; run "cycles" to see what exists`);
     } else {
@@ -416,7 +424,7 @@ export function cmdPrecheck(ing: Ingest): { ok: boolean; report: string } {
 
 const trim = (s: string, n = 160): string => (s.length > n ? `${s.slice(0, n)}…` : s);
 
-export function cmdSummary(ing: Ingest): string {
+export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
   const { merged, details, files } = ing;
   const lineIndex = new Map(merged.rawLogLines.map((l) => [l.lineNumber, l]));
   const stats = computeSummaryStats(
@@ -438,6 +446,11 @@ export function cmdSummary(ing: Ingest): string {
     }
     return { name, lines: result.rawLogLines.length, errors, warns, http: result.httpRequests.length, sentry: result.sentryEvents.length };
   });
+  // Noisiest files first, capped by default so a 100-file archive's per-file
+  // table doesn't dominate the output; --top all restores the full list.
+  const sortedFiles = [...perFile].sort((a, b) => (b.errors + b.warns) - (a.errors + a.warns) || b.lines - a.lines);
+  const topN = flags.top === 'all' ? sortedFiles.length : intFlag(flags.top, 20);
+  const shownFiles = sortedFiles.slice(0, topN);
 
   return JSON.stringify({
     // Identity fields (user_id, device_id) are deliberately omitted: device_id
@@ -450,7 +463,8 @@ export function cmdSummary(ing: Ingest): string {
       version: details.version,
       sdkSha: details.sdkSha,
     },
-    files: perFile,
+    files: shownFiles,
+    ...(sortedFiles.length > shownFiles.length ? { filesOmitted: sortedFiles.length - shownFiles.length } : {}),
     timeSpan: stats.timeSpan,
     totals: {
       lines: stats.totalLogLines,
@@ -567,7 +581,15 @@ export function cmdSpans(ing: Ingest, flags: Flags): string {
     for (const child of children) {
       const indent = '  '.repeat(level);
       const fields = child.fields.slice(0, 2)
-        .map((f) => `${f.key}=${f.values.join('|')}${f.truncated ? '|…' : ''}`).join(' ');
+        // Bound the whole value list: sliding-sync pos= fields carry up to 5
+        // distinct tokens of hundreds of chars each and otherwise dominate output.
+        .map((f) => {
+          const joined = f.values.join('|');
+          const shown = trim(joined, 64);
+          // trim already appends '…' when it cuts; only add the distinct-values
+          // marker when the string wasn't length-trimmed, to avoid '…|…'.
+          return `${f.key}=${shown}${f.truncated && shown === joined ? '|…' : ''}`;
+        }).join(' ');
       const marks = child.errorCount || child.warnCount ? ` — ${child.errorCount} err, ${child.warnCount} warn` : '';
       body.push(`${indent}${child.name}${fields ? ` {${fields}}` : ''} (${spanTotal(child)})${marks}`);
       if (level + 1 < depth) visit(child, level + 1);
@@ -738,6 +760,7 @@ export function run(argv: string[]): { code: number; output: string } {
       depth: { type: 'string' },
       errors: { type: 'boolean' },
       slowest: { type: 'string' },
+      top: { type: 'string' },
     },
   });
   const [cmd, path, pattern] = positionals;
@@ -756,7 +779,7 @@ export function run(argv: string[]): { code: number; output: string } {
       const { ok, report } = cmdPrecheck(ing);
       return { code: ok ? 0 : 1, output: report };
     }
-    case 'summary': return { code: 0, output: cmdSummary(ing) };
+    case 'summary': return { code: 0, output: cmdSummary(ing, flags) };
     case 'overview': return { code: 0, output: cmdOverview(ing, flags) };
     case 'spans': return { code: 0, output: cmdSpans(ing, flags) };
     case 'grep': return { code: 0, output: cmdGrep(ing, pattern as string, flags) };
