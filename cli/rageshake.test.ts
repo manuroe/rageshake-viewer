@@ -97,6 +97,47 @@ describe('rageshake CLI', () => {
     expect(out).toContain('retry scheduled');
   });
 
+  it('--since accepts an absolute ISO timestamp (equivalent to --from)', () => {
+    const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
+    const out = cmdSlice(ing, { since: '2026-01-15T10:00:02Z' });
+    expect(out).toContain('retry scheduled'); // 10:00:02 WARN kept
+    expect(out).not.toContain('Sentry configured'); // 10:00:00 INFO excluded
+  });
+
+  it('--since rejects a value that is neither an anchor nor an ISO timestamp', () => {
+    const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
+    expect(() => cmdSlice(ing, { since: 'yesterday' })).toThrow(/invalid --since/);
+  });
+
+  it('summary ranks files by noise and caps the per-file table with --top', () => {
+    const noisy = ['# [rageshake-viewer-anonymized]',
+      '2026-01-15T10:00:00.000000Z ERROR [matrix-rust-sdk] boom one',
+      '2026-01-15T10:00:01.000000Z ERROR [matrix-rust-sdk] boom two'].join('\n');
+    const quiet = ['# [rageshake-viewer-anonymized]',
+      '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] all good'].join('\n');
+    const mid = ['# [rageshake-viewer-anonymized]',
+      '2026-01-15T10:00:00.000000Z WARN [matrix-rust-sdk] heads up'].join('\n');
+    const archive = gzipSync(buildTar([
+      { name: 'console.2026-01-15-08.log.gz', data: gzipSync(strToU8(quiet)) },
+      { name: 'console.2026-01-15-09.log.gz', data: gzipSync(strToU8(mid)) },
+      { name: 'console.2026-01-15-10.log.gz', data: gzipSync(strToU8(noisy)) },
+    ]));
+    const ing = ingest(archive, 'multi.tar.gz');
+    const full = JSON.parse(cmdSummary(ing, { top: 'all' }));
+    expect(full.files).toHaveLength(3);
+    expect(full.filesOmitted).toBeUndefined();
+    // Noisiest (2 errors) ranks first regardless of chronological order.
+    expect(full.files[0].name).toBe('console.2026-01-15-10.log.gz');
+    const capped = JSON.parse(cmdSummary(ing, { top: '2' }));
+    expect(capped.filesOmitted).toBe(1);
+    // The two kept must be the noisiest two, in noise order — guards against
+    // slicing before sorting (which would still pass a length-only check).
+    expect(capped.files.map((f: { name: string }) => f.name)).toEqual([
+      'console.2026-01-15-10.log.gz',
+      'console.2026-01-15-09.log.gz',
+    ]);
+  });
+
   it('grep rejects a malformed --from timestamp instead of treating it as epoch', () => {
     const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
     expect(() => cmdGrep(ing, 'retry', { from: 'not-a-date' })).toThrow(/invalid --from/);
