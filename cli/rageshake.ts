@@ -56,7 +56,7 @@ Filters:
 
 Pagination (all line/tree output is capped, never unbounded):
   --limit <N>                  Max lines / tree nodes (default 200 lines, 100 nodes)
-  --offset <N>                 Skip N output lines (footer says the next offset)
+  --offset <N>                 Skip N output entries (cycles pages back from the newest; footer shows the next offset)
   --depth <N>                  Max tree depth (overview, spans; default 3)`;
 
 // ---------------------------------------------------------------------------
@@ -102,15 +102,28 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
   const textEntries: TextEntry[] = [];
   let details: Ingest['details'] = null;
 
-  if (isTarBytes(bytes)) {
+  // Trust the archive extension first (parseTar handles non-ustar tars the magic
+  // check would miss); fall back to the ustar magic for extensionless input.
+  const nameIsTar = /\.tar$|\.tar\.gz$|\.tgz$/i.test(name);
+  if (nameIsTar || isTarBytes(bytes)) {
     for (const entry of parseTar(bytes)) {
+      // A log file or details.json that can't be read is a broken archive, not
+      // an unrelated binary member — fail loudly rather than analyse a partial
+      // view. Other members (images, etc.) are skipped silently.
+      const important = isAnalyzableEntry(entry.name) || basename(entry.name) === 'details.json';
       let data = entry.data;
       if (entry.name.toLowerCase().endsWith('.gz')) {
-        if (!isValidGzipHeader(data)) continue;
+        if (!isValidGzipHeader(data)) {
+          if (important) throw new Error(`${entry.name} is not valid gzip — cannot analyse this archive`);
+          continue;
+        }
         data = gunzipSync(data);
       }
       const text = decodeIfText(data);
-      if (text === null) continue;
+      if (text === null) {
+        if (important) throw new Error(`${entry.name} is not valid text — cannot analyse this archive`);
+        continue;
+      }
       textEntries.push({ name: entry.name, text });
       if (basename(entry.name) === 'details.json') details = parseDetailsJson(text);
     }
@@ -393,7 +406,7 @@ export function cmdPrecheck(ing: Ingest): { ok: boolean; report: string } {
     lines.push('Either the file was never anonymized or it contains no Matrix identifiers at all. Verify before analysing.');
     return { ok: false, report: lines.join('\n') };
   }
-  lines.push(`PASS: anonymized (${markerCount} marker(s), alias evidence in ${aliasCount} place(s), 0 raw identifiers).`);
+  lines.push(`PASS: anonymized (${markerCount} marker(s), ${aliasCount} alias signal(s), 0 raw identifiers).`);
   return { ok: true, report: lines.join('\n') };
 }
 
@@ -721,6 +734,12 @@ export function run(argv: string[]): { code: number; output: string } {
   if (!cmd || !path) return { code: 2, output: USAGE };
   const flags = values as Flags;
 
+  // Validate the command (and grep's pattern) before touching the filesystem, so
+  // a typo'd command surfaces the usage message rather than a parse/IO error.
+  const known = ['precheck', 'summary', 'overview', 'spans', 'grep', 'slice', 'http', 'cycles'];
+  if (!known.includes(cmd)) return { code: 2, output: `unknown command "${cmd}"\n\n${USAGE}` };
+  if (cmd === 'grep' && !pattern) return { code: 2, output: 'grep needs a pattern: rageshake grep <path> <pattern>' };
+
   const ing = loadInput(path);
   switch (cmd) {
     case 'precheck': {
@@ -730,14 +749,10 @@ export function run(argv: string[]): { code: number; output: string } {
     case 'summary': return { code: 0, output: cmdSummary(ing) };
     case 'overview': return { code: 0, output: cmdOverview(ing, flags) };
     case 'spans': return { code: 0, output: cmdSpans(ing, flags) };
-    case 'grep': {
-      if (!pattern) return { code: 2, output: 'grep needs a pattern: rageshake grep <path> <pattern>' };
-      return { code: 0, output: cmdGrep(ing, pattern, flags) };
-    }
+    case 'grep': return { code: 0, output: cmdGrep(ing, pattern as string, flags) };
     case 'slice': return { code: 0, output: cmdSlice(ing, flags) };
     case 'http': return { code: 0, output: cmdHttp(ing, flags) };
-    case 'cycles': return { code: 0, output: cmdCycles(ing, flags) };
-    default: return { code: 2, output: `unknown command "${cmd}"\n\n${USAGE}` };
+    default: return { code: 0, output: cmdCycles(ing, flags) };
   }
 }
 

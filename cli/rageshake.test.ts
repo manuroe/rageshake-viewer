@@ -55,6 +55,7 @@ describe('rageshake CLI', () => {
 
     const anon = cmdPrecheck(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'));
     expect(anon.ok).toBe(true);
+    expect(anon.report).toContain('alias signal');
   });
 
   it('precheck fails when no anonymization evidence exists', () => {
@@ -191,6 +192,32 @@ describe('rageshake CLI', () => {
     expect(older).not.toContain('[line 5]');
     // Offset beyond the end is reported, not silently blank.
     expect(cmdCycles(ing, { limit: '2', offset: '99' })).toContain('past the end');
+  });
+
+  it('validates the command before touching the filesystem', () => {
+    // Path does not exist; an unknown command / missing grep pattern must still
+    // return the usage message instead of throwing an IO error.
+    expect(run(['frobnicate', '/no/such/file']).code).toBe(2);
+    expect(run(['frobnicate', '/no/such/file']).output).toContain('unknown command');
+    expect(run(['grep', '/no/such/file']).output).toContain('grep needs a pattern');
+  });
+
+  it('fails fast when an analyzable archive member is unreadable', () => {
+    const broken = gzipSync(buildTar([
+      { name: 'details.json', data: strToU8(DETAILS) },
+      { name: 'console.2026-01-15-10.log.gz', data: strToU8('this is not gzip') },
+    ]));
+    expect(() => ingest(broken, 'anon.tar.gz')).toThrow(/not valid gzip/);
+  });
+
+  it('skips unrelated binary members without failing', () => {
+    const withImage = gzipSync(buildTar([
+      { name: 'console.2026-01-15-10.log.gz', data: gzipSync(strToU8(ANON_LOG)) },
+      { name: 'screenshot.png', data: new Uint8Array([0x89, 0x50, 0x00, 0x01]) },
+    ]));
+    const ing = ingest(withImage, 'anon.tar.gz');
+    expect(ing.files).toHaveLength(1);
+    expect(ing.textEntries.some((t) => t.name === 'screenshot.png')).toBe(false);
   });
 
   it('run returns usage on missing args', () => {
