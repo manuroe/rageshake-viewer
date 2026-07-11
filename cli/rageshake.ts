@@ -549,8 +549,18 @@ export function cmdSpans(ing: Ingest, flags: Flags): string {
   const depth = intFlag(flags.depth, 3);
   const body: string[] = [];
 
-  const spanTotal = (node: SpanNode): number =>
-    node.leaves.reduce((s, l) => s + l.occurrences.length, 0) + node.children.reduce((s, c) => s + spanTotal(c), 0);
+  // Memoized per node (like overviewTotal): spanTotal is called once per node
+  // while rendering, and each call walks the whole subtree, so without a cache
+  // the totals are O(n²) on large span trees.
+  const spanMemo = new Map<SpanNode, number>();
+  const spanTotal = (node: SpanNode): number => {
+    const cached = spanMemo.get(node);
+    if (cached !== undefined) return cached;
+    const total = node.leaves.reduce((s, l) => s + l.occurrences.length, 0)
+      + node.children.reduce((s, c) => s + spanTotal(c), 0);
+    spanMemo.set(node, total);
+    return total;
+  };
 
   const visit = (node: SpanNode, level: number): void => {
     const children = [...node.children].sort((a, b) => (b.errorCount + b.warnCount) - (a.errorCount + a.warnCount));
