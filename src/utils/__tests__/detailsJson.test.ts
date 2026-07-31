@@ -6,6 +6,7 @@ describe('parseDetailsJson', () => {
   it('extracts the fields shown by the archive-style details panel', () => {
     const details = parseDetailsJson(JSON.stringify({
       user_text: 'The app crashed',
+      report_url: 'https://github.com/element-hq/element-ios/issues/1234',
       data: {
         user_id: '@alice:matrix.org',
         device_id: 'ABC123',
@@ -24,6 +25,7 @@ describe('parseDetailsJson', () => {
       appId: 'io.element.app',
       version: '1.2.3',
       sdkSha: 'deadbeef',
+      reportUrl: 'https://github.com/element-hq/element-ios/issues/1234',
     });
   });
 

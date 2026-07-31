@@ -23,6 +23,8 @@ export interface ListingDetails {
   readonly appId: string | null;
   readonly version: string | null;
   readonly sdkSha: string | null;
+  /** Link back to the report on the rageshake server, for citing a source in analysis notes. */
+  readonly reportUrl: string | null;
 }
 
 /**

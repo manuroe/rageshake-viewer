@@ -462,6 +462,7 @@ export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
       app: details.appId,
       version: details.version,
       sdkSha: details.sdkSha,
+      reportUrl: details.reportUrl,
     },
     files: shownFiles,
     ...(sortedFiles.length > shownFiles.length ? { filesOmitted: sortedFiles.length - shownFiles.length } : {}),

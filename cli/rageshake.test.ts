@@ -37,6 +37,7 @@ const CYCLE_LOG = [
 
 const DETAILS = JSON.stringify({
   user_text: 'App crashed on launch',
+  report_url: 'https://github.com/element-hq/element-ios/issues/1234',
   data: { user_id: '@user-0123456789ab:domain-01234567.org', Version: '25.1.0', sdk_sha: 'abc1234' },
 });
 
@@ -68,6 +69,7 @@ describe('rageshake CLI', () => {
     expect(summary.details.userText).toBe('App crashed on launch');
     expect(summary.details.version).toBe('25.1.0');
     expect(summary.details.sdkSha).toBe('abc1234');
+    expect(summary.details.reportUrl).toBe('https://github.com/element-hq/element-ios/issues/1234');
     expect(summary.files).toHaveLength(1);
     expect(summary.files[0].name).toBe('console.2026-01-15-10.log.gz');
     expect(summary.files[0].errors).toBe(1);

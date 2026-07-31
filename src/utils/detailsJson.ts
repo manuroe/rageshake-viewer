@@ -24,6 +24,7 @@ export function parseDetailsJson(text: string): ListingDetails | null {
       appId: getString(data['base_bundle_identifier']) ?? getString(data['app_id']),
       version: getString(data['Version']),
       sdkSha: getString(data['sdk_sha']),
+      reportUrl: getString(json['report_url']),
     };
   } catch {
     return null;
