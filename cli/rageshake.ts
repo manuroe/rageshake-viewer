@@ -20,11 +20,12 @@ import { isAnalyzableEntry } from '../src/utils/archiveSummary.ts';
 import { isValidGzipHeader, isValidTextContent, decodeTextBytes } from '../src/utils/fileValidator.ts';
 import { detectAnonymizedLog, MATRIX_IDENTIFIER_RE } from '../src/utils/anonymizeUtils.ts';
 import { computeSummaryStats } from '../src/utils/summaryStats.ts';
-import { lastColdStartUs, lastForegroundUs, deriveAppStateSegments } from '../src/utils/lifecycleEvents.ts';
+import { lastColdStartUs, lastForegroundUs, deriveAppStateSegments, MARKER_KINDS, type AppStateSegment } from '../src/utils/lifecycleEvents.ts';
 import { buildLogOverview, type OverviewNode } from '../src/utils/logOverview.ts';
 import { buildSpanOverview, type SpanNode } from '../src/utils/spanOverview.ts';
 import { extractDateKey, extractCategory } from '../src/utils/listingEntries.ts';
 import { stripLogPrefix } from '../src/utils/logMessageUtils.ts';
+import { SPANS_MARKER } from '../src/utils/spansParser.ts';
 import { isoToMicros, microsToISO, getMinMaxTimestamps, formatDuration } from '../src/utils/timeUtils.ts';
 import type { LogParserResult, ParsedLogLine, LifecycleEvent, HttpRequest } from '../src/types/log.types.ts';
 import type { TimestampMicros, ISODateTimeString } from '../src/types/time.types.ts';
@@ -36,10 +37,10 @@ Commands:
   summary  <path>              details.json + per-file stats + top errors/warnings/HTTP failures (JSON).
   overview <path>              Log lines grouped by module target, error/warn counts per subtree.
   spans    <path>              SDK log lines grouped by span chain (operation view).
-  grep     <path> <pattern>    Lines matching pattern (case-insensitive substring).
+  grep     <path> <pattern>... Lines matching ANY pattern (case-insensitive substring).
   slice    <path>              All lines in a time window (use with --last/--since/--from).
   http     <path>              HTTP requests: time, method, uri, status, duration.
-  cycles   <path>              App lifecycle: cold starts, foreground/background, crashes.
+  cycles   <path>              App lifecycle: event counts, cold starts/crashes, app-state segments.
 
 Time window (grep, slice, http, overview, spans, cycles):
   --from <ISO>                 Start timestamp, e.g. 2026-01-15T10:00:00Z
@@ -53,10 +54,17 @@ Filters:
   --file <name>                Only lines from this source log file (grep, slice)
   --errors                     Only failed requests: HTTP >= 400 or transport error (http)
   --slowest <N>                N slowest requests, sorted by duration (http)
-  --top <N|all>                Per-file table: N noisiest files or "all" (summary, default 20)
+  --top <N|all>                Per-file table: N noisiest files or "all" (summary, default 5)
 
 Pagination (all line/tree output is capped, never unbounded):
-  --limit <N>                  Max lines / tree nodes (default 200 lines, 100 nodes)
+  --count                      Counts + a time distribution instead of lines (grep, slice). Probe with this
+                               before fetching lines: it shows how many matches there are and when they
+                               happen, so the window can be picked in one call rather than by walking --limit
+  --width <N>                  Truncate each line's message to N chars (grep, slice; default 200, 0 = no limit)
+  --spans                      Keep the "| spans: …" chain on each line (grep, slice). Dropped by default:
+                               it is ~49% of an average SDK line, mostly the sliding-sync pos= cursor.
+                               Use the "spans" command for span structure; this is for one specific chain
+  --limit <N>                  Max lines / tree nodes (default 50 lines, 100 nodes)
   --offset <N>                 Skip N output entries (cycles pages back from the newest; footer shows the next offset)
   --depth <N>                  Max tree depth (overview, spans; default 3)`;
 
@@ -167,6 +175,9 @@ interface Flags {
   errors?: boolean;
   slowest?: string;
   top?: string;
+  count?: boolean;
+  width?: string;
+  spans?: boolean;
 }
 
 const DUR_RE = /^(\d+)(s|m|h|d)$/;
@@ -267,6 +278,19 @@ function tailPage<T>(items: readonly T[], limit: number, offset: number): { page
 
 const LEVELS = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
 
+/**
+ * Default cap for line output (`grep`, `slice`, `http`).
+ *
+ * Sized against the other commands rather than picked round: at the old 200,
+ * `slice --last 2m` returned 42,846 chars while `overview`/`cycles`/`spans`/
+ * `summary` all landed between 3,950 and 7,779 — the line commands alone could
+ * drop ~11k tokens in a single call. That gap is what made walking `--limit`
+ * down from 200 the rational thing to do. 50 × the ~208-char line width puts
+ * line output back in the same band as everything else; ask for more explicitly
+ * when a case needs it, after `--count` has shown the shape.
+ */
+const LINE_LIMIT = 50;
+
 function levelFilter(min: string | undefined): (l: ParsedLogLine) => boolean {
   if (!min) return () => true;
   const idx = LEVELS.indexOf(min.toUpperCase());
@@ -282,8 +306,30 @@ interface DisplayEntry {
   readonly gapBefore: number;
 }
 
+/**
+ * Printed message text: log prefix stripped, `| spans: …` chain dropped unless kept.
+ *
+ * The `| spans: …` suffix the SDK's tracing layer appends is 49% of an average
+ * line — more than twice the message itself — and it is mostly the sliding-sync
+ * `pos=` cursor. Truncating instead of dropping it meant every line ended in
+ * half a token. `./rs spans` is the view for span structure; `--spans` puts it
+ * back on a line when a specific chain matters.
+ *
+ * Single definition on purpose: `buildDisplayEntries` keys its duplicate
+ * collapsing on this, so lines that only differ in the dropped chain collapse
+ * the way they read.
+ */
+function displayText(line: ParsedLogLine, keepSpans: boolean): string {
+  const text = stripLogPrefix(line.rawText);
+  if (keepSpans) return text;
+  // lastIndexOf, matching parseSpansChain: a message body that embeds the
+  // marker must not be cut at its first occurrence.
+  const at = text.lastIndexOf(SPANS_MARKER);
+  return at === -1 ? text : text.slice(0, at);
+}
+
 /** Collapse consecutive same-message lines and record gaps, before pagination. */
-function buildDisplayEntries(lines: readonly ParsedLogLine[], selected: readonly number[]): DisplayEntry[] {
+function buildDisplayEntries(lines: readonly ParsedLogLine[], selected: readonly number[], keepSpans: boolean): DisplayEntry[] {
   const entries: DisplayEntry[] = [];
   let i = 0;
   while (i < selected.length) {
@@ -293,13 +339,13 @@ function buildDisplayEntries(lines: readonly ParsedLogLine[], selected: readonly
     // timestamp (mergeLogParserResults) so lineNumber is not monotonic in array
     // order and its delta would report phantom gaps when processes interleave.
     const gapBefore = i > 0 ? selected[i] - selected[i - 1] - 1 : 0;
-    const baseText = stripLogPrefix(line.rawText);
+    const baseText = displayText(line, keepSpans);
     let dupCount = 0;
     let j = i + 1;
     while (
       j < selected.length
       && selected[j] === selected[j - 1] + 1
-      && stripLogPrefix(lines[selected[j]].rawText) === baseText
+      && displayText(lines[selected[j]], keepSpans) === baseText
     ) {
       dupCount++;
       j++;
@@ -310,17 +356,42 @@ function buildDisplayEntries(lines: readonly ParsedLogLine[], selected: readonly
   return entries;
 }
 
-function formatLine(line: ParsedLogLine, multiFile: boolean): string {
+/**
+ * Map each source file to a short tag (`f1`, `f2`, …) for the line prefix;
+ * `emitEntries` prints the legend that expands the ones a page cites.
+ *
+ * Rageshake archives name every log `console.<date>-<hour>.log.gz`, so
+ * `extractCategory` returned `console` for all of them — the suffix cost bytes
+ * on every line and still never identified the file a report has to cite. An
+ * index costs 2-3 chars per line and the legend resolves it exactly once.
+ * Indices follow `ingest`'s chronological sort, so they are stable per archive.
+ */
+function fileTags(ing: Ingest): Map<string, string> {
+  return new Map(ing.files.map((f, i) => [f.name, `f${i + 1}`]));
+}
+
+function formatLine(line: ParsedLogLine, tags: Map<string, string> | null, width: number, keepSpans: boolean): string {
   const time = line.displayTime ? line.displayTime.slice(0, 12) : '??:??:??.???';
-  const proc = multiFile && line.sourceFile ? `|${extractCategory(line.sourceFile)}` : '';
-  return `[${line.lineNumber}${proc}] ${time} ${line.level.padEnd(5)} ${stripLogPrefix(line.rawText)}`;
+  const tag = tags && line.sourceFile ? `|${tags.get(line.sourceFile) ?? extractCategory(line.sourceFile)}` : '';
+  const text = displayText(line, keepSpans);
+  return `[${line.lineNumber}${tag}] ${time} ${line.level.padEnd(5)} ${width > 0 ? trim(text, width) : text}`;
 }
 
 /** Emit display entries with day markers, gap markers and a pagination footer. */
-function emitEntries(out: string[], entries: readonly DisplayEntry[], flags: Flags, multiFile: boolean): void {
-  const limit = intFlag(flags.limit, 200);
+function emitEntries(out: string[], entries: readonly DisplayEntry[], flags: Flags, ing: Ingest): void {
+  const limit = intFlag(flags.limit, LINE_LIMIT);
   const offset = intFlag(flags.offset, 0);
+  const width = intFlag(flags.width, 200);
   const page = entries.slice(offset, offset + limit);
+  const tags = ing.files.length > 1 ? fileTags(ing) : null;
+  if (tags) {
+    // Legend only for the files this page actually cites. A rageshake routinely
+    // carries 60 logs; expanding all of them costs far more than the tags save,
+    // and the caller only ever needs to resolve a tag it can see.
+    const cited = new Set(page.map((e) => e.line.sourceFile).filter(Boolean));
+    const shown = ing.files.filter((f) => cited.has(f.name));
+    if (shown.length > 0) out.push(`# files: ${shown.map((f) => `${tags.get(f.name)}=${basename(f.name)}`).join(' · ')}`);
+  }
   let lastDay = '';
   for (const e of page) {
     const day = String(e.line.isoTimestamp).slice(0, 10);
@@ -329,7 +400,7 @@ function emitEntries(out: string[], entries: readonly DisplayEntry[], flags: Fla
       lastDay = day;
     }
     if (e.gapBefore > 0) out.push(`... ${e.gapBefore} lines ...`);
-    out.push(formatLine(e.line, multiFile));
+    out.push(formatLine(e.line, tags, width, flags.spans === true));
     if (e.dupCount > 0) out.push(`... ${e.dupCount} duplicated lines ...`);
   }
   const remaining = entries.length - offset - page.length;
@@ -339,6 +410,52 @@ function emitEntries(out: string[], entries: readonly DisplayEntry[], flags: Fla
       ? '# no matching lines'
       : `# --offset ${offset} is past the end (${entries.length} entries) — lower --offset`);
   }
+}
+
+/**
+ * Count-only probe: a coarse time histogram over the selected lines, plus a
+ * ready-to-paste --from/--to for the busiest bucket.
+ *
+ * This is the answer to walking --limit down: the caller cannot see the shape of
+ * a match set before paying for it, so it guesses a limit, and guesses again.
+ * One --count call shows both how many matches there are and when they happen,
+ * and the peak line is the next command's window.
+ *
+ * Deliberately not `bucketActivityRuns`: that merges adjacent non-empty buckets
+ * into runs, which collapses a dense match set to a single row.
+ */
+function emitDistribution(out: string[], lines: readonly ParsedLogLine[], selected: readonly number[]): void {
+  const stamped = selected.map((i) => lines[i].timestampUs).filter((t) => t > 0);
+  if (stamped.length === 0) return;
+  // Reduce rather than Math.min(...arr): a match set of tens of thousands of
+  // lines overflows the argument stack when spread.
+  let min = stamped[0];
+  let max = stamped[0];
+  for (const t of stamped) {
+    if (t < min) min = t;
+    if (t > max) max = t;
+  }
+  const BUCKETS = 10;
+  const span = max - min;
+  const width = Math.max(1, Math.ceil(span / BUCKETS));
+  const counts = new Array<number>(BUCKETS).fill(0);
+  for (const t of stamped) counts[Math.min(BUCKETS - 1, Math.floor((t - min) / width))]++;
+
+  // A rageshake routinely spans several days, and bare HH:MM:SS labels then read
+  // as a backwards range ("13:00 → 11:14"). Add the date only when it varies.
+  const iso = (us: number): string => microsToISO(us as TimestampMicros);
+  const sameDay = iso(min).slice(0, 10) === iso(max).slice(0, 10);
+  const hhmmss = (us: number): string => (sameDay ? iso(us).slice(11, 19) : iso(us).slice(5, 16));
+  const cells = counts
+    .map((n, i) => ({ n, startUs: min + i * width }))
+    .filter((b) => b.n > 0)
+    .map((b) => `${hhmmss(b.startUs)} ${b.n}`);
+  out.push(`# ${hhmmss(min)} → ${hhmmss(max)} · ${cells.join(' | ')}`);
+
+  let peak = 0;
+  for (let i = 1; i < BUCKETS; i++) if (counts[i] > counts[peak]) peak = i;
+  const peakStart = min + peak * width;
+  out.push(`# peak ${counts[peak]} — --from ${microsToISO(peakStart as TimestampMicros)} --to ${microsToISO((peakStart + width) as TimestampMicros)}`);
 }
 
 /** Select line indices by range/level/file filters. */
@@ -444,12 +561,16 @@ export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
       if (l.level === 'ERROR') errors++;
       else if (l.level === 'WARN') warns++;
     }
-    return { name, lines: result.rawLogLines.length, errors, warns, http: result.httpRequests.length, sentry: result.sentryEvents.length };
+    // Basename only: every row otherwise repeats the archive-id directory
+    // prefix ("2026-07-31_111428-JLS3UB6A/"), which is the same on all of them.
+    return { name: basename(name), lines: result.rawLogLines.length, errors, warns, http: result.httpRequests.length, sentry: result.sentryEvents.length };
   });
   // Noisiest files first, capped by default so a 100-file archive's per-file
   // table doesn't dominate the output; --top all restores the full list.
   const sortedFiles = [...perFile].sort((a, b) => (b.errors + b.warns) - (a.errors + a.warns) || b.lines - a.lines);
-  const topN = flags.top === 'all' ? sortedFiles.length : intFlag(flags.top, 20);
+  // 5, not 20: the table was 38% of every summary (2,734 of 7,280 chars) and the
+  // tail of it is quiet files. The noisiest few are what pick the next --file.
+  const topN = flags.top === 'all' ? Infinity : intFlag(flags.top, 5);
   const shownFiles = sortedFiles.slice(0, topN);
 
   return JSON.stringify({
@@ -475,6 +596,8 @@ export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
       incompleteRequests: stats.incompleteRequestCount,
       sentryEvents: merged.sentryEvents.length,
     },
+    // Already capped at the 5 most frequent by computeSummaryStats — no --top
+    // cap here, or --top all would promise a full list the stats never produce.
     errorsByType: stats.errorsByType.map((e) => ({ count: e.count, message: trim(e.type) })),
     warningsByType: stats.warningsByType.map((e) => ({ count: e.count, message: trim(e.type) })),
     httpErrorsByStatus: stats.httpErrorsByStatus,
@@ -488,7 +611,7 @@ export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
       lastColdStart: coldStart !== null ? microsToISO(coldStart) : null,
       lastForeground: foreground !== null ? microsToISO(foreground) : null,
     },
-  }, null, 1);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -606,15 +729,50 @@ export function cmdSpans(ing: Ingest, flags: Flags): string {
 // grep / slice
 // ---------------------------------------------------------------------------
 
-export function cmdGrep(ing: Ingest, pattern: string, flags: Flags): string {
+export function cmdGrep(ing: Ingest, patterns: readonly string[], flags: Flags): string {
   const out: string[] = [];
   const range = resolveRange(ing.merged, flags, (m) => out.push(m));
   rangeHeader(out, range, ing.merged);
   const indices = selectIndices(ing.merged, range, flags);
   const lines = ing.merged.rawLogLines;
-  const query = pattern.toLowerCase();
-  const matches = indices.filter((i) => lines[i].rawText.toLowerCase().includes(query));
-  out.push(`# ${matches.length} matching lines for "${pattern}"`);
+  const queries = patterns.map((p) => p.toLowerCase());
+  // Per-pattern counts, not one combined total: with several patterns in a call
+  // a dud pattern is invisible in the total, and a zero has to distinguish "not
+  // in this window" from "never logged" — otherwise the next call is a guess.
+  // One pass yields both the counts and the match set: lowercasing each line
+  // once per pattern would scan the selection P+1 times for the same answer.
+  const counts = new Array<number>(queries.length).fill(0);
+  const matches: number[] = [];
+  for (const i of indices) {
+    const text = lines[i].rawText.toLowerCase();
+    let hit = false;
+    for (let k = 0; k < queries.length; k++) {
+      if (text.includes(queries[k])) {
+        counts[k]++;
+        hit = true;
+      }
+    }
+    if (hit) matches.push(i);
+  }
+
+  const narrowed = range !== null || flags.level !== undefined || flags.file !== undefined;
+  const hints: string[] = [];
+  for (const [k, n] of counts.entries()) {
+    if (n > 0 || !narrowed) continue;
+    let inLog = 0;
+    for (const l of lines) if (l.rawText.toLowerCase().includes(queries[k])) inLog++;
+    hints.push(inLog > 0
+      ? `# "${patterns[k]}" 0 in range, ${inLog} in full log — widen --last/--since/--from, or drop --level/--file`
+      : `# "${patterns[k]}" 0 in range and 0 in full log — the pattern is never logged`);
+  }
+  const summary = counts.map((n, k) => `"${patterns[k]}" ${n}`).join(' · ');
+  out.push(`# ${summary}${queries.length > 1 ? ` — ${matches.length} lines` : ` line${counts[0] === 1 ? '' : 's'}`}`);
+  out.push(...hints);
+
+  if (flags.count) {
+    emitDistribution(out, lines, matches);
+    return out.join('\n');
+  }
 
   const around = intFlag(flags.around, 0);
   let selected = matches;
@@ -628,7 +786,7 @@ export function cmdGrep(ing: Ingest, pattern: string, flags: Flags): string {
     }
     selected = [...keep].sort((a, b) => a - b);
   }
-  emitEntries(out, buildDisplayEntries(lines, selected), flags, ing.files.length > 1);
+  emitEntries(out, buildDisplayEntries(lines, selected, flags.spans === true), flags, ing);
   return out.join('\n');
 }
 
@@ -637,7 +795,12 @@ export function cmdSlice(ing: Ingest, flags: Flags): string {
   const range = resolveRange(ing.merged, flags, (m) => out.push(m));
   rangeHeader(out, range, ing.merged);
   const indices = selectIndices(ing.merged, range, flags);
-  emitEntries(out, buildDisplayEntries(ing.merged.rawLogLines, indices), flags, ing.files.length > 1);
+  if (flags.count) {
+    out.push(`# ${indices.length} lines`);
+    emitDistribution(out, ing.merged.rawLogLines, indices);
+    return out.join('\n');
+  }
+  emitEntries(out, buildDisplayEntries(ing.merged.rawLogLines, indices, flags.spans === true), flags, ing);
   return out.join('\n');
 }
 
@@ -672,7 +835,17 @@ export function cmdHttp(ing: Ingest, flags: Flags): string {
   }
 
   out.push(`# ${reqs.length} requests${flags.errors ? ' (failures only)' : ''}`);
-  const limit = intFlag(flags.limit, 200);
+  // Same reason as grep's hint: an empty result has to say whether the window or
+  // the filter emptied it, or the follow-up call is a guess. `http` came back
+  // empty on most of its recorded runs and said nothing about why.
+  if (reqs.length === 0 && (range !== null || flags.errors)) {
+    const total = ing.merged.httpRequests.length;
+    const failed = ing.merged.httpRequests.filter(isFailed).length;
+    out.push(total === 0
+      ? '# no HTTP requests in this log at all'
+      : `# ${total} requests in the full log, ${failed} of them failures — widen --last/--since/--from${flags.errors ? ', or drop --errors' : ''}`);
+  }
+  const limit = intFlag(flags.limit, LINE_LIMIT);
   const offset = intFlag(flags.offset, 0);
   const page = reqs.slice(offset, offset + limit);
   for (const r of page) {
@@ -694,6 +867,55 @@ export function cmdHttp(ing: Ingest, flags: Flags): string {
 // cycles
 // ---------------------------------------------------------------------------
 
+/** `HH:MM:SS.mmm` — the date lives on a day marker, as in `emitEntries`. */
+const clockOf = (us: number): string => microsToISO(us as TimestampMicros).slice(11, 23);
+
+/** Emit a `# YYYY-MM-DD` marker when the day changes; returns the new day. */
+function pushDayMarker(out: string[], us: number, lastDay: string): string {
+  const day = microsToISO(us as TimestampMicros).slice(0, 10);
+  if (day !== lastDay) out.push(`# ${day}`);
+  return day;
+}
+
+/** A run of consecutive idle/refresh segments, collapsed into one row. */
+interface CollapsedSegment {
+  readonly startUs: number;
+  readonly endUs: number;
+  readonly state: string;
+  readonly collapsed: number;
+}
+
+const IDLE_STATES = new Set(['background', 'backgroundWorking']);
+// ponytail: a run of 4 is two OS refresh wakes — below that the churn is short
+// enough to read. Raise it if orientation still arrives buried.
+const COLLAPSE_RUN = 4;
+
+/**
+ * Collapse long background/backgroundWorking alternations into a single row.
+ *
+ * iOS wakes a backgrounded app every few minutes to refresh, which derives as
+ * `background → backgroundWorking → background → …` for as long as the log runs.
+ * On a 9-day archive that churn was 132 of 165 segments and said nothing: the
+ * interesting structure is the foreground sessions it sits between. Collapsing
+ * keeps the run's real boundaries, so a window into it is still one --from/--to.
+ */
+function collapseIdleRuns(segs: readonly AppStateSegment[]): (AppStateSegment | CollapsedSegment)[] {
+  const rows: (AppStateSegment | CollapsedSegment)[] = [];
+  let i = 0;
+  while (i < segs.length) {
+    let j = i;
+    while (j < segs.length && IDLE_STATES.has(segs[j].state)) j++;
+    if (j - i >= COLLAPSE_RUN) {
+      rows.push({ startUs: segs[i].startUs, endUs: segs[j - 1].endUs, state: 'background+refresh', collapsed: j - i });
+      i = j;
+    } else {
+      rows.push(segs[i]);
+      i++;
+    }
+  }
+  return rows;
+}
+
 export function cmdCycles(ing: Ingest, flags: Flags): string {
   const out: string[] = [];
   const range = resolveRange(ing.merged, flags, (m) => out.push(m));
@@ -703,32 +925,59 @@ export function cmdCycles(ing: Ingest, flags: Flags): string {
 
   const limit = intFlag(flags.limit, 100);
   const offset = intFlag(flags.offset, 0);
-  // Most recent activity matters most, so page backwards from the end.
-  const { page: eventsPage, older: olderEvents } = tailPage(events, limit, offset);
   if (events.length === 0) {
     out.push('# no lifecycle events detected');
-  } else if (eventsPage.length === 0) {
-    out.push(`# --offset ${offset} is past the end (${events.length} events) — lower --offset`);
   } else {
-    if (olderEvents > 0) out.push(`# ${olderEvents} earlier events — next: --offset ${offset + eventsPage.length}`);
-    for (const e of eventsPage) {
-      out.push(`${microsToISO(e.timestampUs)} ${e.kind} (${e.platform}) [line ${e.lineNumber}]`);
+    // Kind histogram instead of one row per event. Nothing is hidden: every
+    // counted kind other than the markers below is a segment boundary, and the
+    // segment list is the same information as a duration.
+    const byKind = new Map<string, number>();
+    for (const e of events) byKind.set(e.kind, (byKind.get(e.kind) ?? 0) + 1);
+    const kinds = [...byKind].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`);
+    out.push(`# ${events.length} lifecycle events (${events[0].platform}): ${kinds.join(' · ')}`);
+
+    // Only coldStart/crash are listed: MARKER_KINDS is the viewer's own split
+    // between point-in-time signals and durations, and the durations are already
+    // rendered as segments. Listing both was the same data printed twice.
+    const markers = events.filter((e) => (MARKER_KINDS as readonly string[]).includes(e.kind));
+    const { page: markerPage, older: olderMarkers } = tailPage(markers, limit, offset);
+    if (markers.length === 0) {
+      out.push('# no cold starts or crashes');
+    } else if (markerPage.length === 0) {
+      out.push(`# --offset ${offset} is past the end (${markers.length} markers) — lower --offset`);
+    } else {
+      out.push('# cold starts / crashes:');
+      if (olderMarkers > 0) out.push(`# ${olderMarkers} earlier markers — next: --offset ${offset + markerPage.length}`);
+      let lastDay = '';
+      for (const e of markerPage) {
+        lastDay = pushDayMarker(out, e.timestampUs, lastDay);
+        out.push(`  ${clockOf(e.timestampUs)} ${e.kind} [line ${e.lineNumber}]`);
+      }
     }
   }
 
   const { min, max } = getMinMaxTimestamps(ing.merged.rawLogLines);
   if (min > 0) {
     const segments = deriveAppStateSegments(all, range?.startUs ?? min, range?.endUs ?? max);
-    out.push('# app-state segments:');
-    const { page: segPage, older: olderSegs } = tailPage(segments, limit, offset);
-    if (segments.length === 0) {
+    const rows = collapseIdleRuns(segments);
+    const { page: segPage, older: olderSegs } = tailPage(rows, limit, offset);
+    if (rows.length === 0) {
+      out.push('# app-state segments:');
       out.push('  # none');
     } else if (segPage.length === 0) {
-      out.push(`  # --offset ${offset} is past the end (${segments.length} segments) — lower --offset`);
+      out.push('# app-state segments:');
+      out.push(`  # --offset ${offset} is past the end (${rows.length} segments) — lower --offset`);
     } else {
+      // Segments are contiguous, so each row's end is the next row's start —
+      // printing both doubled the timestamps for nothing. Start + duration, and
+      // the section header carries the one end that has no successor.
+      out.push(`# app-state segments (start · state · duration; contiguous through ${microsToISO(segPage[segPage.length - 1].endUs as TimestampMicros)}):`);
       if (olderSegs > 0) out.push(`  # ${olderSegs} earlier segments — next: --offset ${offset + segPage.length}`);
+      let lastDay = '';
       for (const s of segPage) {
-        out.push(`  ${s.state} ${microsToISO(s.startUs as TimestampMicros)} → ${microsToISO(s.endUs as TimestampMicros)} (${formatDuration((s.endUs - s.startUs) / 1000)})`);
+        lastDay = pushDayMarker(out, s.startUs, lastDay);
+        const runs = 'collapsed' in s ? ` ×${s.collapsed}` : '';
+        out.push(`  ${clockOf(s.startUs)} ${s.state}${runs} (${formatDuration((s.endUs - s.startUs) / 1000)})`);
       }
     }
   }
@@ -762,9 +1011,16 @@ export function run(argv: string[]): { code: number; output: string } {
       errors: { type: 'boolean' },
       slowest: { type: 'string' },
       top: { type: 'string' },
+      count: { type: 'boolean' },
+      width: { type: 'string' },
+      spans: { type: 'boolean' },
     },
   });
-  const [cmd, path, pattern] = positionals;
+  const [cmd, path] = positionals;
+  // Every positional after the path is a grep pattern: one call can carry the
+  // whole candidate set, instead of a shell loop that re-reads, gunzips and
+  // re-parses the entire archive once per pattern.
+  const patterns = positionals.slice(2);
   if (!cmd || !path) return { code: 2, output: USAGE };
   const flags = values as Flags;
 
@@ -772,7 +1028,7 @@ export function run(argv: string[]): { code: number; output: string } {
   // a typo'd command surfaces the usage message rather than a parse/IO error.
   const known = ['precheck', 'summary', 'overview', 'spans', 'grep', 'slice', 'http', 'cycles'];
   if (!known.includes(cmd)) return { code: 2, output: `unknown command "${cmd}"\n\n${USAGE}` };
-  if (cmd === 'grep' && !pattern) return { code: 2, output: 'grep needs a pattern: rageshake grep <path> <pattern>' };
+  if (cmd === 'grep' && patterns.length === 0) return { code: 2, output: 'grep needs at least one pattern: rageshake grep <path> <pattern>...' };
 
   const ing = loadInput(path);
   switch (cmd) {
@@ -783,7 +1039,7 @@ export function run(argv: string[]): { code: number; output: string } {
     case 'summary': return { code: 0, output: cmdSummary(ing, flags) };
     case 'overview': return { code: 0, output: cmdOverview(ing, flags) };
     case 'spans': return { code: 0, output: cmdSpans(ing, flags) };
-    case 'grep': return { code: 0, output: cmdGrep(ing, pattern as string, flags) };
+    case 'grep': return { code: 0, output: cmdGrep(ing, patterns, flags) };
     case 'slice': return { code: 0, output: cmdSlice(ing, flags) };
     case 'http': return { code: 0, output: cmdHttp(ing, flags) };
     default: return { code: 0, output: cmdCycles(ing, flags) };
