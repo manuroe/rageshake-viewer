@@ -1,4 +1,4 @@
-# Agent Context: Rageshake Viewer
+# Agent Context: Shakeview
 
 ## Project Overview
 A web application for visualizing and analyzing rageshake logs. It also ships a **browser extension** that enhances [rageshake](https://github.com/matrix-org/rageshake) listing pages with parsed summary cards and an "Open in Visualizer" button.

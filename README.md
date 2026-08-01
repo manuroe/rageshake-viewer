@@ -1,10 +1,10 @@
-# Rageshake Viewer
+# Shakeview
 
-[![codecov](https://codecov.io/gh/manuroe/rageshake-viewer/graph/badge.svg)](https://codecov.io/gh/manuroe/rageshake-viewer)
+[![codecov](https://codecov.io/gh/manuroe/shakeview/graph/badge.svg)](https://codecov.io/gh/manuroe/shakeview)
 
 A web viewer for **rageshake logs** produced by the [Matrix Rust SDK](https://github.com/matrix-org/matrix-rust-sdk) and Element X apps ([Android](https://github.com/element-hq/element-x-android), [iOS](https://github.com/element-hq/element-x-ios)). **All processing runs locally in your browser** — no data is sent anywhere.
 
-Live at **https://manuroe.github.io/rageshake-viewer/**
+Live at **https://manuroe.github.io/shakeview/**
 
 ![Summary view](public/demo/screenshot-summary-light.png#gh-light-mode-only)
 ![Summary view](public/demo/screenshot-summary-dark.png#gh-dark-mode-only)
