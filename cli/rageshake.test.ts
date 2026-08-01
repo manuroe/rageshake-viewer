@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { gzipSync, strToU8 } from 'fflate';
 import { buildTar } from '../src/utils/tarWriter';
 import { ingest, cmdPrecheck, cmdSummary, cmdGrep, cmdSlice, cmdOverview, cmdHttp, cmdCycles, resolveRange, run } from './rageshake';
@@ -93,10 +96,123 @@ describe('rageshake CLI', () => {
   });
 
   it('grep finds matching lines with line numbers', () => {
-    const out = cmdGrep(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), 'retry scheduled', {});
-    expect(out).toContain('# 1 matching lines');
+    const out = cmdGrep(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), ['retry scheduled'], {});
+    expect(out).toContain('# "retry scheduled" 1');
     expect(out).toContain('WARN');
     expect(out).toContain('retry scheduled');
+  });
+
+  it('grep matches ANY of several patterns and counts each separately', () => {
+    // One call replaces the per-pattern shell loop: three patterns, one archive
+    // parse, and a dud pattern stays visible instead of hiding in a total.
+    const out = cmdGrep(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'),
+      ['retry scheduled', 'Sentry configured', 'never-logged'], {});
+    expect(out).toContain('"retry scheduled" 1');
+    expect(out).toContain('"Sentry configured" 1');
+    expect(out).toContain('"never-logged" 0');
+    expect(out).toContain('— 2 lines');
+    expect(out).toContain('retry scheduled');
+    expect(out).toContain('Sentry configured');
+  });
+
+  it('grep --count reports a distribution and a pasteable peak window, no log lines', () => {
+    const out = cmdGrep(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), ['matrix-rust-sdk'], { count: true });
+    expect(out).toContain('"matrix-rust-sdk" 3');
+    expect(out).toContain('# peak');
+    expect(out).toMatch(/--from \d{4}-\d{2}-\d{2}T.* --to \d{4}-\d{2}-\d{2}T/);
+    // The probe must not carry line payloads — that is the whole point of it.
+    expect(out).not.toContain('retry scheduled');
+  });
+
+  it('grep separates "absent from this window" from "never logged"', () => {
+    const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
+    // "Sentry configured" is at 10:00:00, excluded by a window starting at 10:00:02.
+    const narrowed = cmdGrep(ing, ['Sentry configured'], { since: '2026-01-15T10:00:02Z' });
+    expect(narrowed).toContain('0 in range, 1 in full log');
+    expect(narrowed).toContain('widen');
+    // A pattern that is genuinely absent must not suggest widening.
+    const absent = cmdGrep(ing, ['never-logged'], { since: '2026-01-15T10:00:02Z' });
+    expect(absent).toContain('never logged');
+    expect(absent).not.toContain('widen');
+    // Unfiltered, a zero result gets no hint at all: there is no window to blame.
+    expect(cmdGrep(ing, ['never-logged'], {})).not.toContain('in full log');
+  });
+
+  it('--width truncates the message and --width 0 restores it in full', () => {
+    const longLine = ['# [shakeview-anonymized]',
+      `2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] ${'x'.repeat(500)} TAILMARK`].join('\n');
+    const ing = ingest(buildArchive(longLine), 'anon.tar.gz');
+    expect(cmdGrep(ing, ['xxx'], { width: '60' })).not.toContain('TAILMARK');
+    expect(cmdGrep(ing, ['xxx'], { width: '60' })).toContain('…');
+    expect(cmdGrep(ing, ['xxx'], { width: '0' })).toContain('TAILMARK');
+    // Default is 200, so a 500-char payload is cut without asking.
+    expect(cmdGrep(ing, ['xxx'], {})).not.toContain('TAILMARK');
+  });
+
+  it('drops the "| spans:" chain by default and --spans puts it back', () => {
+    const spanLog = ['# [shakeview-anonymized]',
+      '2026-01-15T10:00:00.000000Z DEBUG matrix_sdk::http_client: Got response'
+      + ' | crates/matrix-sdk/src/http_client/mod.rs:197'
+      + ' | spans: next_sync_with_lock > sync_once{conn_id="encryption" pos="0/m7224201017~2.7224201025"}',
+    ].join('\n');
+    const ing = ingest(buildArchive(spanLog), 'anon.tar.gz');
+    const bare = cmdGrep(ing, ['Got response'], {});
+    expect(bare).toContain('Got response');
+    expect(bare).toContain('http_client/mod.rs:197'); // source location kept — reports need it
+    expect(bare).not.toContain('spans:');
+    expect(bare).not.toContain('pos=');
+    // The chain is 49% of an average SDK line, so dropping it must not truncate.
+    expect(bare).not.toContain('…');
+    expect(cmdGrep(ing, ['Got response'], { spans: true })).toContain('next_sync_with_lock');
+    // Non-SDK lines (Android logcat) have no chain: the change is a no-op there.
+    expect(cmdGrep(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), ['retry scheduled'], {}))
+      .toContain('retry scheduled');
+  });
+
+  it('collapses lines that only differ in the dropped spans chain', () => {
+    // Sliding-sync churn: same message, a new pos= cursor every time. Once the
+    // chain is dropped these render identically, so the duplicate collapsing has
+    // to key on the printed text — otherwise the noisiest case in a rageshake
+    // prints N identical rows, exactly what dropping the chain was meant to fix.
+    const log = ['# [shakeview-anonymized]',
+      ...Array.from({ length: 4 }, (_, i) =>
+        `2026-01-15T10:00:0${i}.000000Z DEBUG matrix_sdk::sliding_sync: Sync response`
+        + ' | crates/matrix-sdk/src/sliding_sync/mod.rs:42'
+        + ` | spans: sync_once{pos="0/m722420101${i}"}`),
+    ].join('\n');
+    const ing = ingest(buildArchive(log), 'anon.tar.gz');
+    // Count the source location, not the pattern: the header echoes the pattern.
+    const rows = (out: string): number => (out.match(/sliding_sync\/mod\.rs:42/g) ?? []).length;
+    const collapsed = cmdGrep(ing, ['Sync response'], {});
+    expect(collapsed).toContain('... 3 duplicated lines ...');
+    expect(rows(collapsed)).toBe(1);
+    // With the chain kept the lines really are distinct, so collapsing them
+    // would hide the cursor the caller asked to see.
+    const kept = cmdGrep(ing, ['Sync response'], { spans: true });
+    expect(kept).not.toContain('duplicated lines');
+    expect(rows(kept)).toBe(4);
+  });
+
+  it('emits a file legend only for the files the emitted page actually cites', () => {
+    const consoleLog = ['# [shakeview-anonymized]',
+      '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] console hit'].join('\n');
+    const nseLog = ['# [shakeview-anonymized]',
+      '2026-01-15T10:00:01.000000Z INFO [matrix-rust-sdk] nse hit'].join('\n');
+    const archive = gzipSync(buildTar([
+      { name: 'console.2026-01-15-10.log.gz', data: gzipSync(strToU8(consoleLog)) },
+      { name: 'nse.2026-01-15-10.log.gz', data: gzipSync(strToU8(nseLog)) },
+    ]));
+    const ing = ingest(archive, 'merged.tar.gz');
+    const both = cmdGrep(ing, ['hit'], {});
+    expect(both).toContain('console.2026-01-15-10.log.gz');
+    expect(both).toContain('nse.2026-01-15-10.log.gz');
+    // A page citing one file must not expand the other — the legend is what keeps
+    // a 60-log archive from paying for every filename on every call.
+    const one = cmdGrep(ing, ['nse hit'], {});
+    expect(one).toContain('nse.2026-01-15-10.log.gz');
+    expect(one).not.toContain('console.2026-01-15-10.log.gz');
+    // Single-file archives get neither tag nor legend.
+    expect(cmdGrep(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), ['retry'], {})).not.toContain('# files:');
   });
 
   it('--since accepts an absolute ISO timestamp (equivalent to --from)', () => {
@@ -142,14 +258,14 @@ describe('rageshake CLI', () => {
 
   it('grep rejects a malformed --from timestamp instead of treating it as epoch', () => {
     const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
-    expect(() => cmdGrep(ing, 'retry', { from: 'not-a-date' })).toThrow(/invalid --from/);
+    expect(() => cmdGrep(ing, ['retry'], { from: 'not-a-date' })).toThrow(/invalid --from/);
   });
 
   it('distinguishes no matches from an offset past the end', () => {
     const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
-    expect(cmdGrep(ing, 'no-such-text-anywhere', {})).toContain('# no matching lines');
+    expect(cmdGrep(ing, ['no-such-text-anywhere'], {})).toContain('# no matching lines');
     // "retry scheduled" matches one line; offset 5 is past the single match.
-    expect(cmdGrep(ing, 'retry scheduled', { offset: '5' })).toContain('past the end');
+    expect(cmdGrep(ing, ['retry scheduled'], { offset: '5' })).toContain('past the end');
   });
 
   it('does not report phantom gaps for timestamp-interleaved merged logs', () => {
@@ -221,20 +337,123 @@ describe('rageshake CLI', () => {
     expect(cmdHttp(demo, { offset: '99' })).toContain('past the end');
   });
 
-  it('cmdCycles pages events with --offset', () => {
-    // 5 events on lines 1–5 (cold start line 1 … last resign-active line 5).
-    // Assert on the unique [line N] tag, not timestamps — the range header
-    // always prints the full min→max span, which would match either endpoint.
-    const ing = ingest(buildArchive(CYCLE_LOG), 'anon.tar.gz');
+  it('http says why an empty result is empty', () => {
+    const ing = ingest(buildArchive(HTTP_LOG), 'anon.tar.gz');
+    // Window sits after both requests but inside the log, so the range is valid
+    // and simply empty — the case the hint exists for.
+    const windowed = cmdHttp(ing, { from: '2026-01-15T10:00:01.200000Z' });
+    expect(windowed).toContain('2 requests in the full log');
+    expect(windowed).toContain('widen');
+    // --errors with a window that has no failures must offer dropping the filter.
+    expect(cmdHttp(ing, { errors: true, to: '2026-01-15T10:00:00.900000Z' })).toContain('drop --errors');
+    // A log with no HTTP at all says so instead of pointing at the window.
+    expect(cmdHttp(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), { errors: true }))
+      .toContain('no HTTP requests in this log at all');
+  });
+
+  it('summary stays bounded on a log with many distinct error types', () => {
+    // Word suffixes, not digits: error types are grouped after numeric
+    // normalisation, so "failure 1".."failure 8" would collapse into one type.
+    // computeSummaryStats keeps only the 5 most frequent, so --top does not (and
+    // must not) claim to widen this table.
+    const words = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel'];
+    const many = ['# [shakeview-anonymized]',
+      ...words.map((w, i) => `2026-01-15T10:00:0${i}.000000Z ERROR [matrix-rust-sdk] failure ${w}`),
+    ].join('\n');
+    const ing = ingest(buildArchive(many), 'anon.tar.gz');
+    expect(JSON.parse(cmdSummary(ing, {})).errorsByType).toHaveLength(5);
+    expect(JSON.parse(cmdSummary(ing, { top: 'all' })).errorsByType).toHaveLength(5);
+  });
+
+  it('line output defaults to 50 entries, keeping it in the same band as the trees', () => {
+    // At the old default of 200 a 2-minute slice returned ~43k chars while every
+    // other command sat between 4k and 8k — that gap is what made walking --limit
+    // down the rational move. Pin the default so it cannot drift back.
+    const log = ['# [shakeview-anonymized]',
+      ...Array.from({ length: 120 }, (_, i) =>
+        `2026-01-15T10:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}.000000Z INFO [matrix-rust-sdk] event ${i}`),
+    ].join('\n');
+    const ing = ingest(buildArchive(log), 'anon.tar.gz');
+    const out = cmdSlice(ing, {});
+    expect(out).toContain('# 70 more entries — next: --offset 50');
+    expect(out).toContain('event 49');
+    expect(out).not.toContain('event 50');
+    // An explicit --limit still overrides it.
+    expect(cmdSlice(ing, { limit: '120' })).toContain('event 119');
+  });
+
+  it('summary per-file table defaults to 5 files and drops the archive-id prefix', () => {
+    const files = Array.from({ length: 8 }, (_, i) => ({
+      name: `2026-01-15_101010-ABCDEFGH/console.2026-01-15-${String(10 + i).padStart(2, '0')}.log.gz`,
+      data: gzipSync(strToU8(ANON_LOG)),
+    }));
+    const summary = JSON.parse(cmdSummary(ingest(gzipSync(buildTar(files)), 'anon.tar.gz')));
+    expect(summary.files).toHaveLength(5);
+    expect(summary.filesOmitted).toBe(3);
+    // The directory prefix is identical on every row, so it is not carried.
+    expect(summary.files[0].name).not.toContain('/');
+    expect(summary.files[0].name).toMatch(/^console\./);
+  });
+
+  it('summary output is minified, not pretty-printed', () => {
+    // Indentation cost ~15% of every summary call for no reader benefit.
+    const out = cmdSummary(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'));
+    expect(out).not.toContain('\n');
+    expect(JSON.parse(out).totals.warnings).toBe(1);
+  });
+
+  it('cmdCycles lists only markers and counts the rest', () => {
+    // CYCLE_LOG is 1 cold start + 2 foreground/background pairs. Only the cold
+    // start is a point-in-time signal; the others are durations already rendered
+    // as segments, so listing them was the same data printed twice.
+    const out = cmdCycles(ingest(buildArchive(CYCLE_LOG), 'anon.tar.gz'), {});
+    expect(out).toContain('5 lifecycle events (ios)');
+    expect(out).toContain('foreground 2');   // counted...
+    expect(out).toContain('background 2');
+    expect(out).toContain('[line 1]');       // ...cold start listed...
+    expect(out).not.toContain('[line 2]');   // ...foreground not listed as a marker
+    expect(out).toContain('# app-state segments');
+  });
+
+  it('cmdCycles pages markers with --offset', () => {
+    // Four cold starts on lines 1–4 so there is something to page through.
+    const log = ['# [shakeview-anonymized]',
+      ...Array.from({ length: 4 }, (_, i) =>
+        `2026-01-15T10:00:0${i}.000000Z INFO [MXLog] Sentry configured (enabled: true)`),
+    ].join('\n');
+    const ing = ingest(buildArchive(log), 'anon.tar.gz');
     const recent = cmdCycles(ing, { limit: '2' });
-    expect(recent).toContain('[line 5]');
-    expect(recent).not.toContain('[line 1]'); // cold start is off the recent page
-    // Page one step back: older events appear, newest drop off.
+    expect(recent).toContain('[line 4]');
+    expect(recent).not.toContain('[line 1]'); // oldest is off the recent page
     const older = cmdCycles(ing, { limit: '2', offset: '2' });
-    expect(older).toContain('[line 2]');
-    expect(older).not.toContain('[line 5]');
+    expect(older).toContain('[line 1]');
+    expect(older).not.toContain('[line 4]');
     // Offset beyond the end is reported, not silently blank.
     expect(cmdCycles(ing, { limit: '2', offset: '99' })).toContain('past the end');
+  });
+
+  it('cmdCycles collapses long background/refresh runs but keeps foreground', () => {
+    // Six refresh wakes while backgrounded, then a real foreground session. The
+    // churn must collapse to one row; the foreground session must survive intact.
+    const lines = ['# [shakeview-anonymized]',
+      '2026-01-15T10:00:00.000000Z INFO [MXLog] Application will resign active'];
+    for (let i = 0; i < 6; i++) {
+      lines.push(`2026-01-15T10:${String(10 + i * 5).padStart(2, '0')}:00.000000Z INFO [MXLog] Started background app refresh`);
+      lines.push(`2026-01-15T10:${String(10 + i * 5).padStart(2, '0')}:05.000000Z INFO [MXLog] Background app refresh finished`);
+    }
+    lines.push('2026-01-15T11:00:00.000000Z INFO [MXLog] Application did become active');
+    lines.push('2026-01-15T11:05:00.000000Z INFO [MXLog] Application will resign active');
+    const out = cmdCycles(ingest(buildArchive(lines.join('\n')), 'anon.tar.gz'), {});
+    expect(out).toMatch(/background\+refresh ×\d+/);
+    expect(out).toContain('foreground');
+    // Contiguity is what makes dropping each row's end timestamp safe.
+    expect(out).toContain('contiguous through');
+    // A short run must NOT collapse: two segments stay readable as themselves.
+    const short = ['# [shakeview-anonymized]',
+      '2026-01-15T10:00:00.000000Z INFO [MXLog] Application will resign active',
+      '2026-01-15T10:10:00.000000Z INFO [MXLog] Started background app refresh',
+      '2026-01-15T10:10:05.000000Z INFO [MXLog] Background app refresh finished'].join('\n');
+    expect(cmdCycles(ingest(buildArchive(short), 'anon.tar.gz'), {})).not.toContain('background+refresh');
   });
 
   it('validates the command before touching the filesystem', () => {
@@ -242,7 +461,19 @@ describe('rageshake CLI', () => {
     // return the usage message instead of throwing an IO error.
     expect(run(['frobnicate', '/no/such/file']).code).toBe(2);
     expect(run(['frobnicate', '/no/such/file']).output).toContain('unknown command');
-    expect(run(['grep', '/no/such/file']).output).toContain('grep needs a pattern');
+    expect(run(['grep', '/no/such/file']).output).toContain('grep needs at least one pattern');
+  });
+
+  it('run passes every positional after the path to grep as a pattern', () => {
+    // Guards the variadic wiring end to end: if only the first positional reached
+    // cmdGrep, the extra patterns would be dropped silently and the caller would
+    // see a plausible but incomplete result.
+    const file = join(mkdtempSync(join(tmpdir(), 'rageshake-cli-')), 'anon.tar.gz');
+    writeFileSync(file, buildArchive(ANON_LOG));
+    const { code, output } = run(['grep', file, 'retry scheduled', 'Sentry configured', '--count']);
+    expect(code).toBe(0);
+    expect(output).toContain('"retry scheduled" 1');
+    expect(output).toContain('"Sentry configured" 1');
   });
 
   it('fails fast when an analyzable archive member is unreadable', () => {
