@@ -11,14 +11,14 @@ const RAW_LOG = [
 ].join('\n');
 
 const ANON_LOG = [
-  '# [rageshake-viewer-anonymized]',
+  '# [shakeview-anonymized]',
   '2026-01-15T10:00:00.000000Z  INFO [matrix-rust-sdk] Sentry configured (enabled: true)',
   '2026-01-15T10:00:01.000000Z ERROR [matrix-rust-sdk] Failed to send to @user-0123456789ab:domain-01234567.org in !room-0123456789ab:domain-01234567.org',
   '2026-01-15T10:00:02.000000Z  WARN [matrix-rust-sdk] retry scheduled',
 ].join('\n');
 
 const HTTP_LOG = [
-  '# [rageshake-viewer-anonymized]',
+  '# [shakeview-anonymized]',
   '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0"}',
   '2026-01-15T10:00:00.500000Z INFO [matrix-rust-sdk] send{request_id="r1" method=GET uri="https://matrix/_matrix/client/v3/sync" request_size="0" status=200 response_size="100" request_duration=500ms}',
   '2026-01-15T10:00:01.000000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10"}',
@@ -27,7 +27,7 @@ const HTTP_LOG = [
 
 // iOS lifecycle markers: cold start + two foreground/background cycles (5 events).
 const CYCLE_LOG = [
-  '# [rageshake-viewer-anonymized]',
+  '# [shakeview-anonymized]',
   '2026-01-15T10:00:00.000000Z INFO [MXLog] Sentry configured (enabled: true)',
   '2026-01-15T10:00:01.000000Z INFO [MXLog] Application did become active',
   '2026-01-15T10:00:02.000000Z INFO [MXLog] Application will resign active',
@@ -112,12 +112,12 @@ describe('rageshake CLI', () => {
   });
 
   it('summary ranks files by noise and caps the per-file table with --top', () => {
-    const noisy = ['# [rageshake-viewer-anonymized]',
+    const noisy = ['# [shakeview-anonymized]',
       '2026-01-15T10:00:00.000000Z ERROR [matrix-rust-sdk] boom one',
       '2026-01-15T10:00:01.000000Z ERROR [matrix-rust-sdk] boom two'].join('\n');
-    const quiet = ['# [rageshake-viewer-anonymized]',
+    const quiet = ['# [shakeview-anonymized]',
       '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] all good'].join('\n');
-    const mid = ['# [rageshake-viewer-anonymized]',
+    const mid = ['# [shakeview-anonymized]',
       '2026-01-15T10:00:00.000000Z WARN [matrix-rust-sdk] heads up'].join('\n');
     const archive = gzipSync(buildTar([
       { name: 'console.2026-01-15-08.log.gz', data: gzipSync(strToU8(quiet)) },
@@ -157,12 +157,12 @@ describe('rageshake CLI', () => {
     // timestamp-ordered but per-file lineNumbers are not, so a lineNumber-delta
     // gap would fire between adjacent merged entries. Index-delta must not.
     const consoleLog = [
-      '# [rageshake-viewer-anonymized]',
+      '# [shakeview-anonymized]',
       '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] console line one',
       '2026-01-15T10:00:02.000000Z INFO [matrix-rust-sdk] console line two',
     ].join('\n');
     const nseLog = [
-      '# [rageshake-viewer-anonymized]',
+      '# [shakeview-anonymized]',
       '2026-01-15T10:00:01.000000Z INFO [matrix-rust-sdk] nse line one',
     ].join('\n');
     const archive = gzipSync(buildTar([

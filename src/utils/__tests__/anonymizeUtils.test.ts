@@ -413,12 +413,22 @@ describe('detectAnonymizedLog', () => {
     const content = `2024-01-15T10:00:00Z INFO hello\n${ANONYMIZED_LOG_MARKER}`;
     expect(detectAnonymizedLog(content)).toBe(false);
   });
+
+  it('still recognises the legacy pre-rename marker', () => {
+    const content = '# [rageshake-viewer-anonymized]\n2024-01-15T10:00:00Z INFO hello';
+    expect(detectAnonymizedLog(content)).toBe(true);
+  });
 });
 
 describe('stripAnonymizedMarker', () => {
   it('removes the marker and following LF', () => {
     const rest = '2024-01-15T10:00:00Z INFO hello\n';
     expect(stripAnonymizedMarker(`${ANONYMIZED_LOG_MARKER}\n${rest}`)).toBe(rest);
+  });
+
+  it('removes the legacy pre-rename marker', () => {
+    const rest = '2024-01-15T10:00:00Z INFO hello\n';
+    expect(stripAnonymizedMarker(`# [rageshake-viewer-anonymized]\n${rest}`)).toBe(rest);
   });
 
   it('removes CRLF variant', () => {
