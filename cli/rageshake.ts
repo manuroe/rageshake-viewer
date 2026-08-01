@@ -404,7 +404,7 @@ export function cmdPrecheck(ing: Ingest): { ok: boolean; report: string } {
   const lines: string[] = [];
   if (rawByFile.size > 0) {
     lines.push('FAIL: raw (non-anonymized) Matrix identifiers found — do NOT analyse this file.');
-    lines.push('Anonymize it with rageshake-viewer first, then re-run precheck.');
+    lines.push('Anonymize it with shakeview first, then re-run precheck.');
     for (const [kind, count] of rawByKind) lines.push(`  ${kind}: ${count} occurrence(s)`);
     for (const [file, count] of rawByFile) lines.push(`  in ${file}: ${count}`);
     return { ok: false, report: lines.join('\n') };

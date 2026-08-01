@@ -54,8 +54,8 @@ export function LandingPage() {
 
   const prNumber = import.meta.env.VITE_PR_NUMBER;
   const githubUrl = prNumber
-    ? `https://github.com/manuroe/rageshake-viewer/pull/${prNumber}`
-    : 'https://github.com/manuroe/rageshake-viewer';
+    ? `https://github.com/manuroe/shakeview/pull/${prNumber}`
+    : 'https://github.com/manuroe/shakeview';
 
   const handleLoadDemo = async () => {
     setDemoError(null);

@@ -28,7 +28,7 @@ jobs:
         run: npm ci
       - name: Build preview
         env:
-          VITE_BASE: /rageshake-viewer/pull/${{ github.event.pull_request.number }}/
+          VITE_BASE: /shakeview/pull/${{ github.event.pull_request.number }}/
           VITE_PR_NUMBER: ${{ github.event.pull_request.number }}
         run: npm run build
       - name: Deploy preview to gh-pages
@@ -48,7 +48,7 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             const body = [
               '🚀 PR Preview ready:',
-              `https://manuroe.github.io/rageshake-viewer/pull/${prNumber}/`,
+              `https://manuroe.github.io/shakeview/pull/${prNumber}/`,
               '',
               '<!-- pr-preview-link -->'
             ].join('\n');

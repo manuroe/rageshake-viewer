@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Rageshake Viewer",
+  "name": "Shakeview",
   "version": "1.0.0",
   "description": "Redirects rageshake archive listing pages into the bundled viewer with archive-style summaries and details.",
   "permissions": [

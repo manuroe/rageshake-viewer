@@ -10,11 +10,18 @@ import type { AnonymizationDictionary, ParsedLogLine } from '../types/log.types'
  *
  * @example
  * ```
- * # [rageshake-viewer-anonymized]
+ * # [shakeview-anonymized]
  * 2026-01-01T00:00:00Z INFO @user0:domain0.org joined !room0:domain0.org
  * ```
  */
-export const ANONYMIZED_LOG_MARKER = '# [rageshake-viewer-anonymized]';
+export const ANONYMIZED_LOG_MARKER = '# [shakeview-anonymized]';
+
+/**
+ * Markers accepted when reading. Only `ANONYMIZED_LOG_MARKER` is ever written;
+ * the legacy name is still recognised so logs exported before the rename keep
+ * loading as anonymized.
+ */
+const ACCEPTED_LOG_MARKERS = [ANONYMIZED_LOG_MARKER, '# [rageshake-viewer-anonymized]'];
 
 // ---------------------------------------------------------------------------
 // Matrix identifier regexes (per spec Appendix 4)
@@ -477,7 +484,7 @@ export function unanonymizeLogLine(line: ParsedLogLine, dict: AnonymizationDicti
  *
  * @example
  * ```ts
- * detectAnonymizedLog('# [rageshake-viewer-anonymized]\n2026-01-01T00:00:00Z INFO hello');
+ * detectAnonymizedLog('# [shakeview-anonymized]\n2026-01-01T00:00:00Z INFO hello');
  * // true
  * detectAnonymizedLog('2026-01-01T00:00:00Z INFO hello');
  * // false
@@ -491,7 +498,7 @@ export function detectAnonymizedLog(rawContent: string): boolean {
     const line = rawContent.slice(lineStart, lineEnd).replace(/\r$/, '');
     const trimmed = line.trim();
     if (trimmed.length > 0) {
-      return trimmed === ANONYMIZED_LOG_MARKER;
+      return ACCEPTED_LOG_MARKERS.includes(trimmed);
     }
     if (lineEnd === rawContent.length) break;
     lineStart = lineEnd + 1;
@@ -514,7 +521,7 @@ export function stripAnonymizedMarker(rawContent: string): string {
     if (lineEnd === -1) lineEnd = rawContent.length;
     const line = rawContent.slice(lineStart, lineEnd).replace(/\r$/, '');
     if (line.trim().length > 0) {
-      if (line.trim() === ANONYMIZED_LOG_MARKER) {
+      if (ACCEPTED_LOG_MARKERS.includes(line.trim())) {
         const nextLineStart = lineEnd < rawContent.length ? lineEnd + 1 : lineEnd;
         return rawContent.slice(0, lineStart) + rawContent.slice(nextLineStart);
       }
