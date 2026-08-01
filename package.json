@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "bin": {
+    "rageshake": "dist-cli/rageshake.mjs"
+  },
   "scripts": {
     "start": "vite",
     "dev": "vite",
@@ -19,6 +22,8 @@
     "pr:reply:batch": "tsx .github/skills/fix-review-comments/replyPRComment.ts --batch-file agent-workspace/pr-replies-template.json",
     "screenshots": "tsx scripts/screenshots.ts",
     "rageshake": "tsx cli/rageshake.ts",
+    "build:cli": "esbuild cli/rageshake.ts --bundle --platform=node --target=node20 --format=esm --banner:js=\"#!/usr/bin/env node\" --outfile=dist-cli/rageshake.mjs",
+    "prepare": "npm run build:cli",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -52,6 +57,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-istanbul": "^3.2.4",
+    "esbuild": "^0.27.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

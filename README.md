@@ -31,6 +31,26 @@ npm start
 
 Open http://localhost:5173
 
+## Rageshake CLI
+
+`cli/rageshake.ts` provides compact, LLM-friendly views over rageshake archives
+(summary, module overview, span tree, lifecycle timeline, filtered slices) — every
+command emits bounded output sized for an agent's context window.
+
+```bash
+npm run rageshake -- <command> <path> [options]   # dev, runs via tsx
+```
+
+For consumers (agents, scripts), build the standalone bundle once and run it with
+plain node — it is the package's `bin`:
+
+```bash
+npm run build:cli
+node dist-cli/rageshake.mjs <command> <path> [options]
+```
+
+Run with no arguments for the full command reference.
+
 ## Browser extension
 
 The extension enhances listing pages of any [rageshake](https://github.com/matrix-org/rageshake) server deployment by redirecting `/api/listing/*` pages into the bundled viewer and rendering them with the same archive-style screen used by the web app. It auto-detects rageshake archive pages using the standard `/api/listing/*` path — no configuration needed.
