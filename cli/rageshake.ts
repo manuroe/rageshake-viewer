@@ -27,6 +27,7 @@ import { extractDateKey, extractCategory } from '../src/utils/listingEntries.ts'
 import { stripLogPrefix } from '../src/utils/logMessageUtils.ts';
 import { SPANS_MARKER } from '../src/utils/spansParser.ts';
 import { isoToMicros, microsToISO, getMinMaxTimestamps, formatDuration } from '../src/utils/timeUtils.ts';
+import { cmdServe } from './serve.ts';
 import type { LogParserResult, ParsedLogLine, LifecycleEvent, HttpRequest } from '../src/types/log.types.ts';
 import type { TimestampMicros, ISODateTimeString } from '../src/types/time.types.ts';
 
@@ -41,6 +42,10 @@ Commands:
   slice    <path>              All lines in a time window (use with --last/--since/--from).
   http     <path>              HTTP requests: time, method, uri, status, duration.
   cycles   <path>              App lifecycle: event counts, cold starts/crashes, app-state segments.
+  serve    [dir]               Serve the viewer + a directory of rageshakes on http://127.0.0.1:7357
+                               (default dir: the working directory), so a log line can be opened by
+                               URL: /#/logs?archive=/<path-under-dir>/x.tar.gz&line=<N>. Runs until
+                               stopped; starting it twice reuses the first server. Flag: --port <N>
 
 Time window (grep, slice, http, overview, spans, cycles):
   --from <ISO>                 Start timestamp, e.g. 2026-01-15T10:00:00Z
@@ -1047,10 +1052,17 @@ export function run(argv: string[]): { code: number; output: string } {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const argv = process.argv.slice(2);
   try {
-    const { code, output } = run(process.argv.slice(2));
-    process.stdout.write(`${output}\n`);
-    process.exit(code);
+    if (argv[0] === 'serve') {
+      // The one command that owns the process instead of printing and exiting,
+      // so it is dispatched here rather than through run()'s output contract.
+      await cmdServe(argv.slice(1));
+    } else {
+      const { code, output } = run(argv);
+      process.stdout.write(`${output}\n`);
+      process.exit(code);
+    }
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(2);
