@@ -113,6 +113,43 @@ describe('useArchiveUrl', () => {
     expect((mockNavigate.mock.calls[0][0] as { pathname: string }).pathname).toBe('/');
   });
 
+  it('drops an empty ?archive= instead of leaving the loading gate up', async () => {
+    // App.tsx shows "Loading archive…" while the param is present at all, so an
+    // empty value must still be stripped even though there is nothing to fetch.
+    mockFetchOk();
+    mockSearchParams = new URLSearchParams(`?${ARCHIVE_URL_PARAM}=`);
+
+    renderHook(() => useArchiveUrl());
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(fetch).not.toHaveBeenCalled();
+    const [{ pathname, search }] = mockNavigate.mock.calls[0] as [{ pathname: string; search: string }];
+    expect(pathname).toBe('/');
+    expect(new URLSearchParams(search).has(ARCHIVE_URL_PARAM)).toBe(false);
+  });
+
+  it('keeps params that changed while the archive was still downloading', async () => {
+    let releaseFetch: (value: unknown) => void = () => {};
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise((resolve) => { releaseFetch = resolve; })));
+    mockSearchParams = new URLSearchParams(`?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&line=1234`);
+
+    const { rerender } = renderHook(() => useArchiveUrl());
+
+    // The URL gains a filter mid-download; the redirect must not revert it.
+    act(() => {
+      mockSearchParams = new URLSearchParams(`?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&line=1234&filter=sync`);
+    });
+    rerender();
+    releaseFetch({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) });
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [{ search }] = mockNavigate.mock.calls[0] as [{ search: string }];
+    const nextParams = new URLSearchParams(search);
+    expect(nextParams.get('filter')).toBe('sync');
+    expect(nextParams.get('line')).toBe('1234');
+  });
+
   it('still loads the archive under StrictMode, exactly once', async () => {
     // The app runs inside StrictMode, so effects go mount → cleanup → mount in
     // dev. Cancelling the first run's fetch on that cleanup would strand the app

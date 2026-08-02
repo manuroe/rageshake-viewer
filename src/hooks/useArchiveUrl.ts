@@ -33,7 +33,8 @@ function archiveNameFromUrl(url: string): string {
  * The URL must be same-origin or CORS-readable; a local static server pointed at
  * a case folder is the intended source.
  *
- * The hook is a no-op when the `archive` param is absent.
+ * The hook is a no-op when the `archive` param is absent. A present-but-empty one
+ * is simply dropped from the URL.
  */
 export function useArchiveUrl(): void {
   const [searchParams] = useSearchParams();
@@ -46,16 +47,30 @@ export function useArchiveUrl(): void {
   const inFlightUrl = useRef<string | null>(null);
   const loadedUrl = useRef<string | null>(null);
 
+  // The params as of the latest render. A strip lands after an await, and the
+  // effect closure's copy is stale by then, so rebuilding from it would revert any
+  // param that changed while the archive was downloading.
+  const latestParams = useRef(searchParams);
+  latestParams.current = searchParams;
+
   useEffect(() => {
     const archiveUrl = searchParams.get(ARCHIVE_URL_PARAM);
-    if (!archiveUrl) return;
+    if (archiveUrl === null) return;
 
     // Drop the param so a refresh doesn't re-fetch, keeping line/filter/start/end.
     const stripParam = (route: string) => {
-      const nextParams = new URLSearchParams(searchParams);
+      const nextParams = new URLSearchParams(latestParams.current);
       nextParams.delete(ARCHIVE_URL_PARAM);
       void navigate({ pathname: route, search: nextParams.toString() }, { replace: true });
     };
+
+    // `?archive=` with no value: nothing to fetch, but the param still has to go —
+    // App.tsx's loading gate only checks that it is present, so leaving an empty
+    // one behind holds the loading screen up forever.
+    if (archiveUrl === '') {
+      stripParam('/');
+      return;
+    }
 
     // StrictMode's mount → cleanup → mount, or any unrelated param change while
     // the fetch runs: let the in-flight run finish and navigate.
