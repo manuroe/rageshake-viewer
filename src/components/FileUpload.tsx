@@ -4,13 +4,13 @@ import { decompressSync } from 'fflate';
 import { parseLogFile } from '../utils/logParser';
 import { useLogStore } from '../stores/logStore';
 import { useArchiveStore } from '../stores/archiveStore';
-import { parseTar } from '../utils/tarParser';
+import { assertArchiveSizeOk, parseTarGzArchive } from '../utils/tarGzArchive';
 import {
   validateTextFile,
   validateGzipFile,
   decodeTextBytes,
 } from '../utils/fileValidator';
-import { wrapError, FileError, formatFileSize, type AppError } from '../utils/errorHandling';
+import { wrapError, FileError, type AppError } from '../utils/errorHandling';
 import ErrorDisplay from './ErrorDisplay';
 import styles from './FileUpload.module.css';
 
@@ -73,24 +73,11 @@ export function FileUpload() {
 
   const handleTarGzFile = useCallback(
     async (file: File) => {
-      // Guard against very large files that would lock the main thread when
-      // synchronously decompressed. Limits mirror the gzip path in fileValidator.ts.
-      const MAX_TAR_GZ_SIZE = 500 * 1024 * 1024; // 500 MB hard limit
-      if (file.size > MAX_TAR_GZ_SIZE) {
-        setValidationError(
-          new FileError(`Archive is too large (${formatFileSize(file.size)}). Maximum supported size is ${formatFileSize(MAX_TAR_GZ_SIZE)}.`)
-        );
-        return;
-      }
       try {
+        // Checked before reading, so an oversized archive never enters memory.
+        assertArchiveSizeOk(file.size);
         const buffer = await readFileAsArrayBuffer(file);
-        const tarBytes = decompressSync(new Uint8Array(buffer));
-        const tarEntries = parseTar(tarBytes);
-        if (tarEntries.length === 0) {
-          setValidationError(new FileError('The archive contains no files.'));
-          return;
-        }
-        loadArchive(file.name, tarEntries);
+        loadArchive(file.name, parseTarGzArchive(new Uint8Array(buffer)));
         void navigate('/archive');
       } catch (error) {
         const appError = wrapError(error, 'Failed to open archive. Make sure it is a valid .tar.gz file.');

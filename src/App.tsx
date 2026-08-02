@@ -27,7 +27,9 @@ import { KeyboardShortcutProvider } from './components/KeyboardShortcutProvider'
 import { ShortcutHelpOverlay, ChordToast } from './components/ShortcutHelpOverlay';
 import { useExtensionFile } from './hooks/useExtensionFile';
 import { useTabLog, TAB_LOG_PARAM } from './hooks/useTabLog';
+import { useArchiveUrl, ARCHIVE_URL_PARAM } from './hooks/useArchiveUrl';
 import { AnonymizingProgressModal } from './components/AnonymizingProgressModal';
+import uploadStyles from './components/FileUpload.module.css';
 
 function AppContent() {
   const [searchParams] = useSearchParams();
@@ -45,6 +47,10 @@ function AppContent() {
 
   // Load log text stored in localStorage when opened via "Open in new tab" on the /logs screen.
   useTabLog();
+
+  // Load an archive from the `archive=<url>` param (deep links into a served case folder).
+  useArchiveUrl();
+  const archivePending = searchParams.get(ARCHIVE_URL_PARAM) !== null;
 
   // Reset redirect flag when location changes
   useEffect(() => {
@@ -102,11 +108,25 @@ function AppContent() {
     // populate the store in its own effect and the redirect would race it.
     const tabLogPending = searchParams.get(TAB_LOG_PARAM) !== null;
     const listingPending = searchParams.get(LISTING_URL_PARAM) !== null;
-    if (!hasData && !hasArchive && !hasListing && !tabLogPending && !listingPending && location.pathname !== '/' && !isRedirecting.current) {
+    if (!hasData && !hasArchive && !hasListing && !tabLogPending && !listingPending && !archivePending && location.pathname !== '/' && !isRedirecting.current) {
       isRedirecting.current = true;
       void navigate('/', { replace: true });
     }
-  }, [rawLogLines.length, archiveEntries.length, listingEntries.length, location.pathname, navigate, searchParams]);
+  }, [rawLogLines.length, archiveEntries.length, listingEntries.length, location.pathname, navigate, searchParams, archivePending]);
+
+  // A deep link lands on the route it names (usually /logs) while the archive is
+  // still being fetched and parsed, which would render an empty log view for a
+  // few seconds. Show the loading state here rather than per route, so it covers
+  // every link shape.
+  if (archivePending) {
+    return (
+      <div className={uploadStyles.dropZone}>
+        <div className={uploadStyles.dropZoneContent}>
+          <p>Loading archive…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <KeyboardShortcutProvider>
