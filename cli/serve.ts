@@ -16,7 +16,7 @@
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { dirname, extname, join, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** Repo root, whether running from `cli/` via tsx or from the `dist-cli/` bundle. */
@@ -64,13 +64,36 @@ export function resolveServePath(urlPath: string, dataRoot: string): string | nu
   // likely to hold `.git`, `.env` or editor state that has no business being
   // readable — and it makes `..` unreachable however it was encoded.
   if (decoded.split('/').some((segment) => segment.startsWith('.'))) return null;
-  const relative = `.${decoded === '/' ? '/index.html' : decoded}`;
+  const rel = `.${decoded === '/' ? '/index.html' : decoded}`;
   for (const root of [DIST, dataRoot]) {
-    const target = resolve(root, relative);
-    if (target !== root && !target.startsWith(root + '/')) continue; // escaped this root
+    const target = resolve(root, rel);
+    // Containment via `relative`, not a `root + '/'` prefix: the separator is
+    // whatever the platform resolves to, and a different drive root comes back
+    // absolute rather than as `..`.
+    const inside = relative(root, target);
+    if (inside !== '' && (inside.startsWith('..') || isAbsolute(inside))) continue; // escaped this root
     if (existsSync(target) && statSync(target).isFile()) return target;
   }
   return null;
+}
+
+/**
+ * Is any source newer than the built index? Falls back to "yes" when the probe
+ * itself cannot run — no usable `find`, or a path it was given has gone missing.
+ * A needless rebuild costs a second; a wrong "fresh" serves the wrong viewer, and
+ * refusing to start over a failed probe serves none at all.
+ */
+function sourcesNewerThan(index: string): boolean {
+  try {
+    return (
+      execFileSync('find', ['src', 'index.html', 'vite.config.ts', '-newer', index, '-print', '-quit'], {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+      }).trim() !== ''
+    );
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -92,10 +115,7 @@ function buildViewerIfStale(): void {
     // URLs resolve nowhere under DIST. Mtimes alone would call that dist fresh and
     // serve a blank page, so the base it was built with counts as staleness too.
     readFileSync(index, 'utf8').includes('/shakeview/') ||
-    execFileSync('find', ['src', 'index.html', 'vite.config.ts', '-newer', index, '-print', '-quit'], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-    }).trim() !== '';
+    sourcesNewerThan(index);
   if (!stale) return;
   process.stdout.write('building viewer…\n');
   execFileSync('npm', ['run', 'build'], {
