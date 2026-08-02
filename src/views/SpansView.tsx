@@ -239,6 +239,21 @@ export function SpansView() {
 
   const overview = useMemo(() => buildSpanOverview(filteredLines), [filteredLines]);
 
+  // Referentially stable, because LogDisplayView makes both a dependency of its
+  // O(n) line-filtering memos — inline objects would re-run them on every render
+  // of this view.
+  const selectedLine = selected?.lineNumber;
+  const drilldown = useMemo(
+    () =>
+      selectedLine === undefined
+        ? undefined
+        : {
+            lineRange: { start: selectedLine - DRILLDOWN_CONTEXT, end: selectedLine + DRILLDOWN_CONTEXT },
+            highlightLines: { start: selectedLine, end: selectedLine },
+          },
+    [selectedLine]
+  );
+
   const toggleLevel = (level: LogLevel) => {
     setEnabledLevels((prev) => {
       const next = new Set(prev);
@@ -322,8 +337,8 @@ export function SpansView() {
               <LogDisplayView
                 key={selected.lineNumber}
                 logLines={rawLogLines}
-                lineRange={{ start: selected.lineNumber - DRILLDOWN_CONTEXT, end: selected.lineNumber + DRILLDOWN_CONTEXT }}
-                highlightLineNumber={selected.lineNumber}
+                lineRange={drilldown?.lineRange}
+                highlightLines={drilldown?.highlightLines}
                 defaultLineWrap
                 onExpand={() => openInLogsView(selected)}
                 onClose={() => setSelected(null)}

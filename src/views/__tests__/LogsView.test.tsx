@@ -123,7 +123,17 @@ describe('LogsView', () => {
     expect(container.querySelector(`.${logDisplayStyles.highlightLine}`)).toBeInTheDocument();
   });
 
-  it.each(['abc', '5abc', '0', '-1', '1.5', ''])(
+  it('highlights every line in a ?line=A-B range', () => {
+    const logs = createParsedLogLines(10);
+    useLogStore.setState({ rawLogLines: logs });
+    routerState.searchParams = new URLSearchParams('line=4-6');
+
+    const { container } = render(<LogsView />);
+
+    expect(container.querySelectorAll(`.${logDisplayStyles.highlightLine}`)).toHaveLength(3);
+  });
+
+  it.each(['abc', '5abc', '0', '-1', '1.5', '', '9-2', '5-', '0-3', '1-2-3'])(
     'does not highlight for an invalid ?line= param (%s)',
     (value) => {
       const logs = createParsedLogLines(10);

@@ -7,6 +7,24 @@ import { BurgerMenu } from '../components/BurgerMenu';
 import { TimeRangeSelector } from '../components/TimeRangeSelector';
 import { calculateTimeRangeMicros, getMinMaxTimestamps } from '../utils/timeUtils';
 
+/**
+ * Parse the `line` URL param into an inclusive highlight range.
+ * Returns undefined for anything malformed, so a bad link degrades to "no
+ * highlight" rather than an error screen.
+ *
+ * @example parseLineParam('1234')      // { start: 1234, end: 1234 }
+ * @example parseLineParam('1234-1240') // { start: 1234, end: 1240 }
+ */
+function parseLineParam(lineParam: string | null): { start: number; end: number } | undefined {
+  if (lineParam === null) return undefined;
+  const match = /^(\d+)(?:-(\d+))?$/.exec(lineParam);
+  if (!match) return undefined;
+  const start = Number(match[1]);
+  const end = match[2] === undefined ? start : Number(match[2]);
+  if (start < 1 || end < start) return undefined;
+  return { start, end };
+}
+
 export function LogsView() {
   const { rawLogLines, startTime, endTime, logFilter } = useLogStore();
   const { setLogFilter } = useURLParams();
@@ -15,15 +33,13 @@ export function LogsView() {
   // Get filter from store (synced from URL via App.tsx)
   const filterPrefill = logFilter ?? '';
 
-  // Optional `line` param: highlight and scroll to a specific line, e.g. when
-  // arriving from the overview drilldown's "Open in Logs view" button. Accept
-  // only a strictly positive integer — reject '', '12abc', '0', '-1', '1.5'
-  // (parseInt would silently accept partial/zero/negative values).
+  // Optional `line` param: highlight and scroll to a specific line ('1234'), or
+  // to an inclusive range of them ('1234-1240'). Used by the overview
+  // drilldown's "Open in Logs view" button and by report deep links. Accept only
+  // strictly positive integers, ascending — reject '', '12abc', '0', '-1',
+  // '1.5', '9-2' (parseInt would silently accept partial/zero/negative values).
   const lineParam = searchParams.get('line');
-  const highlightLineNumber =
-    lineParam !== null && /^\d+$/.test(lineParam) && Number(lineParam) > 0
-      ? Number(lineParam)
-      : undefined;
+  const highlightLines = useMemo(() => parseLineParam(lineParam), [lineParam]);
 
   // Callback to update URL when filter changes
   const handleFilterChange = useCallback((filter: string) => {
@@ -86,7 +102,7 @@ export function LogsView() {
           onFilterChange={handleFilterChange}
           prevRequestLineRange={prevRequestLineRange}
           nextRequestLineRange={nextRequestLineRange}
-          highlightLineNumber={highlightLineNumber}
+          highlightLines={highlightLines}
           showAnonymizeButton
         />
       </div>
