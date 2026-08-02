@@ -36,6 +36,16 @@ describe('parseTarGzArchive', () => {
     expect(() => parseTarGzArchive(huge)).toThrow(/too large/);
   });
 
+  it('refuses an archive whose gzip footer declares a huge expansion', () => {
+    // A decompression bomb is small compressed, so the compressed cap never sees
+    // it. gzip's trailing ISIZE field is what gives it away before inflating.
+    const bomb = gzipSync(buildTar([{ name: 'a.log', data: encoder.encode('x') }]));
+    new DataView(bomb.buffer, bomb.byteOffset + bomb.byteLength - 4, 4).setUint32(0, MAX_TAR_GZ_SIZE + 1, true);
+
+    expect(() => parseTarGzArchive(bomb)).toThrow(FileError);
+    expect(() => parseTarGzArchive(bomb)).toThrow(/expands to too much data/);
+  });
+
   it('throws on bytes that are not gzip', () => {
     expect(() => parseTarGzArchive(encoder.encode('not gzip at all'))).toThrow();
   });
