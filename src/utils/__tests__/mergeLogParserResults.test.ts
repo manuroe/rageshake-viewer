@@ -53,6 +53,56 @@ describe('mergeLogParserResults', () => {
     expect(merged.rawLogLines[4].sourceFile).toBe('09.log');
   });
 
+  it('steps the offset by the highest line number, not the line count', () => {
+    // A real parsed file has gaps: continuation lines are folded into their
+    // predecessor, so the last line's number exceeds the line count. Stepping by
+    // the count would overlap the next file onto this one's tail.
+    const withGaps: LogParserResult = {
+      requests: [], httpRequests: [], connectionIds: [],
+      rawLogLines: [line(1), line(2), line(7)], // 3 lines, highest number 7
+      sentryEvents: [{ platform: 'android', lineNumber: 7, message: 'boom' }],
+    };
+    const second: LogParserResult = {
+      requests: [], httpRequests: [], connectionIds: [],
+      rawLogLines: [line(1), line(2)],
+      sentryEvents: [],
+    };
+
+    const merged = mergeLogParserResults([
+      { name: '08.log', result: withGaps },
+      { name: '09.log', result: second },
+    ]);
+
+    const numbers = merged.rawLogLines.map((l) => l.lineNumber);
+    expect(numbers).toEqual([1, 2, 7, 8, 9]);
+    expect(new Set(numbers).size).toBe(numbers.length); // no collisions
+    expect(merged.sentryEvents.map((e) => e.lineNumber)).toEqual([7]);
+  });
+
+  it('clears line references that point past the last parsed line', () => {
+    // A request's response can be logged on a folded continuation line, so its
+    // reference can exceed every rawLogLine number — the offset must clear it too.
+    const first: LogParserResult = {
+      requests: [], httpRequests: [http(1, 9)], connectionIds: [],
+      rawLogLines: [line(1), line(2)],
+      sentryEvents: [],
+    };
+    const second: LogParserResult = {
+      requests: [], httpRequests: [http(1, 2)], connectionIds: [],
+      rawLogLines: [line(1), line(2)],
+      sentryEvents: [],
+    };
+
+    const merged = mergeLogParserResults([
+      { name: '08.log', result: first },
+      { name: '09.log', result: second },
+    ]);
+
+    // Second file starts at 10, clear of the first file's response ref at 9.
+    expect(merged.rawLogLines.map((l) => l.lineNumber)).toEqual([1, 2, 10, 11]);
+    expect(merged.httpRequests.map((r) => [r.sendLineNumber, r.responseLineNumber])).toEqual([[1, 9], [10, 11]]);
+  });
+
   it('rebases lifecycle event line numbers by the same per-file offset', () => {
     const lc = (lineNumber: number): LifecycleEvent => ({
       kind: 'coldStart', platform: 'ios', lineNumber, timestampUs: 0 as TimestampMicros,

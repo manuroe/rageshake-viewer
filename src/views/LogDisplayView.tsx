@@ -39,6 +39,15 @@ function getHttpErrorStatus(rawText: string): string | null {
   return code >= 400 ? m[1] : null;
 }
 
+/** True when `lineNumber` falls inside the inclusive highlight range, if there is one. */
+function isInHighlightRange(
+  lineNumber: number | undefined,
+  range: { start: number; end: number } | undefined
+): boolean {
+  if (range === undefined || lineNumber === undefined) return false;
+  return lineNumber >= range.start && lineNumber <= range.end;
+}
+
 /**
  * Props for LogDisplayView.
  *
@@ -101,14 +110,19 @@ interface LogDisplayViewProps {
    */
   showAnonymizeButton?: boolean;
   /**
-   * When set, the line with this `lineNumber` is highlighted and scrolled to
-   * the center on mount. Used by the overview drilldown to point at the exact
-   * occurrence the user clicked.
+   * When set, every line whose `lineNumber` falls in this **inclusive** range is
+   * highlighted, and `start` is scrolled to the center on mount. A single line is
+   * `start === end`. Used by the overview drilldown to point at the exact
+   * occurrence the user clicked, and by `?line=N` / `?line=A-B` deep links.
+   *
+   * Pass a referentially stable object: this and `lineRange` are dependencies of
+   * the O(n) line-filtering memos, so an inline object re-runs them on every
+   * render of the caller. Both drilldown panels memoize the pair.
    */
-  highlightLineNumber?: number;
+  highlightLines?: { start: number; end: number };
 }
 
-export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false, highlightLineNumber }: LogDisplayViewProps) {
+export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _defaultShowOnlyMatching = false, defaultLineWrap = false, onClose, onExpand, onFilterChange, prevRequestLineRange, nextRequestLineRange, logLines, lineRange, showAnonymizeButton = false, highlightLines }: LogDisplayViewProps) {
   const { rawLogLines, sentryEvents, lifecycleEvents, startTime, endTime, isAnonymized, isAnonymizing, originalLogLines, anonymizationDictionary, anonymizeLogs, unanonymizeLogs, logFileName, loadedEntryNames } = useLogStore();
   // Colour lines by process only when several distinct processes are merged
   // (e.g. console + nse); a single process needs no differentiation. The app
@@ -284,15 +298,15 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       return { visibleLines: filteredLines, collapseGroupsMap: collapseGroups };
     }
     return {
-      // Never collapse the highlighted line (overview drilldown / ?line=N
+      // Never collapse a highlighted line (overview drilldown / ?line=N|A-B
       // target); if it got folded away, the highlight + scroll-to-center would
       // silently no-op because it wouldn't be in the display list.
       visibleLines: filteredLines.filter(
-        ({ line, index }) => !collapsedIndices.has(index) || line.lineNumber === highlightLineNumber
+        ({ line, index }) => !collapsedIndices.has(index) || isInHighlightRange(line.lineNumber, highlightLines)
       ),
       collapseGroupsMap: collapseGroups,
     };
-  }, [filteredLines, collapseEnabled, highlightLineNumber]);
+  }, [filteredLines, collapseEnabled, highlightLines]);
 
   // Build display items with gap indicators
   const displayItems = useMemo(() => {
@@ -455,9 +469,11 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
   // Scroll the highlighted line (overview drilldown target) to center — once
   // per target line, when it first appears in the display list. Guarding on the
   // line value (not just mount) means an unrelated filter/search change later
-  // won't keep yanking the scroll position back.
+  // won't keep yanking the scroll position back. For a range, the first line is
+  // the target: it is where reading starts.
   const scrolledForLine = useRef<number | undefined>(undefined);
   useEffect(() => {
+    const highlightLineNumber = highlightLines?.start;
     if (highlightLineNumber === undefined) return;
     if (scrolledForLine.current === highlightLineNumber) return;
     const pos = displayItems.findIndex((item) => item.data.line.lineNumber === highlightLineNumber);
@@ -471,7 +487,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
       scrolledForLine.current = highlightLineNumber;
     });
     return () => cancelAnimationFrame(id);
-  }, [rowVirtualizer, displayItems, highlightLineNumber]);
+  }, [rowVirtualizer, displayItems, highlightLines]);
 
   // Auto-scroll to current search match
   useEffect(() => {
@@ -1014,7 +1030,7 @@ export function LogDisplayView({ requestFilter = '', defaultShowOnlyMatching: _d
                 ref={(el) => {
                   if (el) rowVirtualizer.measureElement(el);
                 }}
-                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${line.lineNumber === highlightLineNumber ? styles.highlightLine : ''} ${patternTemplateIndices.has(index) ? styles.patternTemplateLine : ''} ${lineWrap ? styles.wrap : styles.nowrap} ${hoveredLineIndex === index ? 'log-row-hovered' : ''}`}
+                className={`${styles.logLine} ${getLogLevelClass(line.level)} ${isMatch ? styles.matchLine : ''} ${isCurrentSearchMatch ? styles.currentMatch : ''} ${isInHighlightRange(line.lineNumber, highlightLines) ? styles.highlightLine : ''} ${patternTemplateIndices.has(index) ? styles.patternTemplateLine : ''} ${lineWrap ? styles.wrap : styles.nowrap} ${hoveredLineIndex === index ? 'log-row-hovered' : ''}`}
                 onMouseEnter={() => setHoveredLineIndex(index)}
                 onMouseLeave={() => setHoveredLineIndex(null)}
                 onFocus={() => setHoveredLineIndex(index)}

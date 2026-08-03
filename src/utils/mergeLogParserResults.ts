@@ -14,6 +14,24 @@ export interface NamedLogParserResult {
 }
 
 /**
+ * Highest line number any of a file's references point at — lines, requests,
+ * sentry and lifecycle events. Every one of them is rebased by the same offset,
+ * so the offset has to clear the highest of them.
+ */
+function maxLineNumber(result: LogParserResult): number {
+  let max = 0;
+  const bump = (n: number | undefined) => {
+    if (n !== undefined && n > max) max = n;
+  };
+  for (const line of result.rawLogLines) bump(line.lineNumber);
+  for (const r of result.requests) { bump(r.sendLineNumber); bump(r.responseLineNumber); }
+  for (const r of result.httpRequests) { bump(r.sendLineNumber); bump(r.responseLineNumber); }
+  for (const e of result.sentryEvents) bump(e.lineNumber);
+  for (const e of result.lifecycleEvents ?? []) bump(e.lineNumber);
+  return max;
+}
+
+/**
  * Merge several parsed log files into one continuous dataset.
  *
  * Logs rotate into separate hourly files, and the app emits a separate stream
@@ -29,10 +47,15 @@ export interface NamedLogParserResult {
  * lines with identical timestamps keep file order.
  *
  * Each file's line numbers restart at 1, so they are rebased with a cumulative
- * offset. This keeps `lineNumberIndex` collision-free and keeps every line
- * reference (`sendLineNumber`, `responseLineNumber`, `SentryEvent.lineNumber`)
- * pointing at the right line. Every line is tagged with `sourceFile` so the UI
- * can colour it by its originating process.
+ * offset — one per file, stepping by that file's highest line number (see
+ * `maxLineNumber`). This keeps `lineNumberIndex` collision-free and keeps every
+ * line reference (`sendLineNumber`, `responseLineNumber`,
+ * `SentryEvent.lineNumber`) pointing at the right line. Numbers are therefore
+ * unique but not contiguous across a file boundary, exactly as they are not
+ * contiguous inside a file whose continuation lines were folded.
+ *
+ * Every line is tagged with `sourceFile` so the UI can colour it by its
+ * originating process.
  */
 export function mergeLogParserResults(files: readonly NamedLogParserResult[]): LogParserResult {
   if (files.length === 0) {
@@ -87,7 +110,13 @@ export function mergeLogParserResults(files: readonly NamedLogParserResult[]): L
       lifecycleEvents.push({ ...e, lineNumber: e.lineNumber + offset });
     }
     for (const id of result.connectionIds) connectionIds.add(id);
-    offset += result.rawLogLines.length;
+    // Advance by the file's highest line number, NOT by its line count: a
+    // parsed line's number indexes the file's *text* lines, and continuation
+    // lines get folded into their predecessor, so the highest number exceeds the
+    // count. Advancing by the count would overlap the next file onto this one's
+    // tail — 1017 colliding numbers on a real 55-log archive, which makes a
+    // `?line=N` deep link resolve to the wrong line.
+    offset += maxLineNumber(result);
   }
 
   // Interleave by time. Array.sort is stable, so equal-key lines keep the file

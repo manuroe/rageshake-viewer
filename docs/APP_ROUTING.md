@@ -33,6 +33,19 @@ This document describes the routing architecture: **URL as single source of trut
 | `filter` | URL-encoded string | URI substring filter | `null` (no filter, omit from URL) |
 | `request_id` | URL-encoded string | Auto-select request | `null` |
 | `timeout` | Integer | Highlight sync requests exceeding timeout (ms) | `null` (no timeout highlighting) |
+| `line` | `N` or `A-B` | Highlight a line or an inclusive range of them on `/logs`, scrolled to the first | `null` (no highlight) |
+| `archive` | URL of a `.tar.gz` | Fetch and open that archive with every analyzable log merged, then redirect to `/logs` | `null` |
+
+### Opening an archive from a URL
+
+`archive=<url>` ([useArchiveUrl.ts](../src/hooks/useArchiveUrl.ts)) makes a log line
+linkable: the recipient does not have to drop the file in first. The URL must be same-origin
+or CORS-readable — a static server pointed at a folder of rageshakes is the intended source.
+
+It opens *every* analyzable entry merged rather than a single file, which is what keeps `line`
+meaningful: that is the same file set and order the `rageshake` CLI merges, so a line number
+taken from CLI output resolves to the same line here. The param is dropped from the URL once
+loaded, so `line`, `filter`, `start` and `end` survive a refresh but the fetch does not repeat.
 
 ### Time Filter Formats
 

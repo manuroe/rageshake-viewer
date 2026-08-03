@@ -20,9 +20,9 @@ vi.mock('../../components/TimeRangeSelector', () => ({
 
 // Isolate the view: stub LogDisplayView and expose the wired props via buttons.
 vi.mock('../LogDisplayView', () => ({
-  LogDisplayView: (props: { highlightLineNumber?: number; onExpand?: () => void; onClose?: () => void }) => (
+  LogDisplayView: (props: { highlightLines?: { start: number; end: number }; onExpand?: () => void; onClose?: () => void }) => (
     <div data-testid="log-display">
-      <span data-testid="highlight">{props.highlightLineNumber}</span>
+      <span data-testid="highlight">{props.highlightLines?.start}</span>
       <button data-testid="expand" onClick={props.onExpand}>expand</button>
       <button data-testid="close" onClick={props.onClose}>close</button>
     </div>

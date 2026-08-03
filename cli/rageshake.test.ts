@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { gzipSync, strToU8 } from 'fflate';
 import { buildTar } from '../src/utils/tarWriter';
 import { ingest, cmdPrecheck, cmdSummary, cmdGrep, cmdSlice, cmdOverview, cmdHttp, cmdCycles, resolveRange, run } from './rageshake';
+import { resolveServePath, parseServeArgs, DEFAULT_PORT } from './serve';
 import type { LogParserResult } from '../src/types/log.types';
 
 const RAW_LOG = [
@@ -497,5 +498,41 @@ describe('rageshake CLI', () => {
   it('run returns usage on missing args', () => {
     expect(run([]).code).toBe(2);
     expect(run([]).output).toContain('Commands:');
+  });
+});
+
+describe('serve', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'serve-'));
+  writeFileSync(join(dataRoot, 'rageshake.tar.gz'), 'x');
+
+  it('resolves a file inside the served directory', () => {
+    expect(resolveServePath('/rageshake.tar.gz', dataRoot)).toBe(join(dataRoot, 'rageshake.tar.gz'));
+  });
+
+  it('refuses to escape the served directory', () => {
+    // A crafted link must not reach files outside the two roots, raw or encoded.
+    expect(resolveServePath('/../../.ssh/id_rsa', dataRoot)).toBeNull();
+    expect(resolveServePath('/%2e%2e/%2e%2e/.ssh/id_rsa', dataRoot)).toBeNull();
+    expect(resolveServePath('/nope/%ZZ', dataRoot)).toBeNull();
+    expect(resolveServePath('/missing.tar.gz', dataRoot)).toBeNull();
+  });
+
+  it('refuses dot files and dot directories inside it', () => {
+    // A normalizing client turns /../.gitignore into /.gitignore, which resolves
+    // *inside* the root — the served directory's own .git/.env must stay unreadable.
+    writeFileSync(join(dataRoot, '.gitignore'), 'x');
+    expect(resolveServePath('/.gitignore', dataRoot)).toBeNull();
+    expect(resolveServePath('/.git/config', dataRoot)).toBeNull();
+    expect(resolveServePath('/sub/.env', dataRoot)).toBeNull();
+  });
+
+  it('parses its own args, defaulting the directory and the port', () => {
+    expect(parseServeArgs([])).toEqual({ dir: resolve('.'), port: DEFAULT_PORT });
+    // A bare directory must survive the flag filtering — the port index is not 0.
+    expect(parseServeArgs([dataRoot])).toEqual({ dir: dataRoot, port: DEFAULT_PORT });
+    expect(parseServeArgs(['--port', '9000'])).toEqual({ dir: resolve('.'), port: 9000 });
+    expect(parseServeArgs([dataRoot, '--port', '9000'])).toEqual({ dir: dataRoot, port: 9000 });
+    expect(() => parseServeArgs(['--port', 'abc'])).toThrow(/integer/);
+    expect(() => parseServeArgs(['--port', '70000'])).toThrow(/integer/);
   });
 });

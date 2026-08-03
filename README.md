@@ -51,6 +51,22 @@ node dist-cli/rageshake.mjs <command> <path> [options]
 
 Run with no arguments for the full command reference.
 
+### Opening a log line by URL
+
+`rageshake serve [dir]` serves the built viewer and a directory of rageshakes on one origin
+(`http://127.0.0.1:7357` by default), so an archive can be opened by link instead of by
+dropping it in — and a specific line pointed at:
+
+```bash
+rageshake serve ~/Downloads
+# http://127.0.0.1:7357/#/logs?archive=/rageshake.tar.gz&line=1234
+```
+
+The link opens every analyzable log in the archive as one merged timeline — the same set and
+order the CLI merges, so a line number from CLI output resolves to the same line. `line=A-B`
+highlights a range. It is read-only, bound to localhost, and safe to start twice (the second
+run reuses the first).
+
 ## Browser extension
 
 The extension enhances listing pages of any [rageshake](https://github.com/matrix-org/rageshake) server deployment by redirecting `/api/listing/*` pages into the bundled viewer and rendering them with the same archive-style screen used by the web app. It auto-detects rageshake archive pages using the standard `/api/listing/*` path — no configuration needed.
