@@ -59,13 +59,15 @@ dropping it in — and a specific line pointed at:
 
 ```bash
 rageshake serve ~/Downloads
-# http://127.0.0.1:7357/#/logs?archive=/rageshake.tar.gz&line=1234
+# http://127.0.0.1:7357/#/logs?archive=/rageshake.tar.gz&file=console.2026-07-21-14.log.gz&line=1234
 ```
 
-The link opens every analyzable log in the archive as one merged timeline — the same set and
-order the CLI merges, so a line number from CLI output resolves to the same line. `line=A-B`
-highlights a range. It is read-only, bound to localhost, and safe to start twice (the second
-run reuses the first).
+`line=` is the number the CLI prints in each line's `[<line>|f<tag>]` prefix, and `file=` is
+the log that `f<tag>` stands for in the `# files:` legend above the output — so a line you
+found in the terminal is one click from its context in the viewer. Naming the file keeps it
+quick: one log parses in ~0.3s, where merging all 56 logs of a real archive takes ~2.4s. Drop
+`file=` to open the whole archive merged instead; `line=A-B` highlights a range. The server is
+read-only, bound to localhost, and safe to start twice (the second run reuses the first).
 
 ## Browser extension
 
