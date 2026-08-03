@@ -63,11 +63,14 @@ export function useArchiveUrl(): void {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // What is being opened right now, and what was opened last, each as
-  // `archive` + `file`. Two refs, not one: an in-flight target must be left
-  // alone, while an already loaded one still needs its param dropped (see
-  // below). A failed load records nothing, so following the same link again
-  // retries it.
+  // The archive being opened right now, and the `archive` + `file` opened last.
+  // Two refs, not one: an in-flight archive must be left alone, while an
+  // already loaded one still needs its param dropped (see below). A failed load
+  // records nothing, so following the same link again retries it.
+  //
+  // `inFlight` deliberately ignores `file`: a link that names another file of
+  // the archive already downloading must not start a second download of it. The
+  // run in flight picks the file up instead (see the open below).
   const inFlight = useRef<string | null>(null);
   const loaded = useRef<{ url: string; file: string | null } | null>(null);
 
@@ -96,22 +99,19 @@ export function useArchiveUrl(): void {
       return;
     }
 
-    const fileParam = searchParams.get(ARCHIVE_FILE_PARAM);
-    const target = `${archiveUrl}\n${fileParam ?? ''}`;
-
-    // StrictMode's mount → cleanup → mount, or any unrelated param change while
-    // the fetch runs: let the in-flight run finish and navigate.
-    if (inFlight.current === target) return;
+    // StrictMode's mount → cleanup → mount, or any param change while the fetch
+    // runs: let the in-flight run finish and navigate.
+    if (inFlight.current === archiveUrl) return;
 
     // The very same link again — a report cites many lines in one file. Nothing
     // to do, but the param still has to go, or `archivePending` in App.tsx keeps
     // the loading screen up forever.
-    if (loaded.current?.url === archiveUrl && loaded.current.file === fileParam) {
+    if (loaded.current?.url === archiveUrl && loaded.current.file === searchParams.get(ARCHIVE_FILE_PARAM)) {
       stripParam('/logs');
       return;
     }
 
-    inFlight.current = target;
+    inFlight.current = archiveUrl;
 
     // No unmount cancellation on purpose: StrictMode's cleanup would cancel the
     // only in-flight fetch, and the second run returns on the guard above. The
@@ -136,12 +136,22 @@ export function useArchiveUrl(): void {
           useArchiveStore.getState().loadArchive(archiveName, entries);
         }
 
+        // `file=` is read here, not from the effect's closure: a second link into
+        // this same archive returned on the in-flight guard above rather than
+        // starting its own download, so this run is the one that has to honour
+        // it. If it moves again during the open, open again — the archive is in
+        // memory by now, so that costs a parse, not a download.
+        //
         // Ignore the route openMergedEntries returns: a link carrying `archive=`
         // is pointing at log lines, so /logs is where it has to land.
-        if (await openMergedEntries(entryNamesFor(entries, fileParam)) === null) {
-          throw new Error('no analyzable logs in archive');
-        }
-        loaded.current = { url: archiveUrl, file: fileParam };
+        let file: string | null;
+        do {
+          file = latestParams.current.get(ARCHIVE_FILE_PARAM);
+          if (await openMergedEntries(entryNamesFor(entries, file)) === null) {
+            throw new Error('no analyzable logs in archive');
+          }
+        } while (file !== latestParams.current.get(ARCHIVE_FILE_PARAM));
+        loaded.current = { url: archiveUrl, file };
         route = '/logs';
       } catch (err) {
         console.error('[useArchiveUrl] failed to open archive from URL:', archiveUrl, err);

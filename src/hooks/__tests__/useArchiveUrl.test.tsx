@@ -191,6 +191,36 @@ describe('useArchiveUrl', () => {
     expect(mockLoadArchive).toHaveBeenLastCalledWith('2026-07-22_112505-FG4DKXZW.tar.gz', ENTRIES);
   });
 
+  it('honours a file= that changed while the archive was still downloading', async () => {
+    // A second link into the same rageshake mid-download must not start its own
+    // download of it, and must not lose to the file the first link named.
+    let releaseFetch: (value: unknown) => void = () => {};
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise((resolve) => { releaseFetch = resolve; })));
+    mockSearchParams = new URLSearchParams(
+      `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=nse.2026-07-22-11.log.gz&line=10`
+    );
+
+    const { rerender } = renderHook(() => useArchiveUrl());
+
+    act(() => {
+      mockSearchParams = new URLSearchParams(
+        `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=console.2026-07-22-11.log.gz&line=20`
+      );
+    });
+    rerender();
+    releaseFetch({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) });
+
+    await waitFor(() => expect(mockOpenMergedEntries).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledTimes(1);
+    // The first link named a file ENTRIES does not even hold, so opening it would
+    // have failed to the landing page. What the URL names when the archive lands
+    // is what opens.
+    expect(mockOpenMergedEntries).toHaveBeenCalledTimes(1);
+    expect(mockOpenMergedEntries).toHaveBeenCalledWith(['console.2026-07-22-11.log.gz']);
+    const [{ pathname }] = mockNavigate.mock.calls[0] as [{ pathname: string }];
+    expect(pathname).toBe('/logs');
+  });
+
   it('falls back to the landing page when the fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
     mockSearchParams = new URLSearchParams(`?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&line=1234`);
