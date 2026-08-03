@@ -29,6 +29,14 @@ const HTTP_LOG = [
   '2026-01-15T10:00:01.500000Z INFO [matrix-rust-sdk] send{request_id="r2" method=POST uri="https://matrix/_matrix/media/v3/upload" request_size="10" status=500 response_size="20" request_duration=500ms}',
 ].join('\n');
 
+// A second process' log, so `http` has two files to tell apart. One request, on
+// its own line 1 — the same number HTTP_LOG's first request carries.
+const NSE_HTTP_LOG = [
+  '# [shakeview-anonymized]',
+  '2026-01-15T10:00:02.000000Z INFO [matrix-rust-sdk] send{request_id="r3" method=GET uri="https://matrix/_matrix/client/v3/keys/query" request_size="0"}',
+  '2026-01-15T10:00:02.500000Z INFO [matrix-rust-sdk] send{request_id="r3" method=GET uri="https://matrix/_matrix/client/v3/keys/query" request_size="0" status=200 response_size="30" request_duration=500ms}',
+].join('\n');
+
 // iOS lifecycle markers: cold start + two foreground/background cycles (5 events).
 const CYCLE_LOG = [
   '# [shakeview-anonymized]',
@@ -339,6 +347,24 @@ describe('rageshake CLI', () => {
     expect(out).toContain('# 1 requests (failures only)');
     expect(out).toContain('/upload');
     expect(out).not.toContain('/sync');
+  });
+
+  it('http cites each request with its line inside its own file, plus the legend', () => {
+    // Both logs hold a request on their own line 1, so the number alone cannot say
+    // which log it is in — hence the tag and the legend that expands it. Merged
+    // numbering would have put the nse request at 5, past console's 4 lines, and
+    // no viewer link could resolve that without re-merging the whole archive.
+    const ing = ingest(gzipSync(buildTar([
+      { name: 'console.2026-01-15-10.log.gz', data: gzipSync(strToU8(HTTP_LOG)) },
+      { name: 'nse.2026-01-15-10.log.gz', data: gzipSync(strToU8(NSE_HTTP_LOG)) },
+    ])), 'merged.tar.gz');
+
+    const out = cmdHttp(ing, {});
+
+    expect(out).toContain('# files: f1=console.2026-01-15-10.log.gz · f2=nse.2026-01-15-10.log.gz');
+    expect(out).toMatch(/\/sync .*\[line 1\|f1\]/);
+    expect(out).toMatch(/\/keys\/query .*\[line 1\|f2\]/);
+    expect(out).not.toContain('[line 5');
   });
 
   it('rejects a time window when the log has no parseable timestamps', () => {
