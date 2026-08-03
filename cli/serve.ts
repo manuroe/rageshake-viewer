@@ -60,6 +60,8 @@ export function resolveServePath(urlPath: string, dataRoot: string): string | nu
     return null; // malformed percent-encoding
   }
   if (decoded.includes('\0')) return null;
+  // Reject Windows path separators so dotfile/path-traversal guards can't be bypassed via %5c.
+  if (decoded.includes('\\')) return null;
   // No dot segments. Rageshakes never live in one, while the served directory is
   // likely to hold `.git`, `.env` or editor state that has no business being
   // readable — and it makes `..` unreachable however it was encoded.
