@@ -7,6 +7,8 @@ import { openMergedEntries } from '../utils/openMergedLogs';
 
 /** URL search-param key carrying the URL of a `.tar.gz` rageshake archive to open. */
 export const ARCHIVE_URL_PARAM = 'archive';
+/** URL search-param key naming one entry inside that archive to open on its own. */
+export const ARCHIVE_FILE_PARAM = 'file';
 
 /** Display name for the archive store: the URL's last path segment. */
 function archiveNameFromUrl(url: string): string {
@@ -19,16 +21,37 @@ function archiveNameFromUrl(url: string): string {
 }
 
 /**
- * Opens a rageshake archive fetched from a URL, with every analyzable log inside
- * it merged into one timeline — the same thing the archive listing's "open all"
- * action does, reachable from a plain link.
+ * Resolve `?file=` against the archive's entries, by full path or by basename —
+ * a link cites `console.2026-07-21-14.log.gz`, while the entry carries the
+ * archive-id directory prefix.
  *
- * This is what makes deep links verifiable: a link can carry `line=`, `filter=`
- * and `start=`/`end=` alongside `archive=`, and the recipient lands on the exact
- * log line without dropping the file in by hand. Merging *all* analyzable
- * entries (rather than one file) is deliberate — it reproduces the line
- * numbering the `rageshake` CLI prints, so a number quoted in a report resolves
- * to the same line here.
+ * @throws when the archive has no analyzable entry by that name. Failing beats
+ *   falling back to opening everything: `line=` is a number *within* the named
+ *   file, so a silent fallback would highlight an unrelated line rather than
+ *   none. A non-log entry (`details.json`, a screenshot) fails the same way —
+ *   parsing one as a log yields a view no `line=` means anything in.
+ */
+function entryNamesFor(entries: readonly { name: string }[], file: string | null): string[] {
+  const logs = entries.filter((e) => isAnalyzableEntry(e.name));
+  if (file === null) return logs.map((e) => e.name);
+  const match = logs.find((e) => e.name === file || e.name.split('/').pop() === file);
+  if (!match) throw new Error(`archive has no analyzable log named "${file}"`);
+  return [match.name];
+}
+
+/**
+ * Opens a rageshake archive fetched from a URL, reachable from a plain link.
+ *
+ * This is what makes deep links verifiable: a link carries `line=`, `filter=` and
+ * `start=`/`end=` alongside `archive=`, and the recipient lands on the exact log
+ * line without dropping the file in by hand.
+ *
+ * `file=` names one entry to open on its own, and `line=` is then the line number
+ * *inside that file* — which is what the `rageshake` CLI prints. It is the fast
+ * path by a wide margin: parsing one log takes ~0.3s against ~2.4s for merging
+ * all 50-odd logs of a real archive, and a cited line lives in one of them.
+ * Without `file=`, every analyzable entry is opened merged (the archive
+ * listing's "open all"), for exploring rather than for pointing.
  *
  * The URL must be same-origin or CORS-readable; a local static server pointed at
  * a case folder is the intended source.
@@ -40,12 +63,13 @@ export function useArchiveUrl(): void {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // The archive being fetched right now, and the last one fetched successfully.
-  // Two refs, not one: an in-flight URL must be left alone, while an already
-  // loaded one still needs its param dropped (see below). A failed load records
-  // nothing, so following the same link again retries it.
-  const inFlightUrl = useRef<string | null>(null);
-  const loadedUrl = useRef<string | null>(null);
+  // What is being opened right now, and what was opened last, each as
+  // `archive` + `file`. Two refs, not one: an in-flight target must be left
+  // alone, while an already loaded one still needs its param dropped (see
+  // below). A failed load records nothing, so following the same link again
+  // retries it.
+  const inFlight = useRef<string | null>(null);
+  const loaded = useRef<{ url: string; file: string | null } | null>(null);
 
   // The params as of the latest render. A strip lands after an await, and the
   // effect closure's copy is stale by then, so rebuilding from it would revert any
@@ -72,19 +96,22 @@ export function useArchiveUrl(): void {
       return;
     }
 
+    const fileParam = searchParams.get(ARCHIVE_FILE_PARAM);
+    const target = `${archiveUrl}\n${fileParam ?? ''}`;
+
     // StrictMode's mount → cleanup → mount, or any unrelated param change while
     // the fetch runs: let the in-flight run finish and navigate.
-    if (inFlightUrl.current === archiveUrl) return;
+    if (inFlight.current === target) return;
 
-    // A second link into the archive already open — a report cites many lines in
-    // one rageshake. Nothing to fetch, but the param still has to go, or
-    // `archivePending` in App.tsx keeps the loading screen up forever.
-    if (loadedUrl.current === archiveUrl) {
+    // The very same link again — a report cites many lines in one file. Nothing
+    // to do, but the param still has to go, or `archivePending` in App.tsx keeps
+    // the loading screen up forever.
+    if (loaded.current?.url === archiveUrl && loaded.current.file === fileParam) {
       stripParam('/logs');
       return;
     }
 
-    inFlightUrl.current = archiveUrl;
+    inFlight.current = target;
 
     // No unmount cancellation on purpose: StrictMode's cleanup would cancel the
     // only in-flight fetch, and the second run returns on the guard above. The
@@ -94,22 +121,32 @@ export function useArchiveUrl(): void {
       // rather than an empty log view with no explanation.
       let route = '/';
       try {
-        const response = await fetch(archiveUrl);
-        if (!response.ok) throw new Error(`fetch failed with HTTP ${response.status}`);
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        const entries = parseTarGzArchive(bytes);
-        useArchiveStore.getState().loadArchive(archiveNameFromUrl(archiveUrl), entries);
+        // A second link into the archive already in memory — another file, or the
+        // merged view — needs no download and no unpacking, just the open. The
+        // store decides that, not `loaded`: dropping another archive in by hand
+        // replaces `archiveEntries`, and resolving `file=` against those would
+        // open a same-named log from the wrong rageshake.
+        const archiveName = archiveNameFromUrl(archiveUrl);
+        let entries = useArchiveStore.getState().archiveEntries;
+        if (useArchiveStore.getState().archiveName !== archiveName) {
+          const response = await fetch(archiveUrl);
+          if (!response.ok) throw new Error(`fetch failed with HTTP ${response.status}`);
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          entries = parseTarGzArchive(bytes);
+          useArchiveStore.getState().loadArchive(archiveName, entries);
+        }
 
-        const names = entries.filter((e) => isAnalyzableEntry(e.name)).map((e) => e.name);
         // Ignore the route openMergedEntries returns: a link carrying `archive=`
         // is pointing at log lines, so /logs is where it has to land.
-        if (await openMergedEntries(names) === null) throw new Error('no analyzable logs in archive');
-        loadedUrl.current = archiveUrl;
+        if (await openMergedEntries(entryNamesFor(entries, fileParam)) === null) {
+          throw new Error('no analyzable logs in archive');
+        }
+        loaded.current = { url: archiveUrl, file: fileParam };
         route = '/logs';
       } catch (err) {
         console.error('[useArchiveUrl] failed to open archive from URL:', archiveUrl, err);
       }
-      inFlightUrl.current = null;
+      inFlight.current = null;
       stripParam(route);
     })();
   }, [searchParams, navigate]);
