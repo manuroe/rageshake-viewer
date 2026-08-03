@@ -14,7 +14,7 @@ import { parseArgs } from 'node:util';
 import { gunzipSync } from 'fflate';
 import { parseTar } from '../src/utils/tarParser.ts';
 import { parseLogFile } from '../src/utils/logParser.ts';
-import { mergeLogParserResults, type NamedLogParserResult } from '../src/utils/mergeLogParserResults.ts';
+import { mergeLogParserResults, maxLineNumber, type NamedLogParserResult } from '../src/utils/mergeLogParserResults.ts';
 import { parseDetailsJson } from '../src/utils/detailsJson.ts';
 import { isAnalyzableEntry } from '../src/utils/archiveSummary.ts';
 import { isValidGzipHeader, isValidTextContent, decodeTextBytes } from '../src/utils/fileValidator.ts';
@@ -44,7 +44,11 @@ Commands:
   cycles   <path>              App lifecycle: event counts, cold starts/crashes, app-state segments.
   serve    [dir]               Serve the viewer + a directory of rageshakes on http://127.0.0.1:7357
                                (default dir: the working directory), so a log line can be opened by
-                               URL: /#/logs?archive=/<path-under-dir>/x.tar.gz&line=<N>. Runs until
+                               URL: /#/logs?archive=/<path-under-dir>/x.tar.gz&file=<log>&line=<N>.
+                               file/line are the "[<N>|f<k>]" prefix printed on every line, with the
+                               "# files:" legend expanding f<k> to the log name — line numbers are
+                               always counted inside their own file, so file= is what makes line=
+                               resolve (drop it and all logs open merged instead). Runs until
                                stopped; starting it twice reuses the first server. Flag: --port <N>
 
 Time window (grep, slice, http, overview, spans, cycles):
@@ -87,6 +91,13 @@ export interface Ingest {
   readonly files: readonly NamedLogParserResult[];
   /** All files merged into one timeline. */
   readonly merged: LogParserResult;
+  /**
+   * Per-file line-number offset in the merged timeline, keyed by file name.
+   * Subtracting it turns a merged number back into the number that line has
+   * inside its own file — which is what output prints and what a viewer link
+   * carries, so opening one log is enough to reach the line.
+   */
+  readonly offsets: ReadonlyMap<string, number>;
   /** Parsed details.json when the archive has one. */
   readonly details: ReturnType<typeof parseDetailsJson>;
   /** Every decodable text entry (for precheck). */
@@ -155,7 +166,15 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
   // Pass the raw text: parseLogFile detects and strips the anonymization marker
   // itself and sets isAnonymized — pre-stripping here would hide that signal.
   const files = logs.map((t) => ({ name: t.name, result: parseLogFile(t.text) }));
-  return { files, merged: mergeLogParserResults(files), details, textEntries };
+  // Mirror mergeLogParserResults' cumulative rebasing, so a merged number can be
+  // mapped back to (file, line-in-file). Same helper, so the two cannot drift.
+  const offsets = new Map<string, number>();
+  let offset = 0;
+  for (const f of files) {
+    offsets.set(f.name, offset);
+    offset += maxLineNumber(f.result);
+  }
+  return { files, merged: mergeLogParserResults(files), offsets, details, textEntries };
 }
 
 function loadInput(path: string): Ingest {
@@ -375,11 +394,42 @@ function fileTags(ing: Ingest): Map<string, string> {
   return new Map(ing.files.map((f, i) => [f.name, `f${i + 1}`]));
 }
 
-function formatLine(line: ParsedLogLine, tags: Map<string, string> | null, width: number, keepSpans: boolean): string {
+/**
+ * `# files:` legend expanding only the tags the emitted page actually cites. A
+ * rageshake routinely carries 60 logs; expanding all of them costs far more than
+ * the tags save, and the caller only ever needs to resolve a tag it can see.
+ */
+function filesLegend(ing: Ingest, tags: Map<string, string> | null, citedFiles: Iterable<string | undefined>): string | null {
+  if (!tags) return null;
+  const cited = new Set<string>();
+  for (const name of citedFiles) if (name !== undefined) cited.add(name);
+  const shown = ing.files.filter((f) => cited.has(f.name));
+  if (shown.length === 0) return null;
+  return `# files: ${shown.map((f) => `${tags.get(f.name)}=${basename(f.name)}`).join(' · ')}`;
+}
+
+/**
+ * Render a merged line number as `<line-in-its-own-file>|<file tag>`.
+ *
+ * Every printed number is per-file, never merged, so one number means one thing
+ * throughout the output: the line as its own log file counts it. That is what a
+ * viewer link needs — with the file named, the viewer opens that log alone
+ * (~0.3s) instead of merging all 50-odd logs in the archive (~2.4s) to make a
+ * merged number resolve.
+ *
+ * `tags` is null for a single-log archive, where the offset is 0 and the file
+ * needs no naming, so the output is just the number.
+ */
+function lineRef(mergedLineNumber: number, sourceFile: string | undefined, tags: Map<string, string> | null, offsets: ReadonlyMap<string, number>): string {
+  if (!tags || !sourceFile) return `${mergedLineNumber}`;
+  const inFile = mergedLineNumber - (offsets.get(sourceFile) ?? 0);
+  return `${inFile}|${tags.get(sourceFile) ?? extractCategory(sourceFile)}`;
+}
+
+function formatLine(line: ParsedLogLine, tags: Map<string, string> | null, width: number, keepSpans: boolean, offsets: ReadonlyMap<string, number>): string {
   const time = line.displayTime ? line.displayTime.slice(0, 12) : '??:??:??.???';
-  const tag = tags && line.sourceFile ? `|${tags.get(line.sourceFile) ?? extractCategory(line.sourceFile)}` : '';
   const text = displayText(line, keepSpans);
-  return `[${line.lineNumber}${tag}] ${time} ${line.level.padEnd(5)} ${width > 0 ? trim(text, width) : text}`;
+  return `[${lineRef(line.lineNumber, line.sourceFile, tags, offsets)}] ${time} ${line.level.padEnd(5)} ${width > 0 ? trim(text, width) : text}`;
 }
 
 /** Emit display entries with day markers, gap markers and a pagination footer. */
@@ -389,14 +439,8 @@ function emitEntries(out: string[], entries: readonly DisplayEntry[], flags: Fla
   const width = intFlag(flags.width, 200);
   const page = entries.slice(offset, offset + limit);
   const tags = ing.files.length > 1 ? fileTags(ing) : null;
-  if (tags) {
-    // Legend only for the files this page actually cites. A rageshake routinely
-    // carries 60 logs; expanding all of them costs far more than the tags save,
-    // and the caller only ever needs to resolve a tag it can see.
-    const cited = new Set(page.map((e) => e.line.sourceFile).filter(Boolean));
-    const shown = ing.files.filter((f) => cited.has(f.name));
-    if (shown.length > 0) out.push(`# files: ${shown.map((f) => `${tags.get(f.name)}=${basename(f.name)}`).join(' · ')}`);
-  }
+  const legend = filesLegend(ing, tags, page.map((e) => e.line.sourceFile));
+  if (legend) out.push(legend);
   let lastDay = '';
   for (const e of page) {
     const day = String(e.line.isoTimestamp).slice(0, 10);
@@ -405,7 +449,7 @@ function emitEntries(out: string[], entries: readonly DisplayEntry[], flags: Fla
       lastDay = day;
     }
     if (e.gapBefore > 0) out.push(`... ${e.gapBefore} lines ...`);
-    out.push(formatLine(e.line, tags, width, flags.spans === true));
+    out.push(formatLine(e.line, tags, width, flags.spans === true, ing.offsets));
     if (e.dupCount > 0) out.push(`... ${e.dupCount} duplicated lines ...`);
   }
   const remaining = entries.length - offset - page.length;
@@ -610,7 +654,18 @@ export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
     slowestHttpRequests: stats.slowestHttpRequests.slice(0, 5).map((r) => ({
       durationMs: r.duration, method: r.method, status: r.status, uri: trim(r.uri, 120),
     })),
-    sentryEvents: merged.sentryEvents.slice(0, 10).map((e) => ({ platform: e.platform, line: e.lineNumber, message: trim(e.message) })),
+    // `line` is per-file like every other number the CLI prints, so `file` has to
+    // come with it — there is no merged view to resolve it against.
+    sentryEvents: merged.sentryEvents.slice(0, 10).map((e) => {
+      const sourceFile = lineIndex.get(e.lineNumber)?.sourceFile;
+      const offset = sourceFile !== undefined ? ing.offsets.get(sourceFile) ?? 0 : 0;
+      return {
+        platform: e.platform,
+        line: e.lineNumber - offset,
+        ...(ing.files.length > 1 && sourceFile !== undefined ? { file: basename(sourceFile) } : {}),
+        message: trim(e.message),
+      };
+    }),
     lifecycle: {
       counts: lifecycleCounts,
       lastColdStart: coldStart !== null ? microsToISO(coldStart) : null,
@@ -853,12 +908,16 @@ export function cmdHttp(ing: Ingest, flags: Flags): string {
   const limit = intFlag(flags.limit, LINE_LIMIT);
   const offset = intFlag(flags.offset, 0);
   const page = reqs.slice(offset, offset + limit);
+  const tags = ing.files.length > 1 ? fileTags(ing) : null;
+  const legend = filesLegend(ing, tags, page.map((r) => lineIndex.get(r.sendLineNumber || r.responseLineNumber)?.sourceFile));
+  if (legend) out.push(legend);
   for (const r of page) {
     const line = lineIndex.get(r.sendLineNumber || r.responseLineNumber);
     const time = line?.displayTime ? line.displayTime.slice(0, 12) : '?';
     const outcome = r.clientError ? `err=${r.clientError}` : (r.status || 'incomplete');
     const retries = (r.numAttempts ?? 1) > 1 ? ` attempts=${r.numAttempts}` : '';
-    out.push(`${time} ${r.method} ${trim(r.uri, 120)} → ${outcome} ${r.requestDurationMs}ms up=${r.requestSizeString || '0'} down=${r.responseSizeString || '0'}${retries} [line ${r.sendLineNumber || r.responseLineNumber}]`);
+    const ref = lineRef(r.sendLineNumber || r.responseLineNumber, line?.sourceFile, tags, ing.offsets);
+    out.push(`${time} ${r.method} ${trim(r.uri, 120)} → ${outcome} ${r.requestDurationMs}ms up=${r.requestSizeString || '0'} down=${r.responseSizeString || '0'}${retries} [line ${ref}]`);
   }
   const remaining = reqs.length - offset - page.length;
   if (remaining > 0) out.push(`# ${remaining} more — next: --offset ${offset + page.length}`);
@@ -953,10 +1012,15 @@ export function cmdCycles(ing: Ingest, flags: Flags): string {
     } else {
       out.push('# cold starts / crashes:');
       if (olderMarkers > 0) out.push(`# ${olderMarkers} earlier markers — next: --offset ${offset + markerPage.length}`);
+      const tags = ing.files.length > 1 ? fileTags(ing) : null;
+      const lineIndex = new Map(ing.merged.rawLogLines.map((l) => [l.lineNumber, l]));
+      const legend = filesLegend(ing, tags, markerPage.map((e) => lineIndex.get(e.lineNumber)?.sourceFile));
+      if (legend) out.push(legend);
       let lastDay = '';
       for (const e of markerPage) {
         lastDay = pushDayMarker(out, e.timestampUs, lastDay);
-        out.push(`  ${clockOf(e.timestampUs)} ${e.kind} [line ${e.lineNumber}]`);
+        const ref = lineRef(e.lineNumber, lineIndex.get(e.lineNumber)?.sourceFile, tags, ing.offsets);
+        out.push(`  ${clockOf(e.timestampUs)} ${e.kind} [line ${ref}]`);
       }
     }
   }

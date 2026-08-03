@@ -3,7 +3,10 @@
  * on one origin, so a log line can be reached by URL instead of by dropping a
  * file into the browser.
  *
- *   http://127.0.0.1:7357/#/logs?archive=/<path-under-dir>/rageshake.tar.gz&line=1234
+ *   http://127.0.0.1:7357/#/logs?archive=/<path-under-dir>/rageshake.tar.gz&file=console.2026-07-21-14.log.gz&line=1234
+ *
+ * `line` counts inside `file`, which is how the CLI prints it; without `file` the
+ * whole archive opens merged instead.
  *
  * The viewer fetches the archive itself (see `useArchiveUrl`), which needs it to
  * be same-origin — hence one server for both. Everything is read-only and bound

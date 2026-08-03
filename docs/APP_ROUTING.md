@@ -34,18 +34,29 @@ This document describes the routing architecture: **URL as single source of trut
 | `request_id` | URL-encoded string | Auto-select request | `null` |
 | `timeout` | Integer | Highlight sync requests exceeding timeout (ms) | `null` (no timeout highlighting) |
 | `line` | `N` or `A-B` | Highlight a line or an inclusive range of them on `/logs`, scrolled to the first | `null` (no highlight) |
-| `archive` | URL of a `.tar.gz` | Fetch and open that archive with every analyzable log merged, then redirect to `/logs` | `null` |
+| `archive` | URL of a `.tar.gz` | Fetch and open that archive, then redirect to `/logs` | `null` |
+| `file` | Name of one analyzable log inside the archive | Open just that log; `line` then counts within it | `null` (all analyzable logs, merged) |
 
 ### Opening an archive from a URL
 
 `archive=<url>` ([useArchiveUrl.ts](../src/hooks/useArchiveUrl.ts)) makes a log line
 linkable: the recipient does not have to drop the file in first. The URL must be same-origin
 or CORS-readable — a static server pointed at a folder of rageshakes is the intended source.
+Only `archive` is dropped from the URL once loaded, so `file`, `line`, `filter`, `start` and
+`end` survive a refresh but the fetch does not repeat.
 
-It opens *every* analyzable entry merged rather than a single file, which is what keeps `line`
-meaningful: that is the same file set and order the `rageshake` CLI merges, so a line number
-taken from CLI output resolves to the same line here. The param is dropped from the URL once
-loaded, so `line`, `filter`, `start` and `end` survive a refresh but the fetch does not repeat.
+Add `file=<entry>` (matched on full path or basename) and only that log is opened, with `line`
+counted inside it — which is how the `rageshake` CLI prints line numbers. This is the fast
+path: measured on a real 19 MB, 56-log archive, **335 ms against 2480 ms** for the merged
+alternative, since decompressing and parsing every log is ~95% of the work. A `file=` that
+names no analyzable log in the archive fails to the landing page rather than falling back to
+the merged view, because `line` would then point at an unrelated line.
+
+Without `file=`, every analyzable entry is opened as one merged timeline (the archive
+listing's "open all") — for exploring an archive rather than pointing at a line. A second link
+into the archive still in memory re-opens from the store with no new download; one into an
+archive since replaced by a hand-dropped file re-fetches, since `file` would otherwise resolve
+against the wrong rageshake.
 
 ### Time Filter Formats
 

@@ -25,8 +25,29 @@ vi.mock('../../utils/openMergedLogs', () => ({
   openMergedEntries: mockOpenMergedEntries,
 }));
 
+// The store is stateful here, not a bare spy: the hook skips the download when
+// the archive it wants is the one in memory, so `archiveName`/`archiveEntries`
+// have to actually change when something is loaded — including the hand-dropped
+// archive of the "replaced in memory" test.
+let storeName = '';
+let storeEntries: readonly { name: string }[] = [];
+function putInStore(name: string, entries: readonly { name: string }[]): void {
+  storeName = name;
+  storeEntries = entries;
+}
 vi.mock('../../stores/archiveStore', () => ({
-  useArchiveStore: { getState: () => ({ loadArchive: mockLoadArchive }) },
+  // Getters, not values: the factory runs at import time, when the bindings
+  // above are still in their temporal dead zone.
+  useArchiveStore: {
+    getState: () => ({
+      loadArchive: (name: string, entries: readonly { name: string }[]) => {
+        putInStore(name, entries);
+        mockLoadArchive(name, entries);
+      },
+      get archiveName() { return storeName; },
+      get archiveEntries() { return storeEntries; },
+    }),
+  },
 }));
 
 let mockSearchParams: URLSearchParams;
@@ -35,7 +56,7 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-import { useArchiveUrl, ARCHIVE_URL_PARAM } from '../useArchiveUrl';
+import { useArchiveUrl, ARCHIVE_URL_PARAM, ARCHIVE_FILE_PARAM } from '../useArchiveUrl';
 
 const ARCHIVE_URL = 'http://127.0.0.1:7357/cases/ios-1-slug/shakes/2026-07-22_112505-FG4DKXZW.tar.gz';
 const ENTRIES = [
@@ -56,6 +77,7 @@ describe('useArchiveUrl', () => {
     vi.clearAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => {});
     mockSearchParams = new URLSearchParams();
+    putInStore('', []);
     mockParseTarGzArchive.mockReturnValue(ENTRIES);
     mockOpenMergedEntries.mockResolvedValue('/summary');
   });
@@ -87,6 +109,116 @@ describe('useArchiveUrl', () => {
     expect(nextParams.has(ARCHIVE_URL_PARAM)).toBe(false);
     expect(nextParams.get('line')).toBe('1234');
     expect(nextParams.get('filter')).toBe('sync');
+  });
+
+  it('opens only the entry named by file=, matched on its basename', async () => {
+    mockFetchOk();
+    // The link cites the bare filename; the entry carries no prefix here, but a
+    // real archive nests everything under its archive-id directory.
+    mockSearchParams = new URLSearchParams(
+      `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=console.2026-07-22-11.log.gz&line=1234`
+    );
+
+    renderHook(() => useArchiveUrl());
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(mockOpenMergedEntries).toHaveBeenCalledWith(['console.2026-07-22-11.log.gz']);
+    const [{ pathname, search }] = mockNavigate.mock.calls[0] as [{ pathname: string; search: string }];
+    expect(pathname).toBe('/logs');
+    // file= stays in the URL: it says what `line=` is relative to.
+    expect(new URLSearchParams(search).get(ARCHIVE_FILE_PARAM)).toBe('console.2026-07-22-11.log.gz');
+  });
+
+  it('refuses an unknown file= instead of opening everything', async () => {
+    // Falling back to the merged view would read `line=` as a merged number and
+    // highlight an unrelated line — worse than no highlight at all.
+    mockFetchOk();
+    mockSearchParams = new URLSearchParams(
+      `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=nse.2026-07-22-11.log.gz&line=1234`
+    );
+
+    renderHook(() => useArchiveUrl());
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(mockOpenMergedEntries).not.toHaveBeenCalled();
+    expect((mockNavigate.mock.calls[0][0] as { pathname: string }).pathname).toBe('/');
+  });
+
+  it('reuses the archive already in memory for a second link, without re-fetching', async () => {
+    mockFetchOk();
+    mockSearchParams = new URLSearchParams(
+      `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=console.2026-07-22-11.log.gz&line=10`
+    );
+
+    const { rerender } = renderHook(() => useArchiveUrl());
+    await waitFor(() => expect(mockOpenMergedEntries).toHaveBeenCalledTimes(1));
+
+    // Same archive, no file → the merged view, still no second download.
+    act(() => {
+      mockSearchParams = new URLSearchParams(`?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&line=20`);
+    });
+    rerender();
+
+    await waitFor(() => expect(mockOpenMergedEntries).toHaveBeenCalledTimes(2));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mockLoadArchive).toHaveBeenCalledTimes(1);
+    expect(mockOpenMergedEntries).toHaveBeenLastCalledWith(['console.2026-07-22-11.log.gz']);
+  });
+
+  it('re-fetches when another archive has replaced the one in memory', async () => {
+    mockFetchOk();
+    mockSearchParams = new URLSearchParams(
+      `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=console.2026-07-22-11.log.gz`
+    );
+
+    const { rerender } = renderHook(() => useArchiveUrl());
+    await waitFor(() => expect(mockLoadArchive).toHaveBeenCalledTimes(1));
+
+    // The user drops a different rageshake in by hand, so the store now holds its
+    // entries. A link into the first archive naming another of its files must
+    // re-fetch: hourly log names repeat across archives, so resolving `file=`
+    // against what happens to be in memory would open the wrong rageshake's log.
+    act(() => {
+      putInStore('other.tar.gz', [{ name: 'nse.2026-07-22-11.log.gz', data: new Uint8Array() }]);
+      mockSearchParams = new URLSearchParams(
+        `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=nse.2026-07-22-11.log.gz`
+      );
+    });
+    rerender();
+
+    await waitFor(() => expect(mockLoadArchive).toHaveBeenCalledTimes(2));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(mockLoadArchive).toHaveBeenLastCalledWith('2026-07-22_112505-FG4DKXZW.tar.gz', ENTRIES);
+  });
+
+  it('honours a file= that changed while the archive was still downloading', async () => {
+    // A second link into the same rageshake mid-download must not start its own
+    // download of it, and must not lose to the file the first link named.
+    let releaseFetch: (value: unknown) => void = () => {};
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise((resolve) => { releaseFetch = resolve; })));
+    mockSearchParams = new URLSearchParams(
+      `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=nse.2026-07-22-11.log.gz&line=10`
+    );
+
+    const { rerender } = renderHook(() => useArchiveUrl());
+
+    act(() => {
+      mockSearchParams = new URLSearchParams(
+        `?${ARCHIVE_URL_PARAM}=${ARCHIVE_URL}&${ARCHIVE_FILE_PARAM}=console.2026-07-22-11.log.gz&line=20`
+      );
+    });
+    rerender();
+    releaseFetch({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) });
+
+    await waitFor(() => expect(mockOpenMergedEntries).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledTimes(1);
+    // The first link named a file ENTRIES does not even hold, so opening it would
+    // have failed to the landing page. What the URL names when the archive lands
+    // is what opens.
+    expect(mockOpenMergedEntries).toHaveBeenCalledTimes(1);
+    expect(mockOpenMergedEntries).toHaveBeenCalledWith(['console.2026-07-22-11.log.gz']);
+    const [{ pathname }] = mockNavigate.mock.calls[0] as [{ pathname: string }];
+    expect(pathname).toBe('/logs');
   });
 
   it('falls back to the landing page when the fetch fails', async () => {
