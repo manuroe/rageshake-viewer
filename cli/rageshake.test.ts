@@ -216,6 +216,30 @@ describe('rageshake CLI', () => {
     expect(cmdGrep(ingest(buildArchive(ANON_LOG), 'anon.tar.gz'), ['retry'], {})).not.toContain('# files:');
   });
 
+  it('prints line numbers as counted inside their own file, not merged', () => {
+    // A deep link names one log and a line inside it, so the viewer opens that log
+    // alone instead of merging every log in the archive to resolve the number.
+    const consoleLog = ['# [shakeview-anonymized]',
+      '2026-01-15T10:00:00.000000Z INFO [matrix-rust-sdk] first console line',
+      '2026-01-15T10:00:02.000000Z INFO [matrix-rust-sdk] second console line',
+      '2026-01-15T10:00:04.000000Z INFO [matrix-rust-sdk] third console line'].join('\n');
+    const nseLog = ['# [shakeview-anonymized]',
+      '2026-01-15T10:00:01.000000Z INFO [matrix-rust-sdk] first nse line',
+      '2026-01-15T10:00:03.000000Z INFO [matrix-rust-sdk] second nse line'].join('\n');
+    const ing = ingest(gzipSync(buildTar([
+      { name: 'console.2026-01-15-10.log.gz', data: gzipSync(strToU8(consoleLog)) },
+      { name: 'nse.2026-01-15-10.log.gz', data: gzipSync(strToU8(nseLog)) },
+    ])), 'merged.tar.gz');
+
+    const out = cmdGrep(ing, ['second'], {});
+
+    // Both files number their own lines from 1 (parseLogFile strips the
+    // anonymization marker), so each file's second line is 2. Merged numbering
+    // would have put the nse line at 5, past the console file's 3 lines.
+    expect(out).toMatch(/\[2\|f1\].*second console line/);
+    expect(out).toMatch(/\[2\|f2\].*second nse line/);
+  });
+
   it('--since accepts an absolute ISO timestamp (equivalent to --from)', () => {
     const ing = ingest(buildArchive(ANON_LOG), 'anon.tar.gz');
     const out = cmdSlice(ing, { since: '2026-01-15T10:00:02Z' });

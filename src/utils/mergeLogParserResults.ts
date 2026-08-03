@@ -18,7 +18,7 @@ export interface NamedLogParserResult {
  * sentry and lifecycle events. Every one of them is rebased by the same offset,
  * so the offset has to clear the highest of them.
  */
-function maxLineNumber(result: LogParserResult): number {
+export function maxLineNumber(result: LogParserResult): number {
   let max = 0;
   const bump = (n: number | undefined) => {
     if (n !== undefined && n > max) max = n;
