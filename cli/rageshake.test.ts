@@ -602,7 +602,35 @@ describe('rageshake CLI', () => {
     // No shift means no legend note.
     expect(cmdGrep(ing, ['Tag'], {})).not.toContain('shifted');
   });
+
+  it('lastseen lists targets quietest-first with silence gaps', () => {
+    const log = [
+      '# [shakeview-anonymized]',
+      '2026-01-15T10:00:00.000000Z DEBUG matrix_sdk::event_cache: handling update',
+      '2026-01-15T10:00:01.000000Z DEBUG matrix_sdk::sliding_sync: tick',
+      '2026-01-15T10:00:02.000000Z DEBUG matrix_sdk::event_cache: handling update',
+      '2026-01-15T10:00:30.000000Z DEBUG matrix_sdk::sliding_sync: tick',
+    ].join('\n');
+    const output = run(['lastseen', writeTmpArchive(buildArchive(log))]).output;
+
+    // The wedged-looking target (last line 28s before the end) floats to the top.
+    const eventCacheAt = output.indexOf('matrix_sdk::event_cache');
+    const slidingSyncAt = output.indexOf('matrix_sdk::sliding_sync');
+    expect(eventCacheAt).toBeGreaterThan(-1);
+    expect(slidingSyncAt).toBeGreaterThan(-1);
+    expect(eventCacheAt).toBeLessThan(slidingSyncAt);
+    expect(output).toContain('silent');
+    expect(output).toContain('(2 lines)');
+  });
 });
+
+/** Write an archive to a temp file and return its path (for `run`). */
+function writeTmpArchive(bytes: Uint8Array): string {
+  const dir = mkdtempSync(join(tmpdir(), 'rageshake-cli-'));
+  const path = join(dir, 'archive.tar.gz');
+  writeFileSync(path, bytes);
+  return path;
+}
 
 describe('serve', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'serve-'));

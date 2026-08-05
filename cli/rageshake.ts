@@ -21,7 +21,7 @@ import { isValidGzipHeader, isValidTextContent, decodeTextBytes } from '../src/u
 import { detectAnonymizedLog, MATRIX_IDENTIFIER_RE } from '../src/utils/anonymizeUtils.ts';
 import { computeSummaryStats } from '../src/utils/summaryStats.ts';
 import { lastColdStartUs, lastForegroundUs, deriveAppStateSegments, MARKER_KINDS, type AppStateSegment } from '../src/utils/lifecycleEvents.ts';
-import { buildLogOverview, type OverviewNode } from '../src/utils/logOverview.ts';
+import { buildLogOverview, extractTarget, type OverviewNode } from '../src/utils/logOverview.ts';
 import { buildSpanOverview, type SpanNode } from '../src/utils/spanOverview.ts';
 import { extractDateKey, extractCategory } from '../src/utils/listingEntries.ts';
 import { stripLogPrefix } from '../src/utils/logMessageUtils.ts';
@@ -38,6 +38,9 @@ Commands:
   precheck <path>              Verify the file is anonymized. Exit 1 + reason when not.
   summary  <path>              details.json + per-file stats + top errors/warnings/HTTP failures (JSON).
   overview <path>              Log lines grouped by module target, error/warn counts per subtree.
+  lastseen <path>              Per-target last-activity table, quietest first. Silence is evidence:
+                               a deadlocked subsystem stops logging without any error — this names
+                               the target that went quiet while everything else kept running.
   spans    <path>              SDK log lines grouped by span chain (operation view).
   grep     <path> <pattern>... Lines matching ANY pattern (case-insensitive substring).
   slice    <path>              All lines in a time window (use with --last/--since/--from).
@@ -52,7 +55,7 @@ Commands:
                                resolve (drop it and all logs open merged instead). Runs until
                                stopped; starting it twice reuses the first server. Flag: --port <N>
 
-Time window (grep, slice, http, overview, spans, cycles):
+Time window (grep, slice, http, overview, lastseen, spans, cycles):
   --from <ISO>                 Start timestamp, e.g. 2026-01-15T10:00:00Z
   --to <ISO>                   End timestamp
   --since <anchor|ISO>         last-cold-start | last-foreground | last-background, or an ISO timestamp
@@ -178,6 +181,7 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
   // are captured at submission time — see estimateLogcatSkewUs).
   const { files, skewUs: logcatSkewUs } = alignLogcatFiles(
     logs.map((t) => ({ name: t.name, result: parseLogFile(t.text) })));
+
   // Mirror mergeLogParserResults' cumulative rebasing, so a merged number can be
   // mapped back to (file, line-in-file). Same helper, so the two cannot drift.
   const offsets = new Map<string, number>();
@@ -763,6 +767,59 @@ export function cmdOverview(ing: Ingest, flags: Flags): string {
   return out.join('\n');
 }
 
+/**
+ * Flat per-target activity table, quietest-first: when did each module last
+ * log inside the window?
+ *
+ * Silence is evidence. A wedged subsystem (deadlock, stuck task) simply stops
+ * logging — no error ever fires — while the rest of the process carries on,
+ * so presence-oriented views (`overview`, `grep`) look healthy. Sorting
+ * targets by their last line and showing how long each has been silent before
+ * the window end names the frozen subsystem in one call — the case this was
+ * built for had the event cache's last line 11 minutes before the report was
+ * sent while sliding sync logged to the final second.
+ */
+export function cmdLastSeen(ing: Ingest, flags: Flags): string {
+  const out: string[] = [];
+  const range = resolveRange(ing.merged, flags, (m) => out.push(m));
+  rangeHeader(out, range, ing.merged);
+  const indices = selectIndices(ing.merged, range, flags);
+
+  interface Row { count: number; lastUs: number; }
+  const rows = new Map<string, Row>();
+  for (const i of indices) {
+    const line = ing.merged.rawLogLines[i];
+    if (!line.timestampUs) continue;
+    const target = extractTarget(line.rawText) ?? '(no target)';
+    const row = rows.get(target);
+    if (row) {
+      row.count += 1;
+      row.lastUs = Math.max(row.lastUs, line.timestampUs);
+    } else {
+      rows.set(target, { count: 1, lastUs: line.timestampUs });
+    }
+  }
+  if (rows.size === 0) {
+    out.push('# no matching lines');
+    return out.join('\n');
+  }
+
+  const endUs = range?.endUs ?? getMinMaxTimestamps(ing.merged.rawLogLines).max;
+  const limit = intFlag(flags.limit, 40);
+  // Quietest first: the wedged subsystem floats to the top.
+  const sorted = [...rows.entries()].sort((a, b) => a[1].lastUs - b[1].lastUs);
+
+  out.push(`# ${rows.size} targets · sorted by last activity (quietest first) · silent = gap to window end`);
+  for (const [target, row] of sorted.slice(0, limit)) {
+    const silentUs = endUs - row.lastUs;
+    // formatDuration takes milliseconds.
+    const silentLabel = silentUs > 1e6 ? `silent ${formatDuration(silentUs / 1000)}` : 'active at end';
+    out.push(`${microsToISO(row.lastUs as TimestampMicros)}  ${silentLabel.padEnd(14)}  ${target} (${row.count} lines)`);
+  }
+  if (sorted.length > limit) out.push(`# ${sorted.length - limit} more targets — raise --limit`);
+  return out.join('\n');
+}
+
 export function cmdSpans(ing: Ingest, flags: Flags): string {
   const out: string[] = [];
   const range = resolveRange(ing.merged, flags, (m) => out.push(m));
@@ -1120,7 +1177,7 @@ export function run(argv: string[]): { code: number; output: string } {
 
   // Validate the command (and grep's pattern) before touching the filesystem, so
   // a typo'd command surfaces the usage message rather than a parse/IO error.
-  const known = ['precheck', 'summary', 'overview', 'spans', 'grep', 'slice', 'http', 'cycles'];
+  const known = ['precheck', 'summary', 'overview', 'lastseen', 'spans', 'grep', 'slice', 'http', 'cycles'];
   if (!known.includes(cmd)) return { code: 2, output: `unknown command "${cmd}"\n\n${USAGE}` };
   if (cmd === 'grep' && patterns.length === 0) return { code: 2, output: 'grep needs at least one pattern: rageshake grep <path> <pattern>...' };
 
@@ -1132,6 +1189,7 @@ export function run(argv: string[]): { code: number; output: string } {
     }
     case 'summary': return { code: 0, output: cmdSummary(ing, flags) };
     case 'overview': return { code: 0, output: cmdOverview(ing, flags) };
+    case 'lastseen': return { code: 0, output: cmdLastSeen(ing, flags) };
     case 'spans': return { code: 0, output: cmdSpans(ing, flags) };
     case 'grep': return { code: 0, output: cmdGrep(ing, patterns, flags) };
     case 'slice': return { code: 0, output: cmdSlice(ing, flags) };
