@@ -26,6 +26,7 @@ import { buildSpanOverview, type SpanNode } from '../src/utils/spanOverview.ts';
 import { extractDateKey, extractCategory } from '../src/utils/listingEntries.ts';
 import { stripLogPrefix } from '../src/utils/logMessageUtils.ts';
 import { SPANS_MARKER } from '../src/utils/spansParser.ts';
+import { alignLogcatFiles, isLogcatFile } from '../src/utils/logcatClockAlign.ts';
 import { isoToMicros, microsToISO, getMinMaxTimestamps, formatDuration } from '../src/utils/timeUtils.ts';
 import { cmdServe } from './serve.ts';
 import type { LogParserResult, ParsedLogLine, LifecycleEvent, HttpRequest } from '../src/types/log.types.ts';
@@ -102,6 +103,12 @@ export interface Ingest {
   readonly details: ReturnType<typeof parseDetailsJson>;
   /** Every decodable text entry (for precheck). */
   readonly textEntries: readonly TextEntry[];
+  /**
+   * Microseconds added to the logcat file's timestamps to align its
+   * device-local clock with the UTC tracing logs (0 = no correction applied).
+   * Surfaced in the `# files:` legend so the shift is never silent.
+   */
+  readonly logcatSkewUs: number;
 }
 
 function isTarBytes(bytes: Uint8Array): boolean {
@@ -165,7 +172,12 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
       || a.name.localeCompare(b.name));
   // Pass the raw text: parseLogFile detects and strips the anonymization marker
   // itself and sets isAnonymized — pre-stripping here would hide that signal.
-  const files = logs.map((t) => ({ name: t.name, result: parseLogFile(t.text) }));
+  // Android logcat runs on the device-local clock while the tracing files are
+  // UTC. Merging them uncorrected fabricates phantom multi-hour gaps and
+  // breaks lifecycle durations, so align logcat onto the tracing clock (both
+  // are captured at submission time — see estimateLogcatSkewUs).
+  const { files, skewUs: logcatSkewUs } = alignLogcatFiles(
+    logs.map((t) => ({ name: t.name, result: parseLogFile(t.text) })));
   // Mirror mergeLogParserResults' cumulative rebasing, so a merged number can be
   // mapped back to (file, line-in-file). Same helper, so the two cannot drift.
   const offsets = new Map<string, number>();
@@ -174,7 +186,7 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
     offsets.set(f.name, offset);
     offset += maxLineNumber(f.result);
   }
-  return { files, merged: mergeLogParserResults(files), offsets, details, textEntries };
+  return { files, merged: mergeLogParserResults(files), offsets, details, textEntries, logcatSkewUs };
 }
 
 function loadInput(path: string): Ingest {
@@ -405,7 +417,20 @@ function filesLegend(ing: Ingest, tags: Map<string, string> | null, citedFiles: 
   for (const name of citedFiles) if (name !== undefined) cited.add(name);
   const shown = ing.files.filter((f) => cited.has(f.name));
   if (shown.length === 0) return null;
-  return `# files: ${shown.map((f) => `${tags.get(f.name)}=${basename(f.name)}`).join(' · ')}`;
+  // A logcat whose device-local clock was aligned to UTC says so, so the times
+  // printed here never silently disagree with the raw file.
+  const note = (name: string): string =>
+    ing.logcatSkewUs !== 0 && isLogcatFile(name) ? ` (device-local times shifted ${formatSkew(ing.logcatSkewUs)} to UTC)` : '';
+  return `# files: ${shown.map((f) => `${tags.get(f.name)}=${basename(f.name)}${note(f.name)}`).join(' · ')}`;
+}
+
+/** Render a clock skew as a signed hours/minutes label, e.g. `-2h`, `+5h45m` or `+30m`. */
+function formatSkew(skewUs: number): string {
+  const sign = skewUs < 0 ? '-' : '+';
+  const totalMinutes = Math.round(Math.abs(skewUs) / 60e6);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${sign}${h > 0 ? `${h}h` : ''}${m > 0 ? `${m}m` : ''}`;
 }
 
 /**

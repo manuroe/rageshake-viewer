@@ -60,6 +60,27 @@ function buildArchive(logText: string): Uint8Array {
   ]));
 }
 
+// Logcat lines carry no year, so the parser infers one from today's date:
+// January is never ahead of the current month, so it always resolves to the
+// current year. Pinning the tracing fixture to that same year keeps the two
+// clocks a fixed distance apart whenever this suite runs.
+const LOGCAT_MD = '01-15';
+const LOGCAT_YEAR = String(new Date().getFullYear());
+
+/** Archive pairing a UTC tracing log ending at 10:00:02 with a logcat dump. */
+function buildLogcatArchive(logcatText: string): Uint8Array {
+  const tracing = [
+    '# [shakeview-anonymized]',
+    `${LOGCAT_YEAR}-${LOGCAT_MD}T10:00:00.000000Z  INFO [matrix-rust-sdk] Sentry configured (enabled: true)`,
+    `${LOGCAT_YEAR}-${LOGCAT_MD}T10:00:02.000000Z  WARN [matrix-rust-sdk] retry scheduled`,
+  ].join('\n');
+  return gzipSync(buildTar([
+    { name: 'details.json', data: strToU8(DETAILS) },
+    { name: `console.${LOGCAT_YEAR}-${LOGCAT_MD}-10.log.gz`, data: gzipSync(strToU8(tracing)) },
+    { name: 'logcat.log.gz', data: gzipSync(strToU8(logcatText)) },
+  ]));
+}
+
 describe('rageshake CLI', () => {
   it('precheck fails on raw identifiers and passes on anonymized archive', () => {
     const raw = cmdPrecheck(ingest(buildArchive(RAW_LOG), 'raw.tar.gz'));
@@ -548,6 +569,38 @@ describe('rageshake CLI', () => {
   it('run returns usage on missing args', () => {
     expect(run([]).code).toBe(2);
     expect(run([]).output).toContain('Commands:');
+  });
+
+  it('aligns a device-local logcat clock onto the UTC tracing logs', () => {
+    // Tracing log ends 10:00:02 UTC; logcat (threadtime, no year, device on
+    // UTC+2) ends at 12:00:40 local — both captured at submission time.
+    const ing = ingest(buildLogcatArchive([
+      `${LOGCAT_MD} 12:00:10.000  100  100 D Tag: first`,
+      `${LOGCAT_MD} 12:00:40.000  100  100 D Tag: last`,
+    ].join('\n')), 'anon.tar.gz');
+
+    // 2h 38s of raw difference rounds to the quarter hour: exactly -2h.
+    expect(ing.logcatSkewUs).toBe(-2 * 3600e6);
+    const logcatLines = ing.files.find((f) => f.name === 'logcat.log.gz')!.result.rawLogLines;
+    expect(logcatLines[logcatLines.length - 1].isoTimestamp).toBe(`${LOGCAT_YEAR}-${LOGCAT_MD}T10:00:40.000000Z`);
+    // The shift is announced in the files legend, never silent.
+    const output = cmdGrep(ing, ['Tag'], {});
+    expect(output).toContain('device-local times shifted -2h to UTC');
+  });
+
+  it('leaves a same-clock logcat untouched', () => {
+    // Logcat ends 38 seconds after the tracing log — capture jitter, not a
+    // timezone.
+    const ing = ingest(buildLogcatArchive([
+      `${LOGCAT_MD} 10:00:10.000  100  100 D Tag: first`,
+      `${LOGCAT_MD} 10:00:40.000  100  100 D Tag: last`,
+    ].join('\n')), 'anon.tar.gz');
+
+    expect(ing.logcatSkewUs).toBe(0);
+    const logcatLines = ing.files.find((f) => f.name === 'logcat.log.gz')!.result.rawLogLines;
+    expect(logcatLines[logcatLines.length - 1].isoTimestamp).toBe(`${LOGCAT_YEAR}-${LOGCAT_MD}T10:00:40.000000Z`);
+    // No shift means no legend note.
+    expect(cmdGrep(ing, ['Tag'], {})).not.toContain('shifted');
   });
 });
 

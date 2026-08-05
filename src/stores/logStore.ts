@@ -37,6 +37,7 @@ import { buildAnonymizationDictionary, buildCompiledAnonymizer, buildCompiledUna
 import { useAnonSaltStore } from './anonSaltStore';
 import { mergeLogParserResults, type NamedLogParserResult } from '../utils/mergeLogParserResults';
 import { stripEntryPrefix } from '../utils/listingEntries';
+import { alignLogcatFiles } from '../utils/logcatClockAlign';
 
 /**
  * Mutable token shared between `anonymizeLogs` and `cancelAnonymization` so
@@ -737,7 +738,9 @@ export const useLogStore = create<LogStore>((set, get) => ({
 
   loadMergedLogParserResults: (files) => {
     const names = files.map((f) => f.name);
-    get().loadLogParserResult(mergeLogParserResults(files), {
+    // Same logcat clock correction the CLI applies in `ingest`, so a timestamp
+    // printed by `rageshake grep` matches the line a deep link opens here.
+    get().loadLogParserResult(mergeLogParserResults(alignLogcatFiles(files).files), {
       loadedEntryNames: names,
       logFileName: names.length === 1 ? stripEntryPrefix(names[0]) : `${names.length} files`,
     });
