@@ -101,6 +101,13 @@ export function isLogcatFile(name: string): boolean {
  * timestamp printed by `rageshake grep` and the same line opened through a deep
  * link have to agree.
  *
+ * One skew is derived for the whole set, from the latest logcat timestamp
+ * against the latest tracing timestamp, and then applied to every logcat entry
+ * or to none. Estimating per file would let two dumps off the same device clock
+ * be shifted by different amounts, and the single returned `skewUs` could then
+ * describe only the last of them — so the returned value is true of every file
+ * that moved, by construction.
+ *
  * @param files - the parsed archive entries, logcat and tracing mixed
  * @returns the files with logcat results shifted, and the applied skew (`0`
  *   when nothing was corrected) so callers can disclose it
@@ -109,14 +116,15 @@ export function alignLogcatFiles(
   files: readonly NamedLogParserResult[],
 ): { files: readonly NamedLogParserResult[]; skewUs: number } {
   const lastUs = (r: LogParserResult): number => getMinMaxTimestamps(r.rawLogLines).max;
-  const tracingMaxUs = files.reduce((max, f) => (isLogcatFile(f.name) ? max : Math.max(max, lastUs(f.result))), 0);
-  let skewUs = 0;
-  const aligned = files.map((f) => {
-    if (!isLogcatFile(f.name)) return f;
-    const skew = estimateLogcatSkewUs(lastUs(f.result), tracingMaxUs);
-    if (skew === 0) return f;
-    skewUs = skew;
-    return { name: f.name, result: alignLogcatResult(f.result, skew) };
-  });
-  return { files: aligned, skewUs };
+  const maxOf = (wantLogcat: boolean): number => files.reduce(
+    (max, f) => (isLogcatFile(f.name) === wantLogcat ? Math.max(max, lastUs(f.result)) : max), 0);
+
+  const skewUs = estimateLogcatSkewUs(maxOf(true), maxOf(false));
+  if (skewUs === 0) return { files, skewUs };
+  return {
+    files: files.map((f) => (isLogcatFile(f.name)
+      ? { name: f.name, result: alignLogcatResult(f.result, skewUs) }
+      : f)),
+    skewUs,
+  };
 }
