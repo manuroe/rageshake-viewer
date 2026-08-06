@@ -2,25 +2,28 @@ import { decompressSync, gzipSync, strToU8 } from 'fflate';
 import type { AnonymizationDictionary } from '../types/log.types';
 import { buildAnonymizationDictionaryFromTexts, buildCompiledAnonymizer } from './anonymizeUtils';
 import { decodeTextBytes, isValidGzipHeader, isValidTextContent } from './fileValidator';
-import { buildTar, type TarFile } from './tarWriter';
+import { buildTar, canEncodeUstarName, type TarFile } from './tarWriter';
 
 /**
  * Anonymise every text file in an archive and repack as a gzipped tar.
  *
  * A single dictionary is built across all text files (with the given salt) so
  * aliases are consistent across the whole archive and match the per-log save.
- * File names are preserved exactly. Text files are decoded, anonymised, and
- * re-gzipped when their name ends in `.gz`; binary files pass through unchanged.
+ * Text file names are preserved exactly; they are decoded, anonymised, and
+ * re-gzipped when their name ends in `.gz`. A file that cannot be decoded as
+ * text cannot be anonymised either, so it is dropped and replaced by a
+ * `<name>.removed` marker rather than shipped raw.
  */
 
 /**
  * Extensions treated as anonymisable text. `.gz` covers inner gzipped logs
- * (e.g. `console.log.gz`). Everything else — notably images — passes through
- * byte-for-byte so binary content is never corrupted.
+ * (e.g. `console.log.gz`). Everything else — notably images — is dropped and
+ * replaced by a `.removed` marker, so binary content is neither corrupted nor
+ * leaked unanonymised.
  *
- * ponytail: extension whitelist is the ceiling. An unknown binary type without a
- * listed text extension is passed through (safe), not garbled; add its extension
- * here if it should be anonymised.
+ * ponytail: extension whitelist is the ceiling. An unknown type without a listed
+ * text extension is dropped with a marker; add its extension here to anonymise it
+ * instead.
  */
 const TEXT_EXTENSIONS = ['.log', '.txt', '.json', '.csv', '.xml', '.yaml', '.yml', '.ndjson', '.gz'];
 
@@ -32,13 +35,26 @@ function isTextEntry(name: string): boolean {
 }
 
 /**
- * Decode a text entry to a string (gunzipping `.gz`), or null when it should be
- * passed through unchanged: a binary member, a `.gz` that is not actually gzip
- * (corrupt/mislabelled), or any member that fails to decompress. Returning null
- * keeps the original bytes intact instead of throwing and aborting the export.
+ * Body of a `<name>.removed` marker. An entry the anonymiser cannot decode as text
+ * cannot be anonymised either, so it is dropped rather than passed through raw —
+ * the marker keeps the fact that it existed, which is what a reader needs in order
+ * to ask for it out of band.
+ */
+const REMOVED_NOTE = 'Removed by shakeview anonymization: this file could not be anonymized.\n'
+  + 'If its contents matter, ask the reporter to describe it or share it separately.\n';
+
+/**
+ * Decode a text entry to a string (gunzipping `.gz`), or null when it cannot be
+ * anonymised and must be dropped: a binary member, a `.gz` that is not actually
+ * gzip (corrupt/mislabelled), or any member that fails to decompress. Returning
+ * null replaces the entry with a marker instead of throwing and aborting the export.
  */
 function decodeEntryText(entry: { name: string; data: Uint8Array }): string | null {
   if (!isTextEntry(entry.name)) return null;
+  // An empty member is empty text, not undecodable: an empty `.gz` would otherwise
+  // fail the gzip-header check below and be replaced by a marker telling the reader
+  // to chase content that never existed.
+  if (entry.data.length === 0) return '';
   try {
     const isGz = entry.name.toLowerCase().endsWith('.gz');
     if (isGz && !isValidGzipHeader(entry.data)) return null;
@@ -51,6 +67,20 @@ function decodeEntryText(entry: { name: string; data: Uint8Array }): string | nu
   } catch {
     return null;
   }
+}
+
+/**
+ * Name of the marker that replaces a dropped entry. An entry already named
+ * `<name>.removed` is a marker from an earlier pass and keeps its name, so
+ * re-anonymising an anonymised archive doesn't stack suffixes. When the suffix
+ * would push the name past what ustar can encode (a 93+ char member with no '/'
+ * to split on), the tail of the name is dropped to make room — the marker has to
+ * fit, or that one entry aborts the whole export.
+ */
+function markerName(name: string): string {
+  if (name.endsWith('.removed')) return name;
+  const withSuffix = `${name}.removed`;
+  return canEncodeUstarName(withSuffix) ? withSuffix : `${name.slice(0, -'.removed'.length)}.removed`;
 }
 
 /**
@@ -103,8 +133,9 @@ export function deriveAnonymizedArchiveName(name: string | null): string {
 
 /**
  * Build an anonymised `.tar.gz` (returned as bytes) from raw archive entries.
- * Entry order and names are preserved. The work is chunked and yields to the
- * event loop periodically so `onProgress` updates can paint.
+ * Entry order is preserved, as are the names of anonymisable text entries; an
+ * entry that cannot be anonymised becomes a `<name>.removed` marker. The work is
+ * chunked and yields to the event loop periodically so `onProgress` updates paint.
  */
 export async function buildAnonymisedArchiveGz(
   entries: readonly { name: string; data: Uint8Array }[],
@@ -135,7 +166,7 @@ export async function buildAnonymisedArchiveGz(
   for (let i = 0; i < decoded.length; i++) {
     const { entry, text } = decoded[i];
     if (text === null) {
-      outFiles.push({ name: entry.name, data: entry.data });
+      outFiles.push({ name: markerName(entry.name), data: strToU8(REMOVED_NOTE) });
     } else {
       const anonBytes = strToU8(apply(text));
       const data = entry.name.toLowerCase().endsWith('.gz') ? gzipSync(anonBytes) : anonBytes;

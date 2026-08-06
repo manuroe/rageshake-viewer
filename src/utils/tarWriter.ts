@@ -44,6 +44,16 @@ function splitName(path: string): { name: string; prefix: string } {
   throw new Error(`tarWriter: path too long to encode as ustar: ${path}`);
 }
 
+/** True when `path` fits the ustar name/prefix fields, i.e. `buildTar` accepts it. */
+export function canEncodeUstarName(path: string): boolean {
+  try {
+    splitName(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function buildHeader(file: TarFile): Uint8Array {
   const h = new Uint8Array(BLOCK_SIZE);
   const { name, prefix } = splitName(file.name);
