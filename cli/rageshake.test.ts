@@ -97,6 +97,20 @@ describe('rageshake CLI', () => {
     expect(cmdPrecheck(ingest(bytes, 'plain.log')).ok).toBe(false);
   });
 
+  it('precheck warns when a dropped member was a log file', () => {
+    const archive = gzipSync(buildTar([
+      { name: '2026-01-15_100000-ABCD/details.json', data: strToU8(DETAILS) },
+      { name: '2026-01-15_100000-ABCD/console.2026-01-15-10.log.gz', data: gzipSync(strToU8(ANON_LOG)) },
+      { name: '2026-01-15_100000-ABCD/console.2026-01-15-09.log.gz.removed', data: strToU8('Removed by shakeview anonymization: …\n') },
+      { name: '2026-01-15_100000-ABCD/screenshot.png.removed', data: strToU8('Removed by shakeview anonymization: …\n') },
+    ]));
+    const report = cmdPrecheck(ingest(archive, 'anon.tar.gz'));
+    expect(report.ok).toBe(true);
+    expect(report.report).toContain('console.2026-01-15-09.log.gz');
+    // An image is not a partial view of the logs: it must not raise the warning.
+    expect(report.report).not.toContain('screenshot.png');
+  });
+
   it('summary reports details.json fields and per-file counts', () => {
     const summary = JSON.parse(cmdSummary(ingest(buildArchive(ANON_LOG), 'anon.tar.gz')));
     expect(summary.details.userText).toBe('App crashed on launch');
@@ -112,6 +126,20 @@ describe('rageshake CLI', () => {
     // anonymizer never rewrites) into LLM-bound output.
     expect(summary.details.deviceId).toBeUndefined();
     expect(summary.details.userId).toBeUndefined();
+    // Nothing was dropped by the anonymizer, so the key stays out of the output.
+    expect(summary.removedFiles).toBeUndefined();
+  });
+
+  it('summary names the members the anonymizer dropped', () => {
+    const archive = gzipSync(buildTar([
+      { name: '2026-01-15_100000-ABCD/details.json', data: strToU8(DETAILS) },
+      { name: '2026-01-15_100000-ABCD/console.2026-01-15-10.log.gz', data: gzipSync(strToU8(ANON_LOG)) },
+      { name: '2026-01-15_100000-ABCD/screenshot.png.removed', data: strToU8('Removed by shakeview anonymization: …\n') },
+    ]));
+    const summary = JSON.parse(cmdSummary(ingest(archive, 'anon.tar.gz')));
+    expect(summary.removedFiles).toEqual(['screenshot.png']);
+    // The marker is not a log: it must not appear in the per-file table.
+    expect(summary.files).toHaveLength(1);
   });
 
   it('rejects binary (null-byte) input as not a text log', () => {

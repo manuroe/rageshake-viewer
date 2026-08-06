@@ -16,20 +16,20 @@ describe('deriveAnonymizedArchiveName', () => {
 });
 
 describe('buildAnonymisedArchiveGz', () => {
-  it('anonymises text files with cross-file aliases, passes binaries through, keeps names', async () => {
+  it('anonymises text files with cross-file aliases, drops binaries, keeps text names', async () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 255]);
     const entries = [
       { name: 'console.log.gz', data: gzipSync(strToU8('user @alice:matrix.org joined')) },
       { name: 'details.json', data: strToU8('{"userId":"@alice:matrix.org"}') },
-      { name: 'logo.png', data: png },
+      { name: 'screenshot.png', data: png },
     ];
 
     const gz = await buildAnonymisedArchiveGz(entries, SALT);
     const tar = parseTar(decompressSync(gz));
     const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
 
-    // Names unchanged.
-    expect(Object.keys(byName).sort()).toEqual(['console.log.gz', 'details.json', 'logo.png']);
+    // Text names unchanged; the image is gone, replaced by a marker.
+    expect(Object.keys(byName).sort()).toEqual(['console.log.gz', 'details.json', 'screenshot.png.removed']);
 
     const logText = strFromU8(decompressSync(byName['console.log.gz'].data));
     const jsonText = strFromU8(byName['details.json'].data);
@@ -42,11 +42,11 @@ describe('buildAnonymisedArchiveGz', () => {
     expect(jsonText).toContain(alias);
     expect(jsonText).not.toContain('@alice:matrix.org');
 
-    // Binary passed through byte-for-byte.
-    expect(Array.from(byName['logo.png'].data)).toEqual(Array.from(png));
+    // The marker carries none of the original bytes, only the explanatory note.
+    expect(strFromU8(byName['screenshot.png.removed'].data)).toMatch(/could not be anonymized/);
   });
 
-  it('passes a mislabelled/corrupt .gz member through unchanged instead of throwing', async () => {
+  it('drops a mislabelled/corrupt .gz member instead of throwing', async () => {
     const notGz = new Uint8Array([1, 2, 3, 4, 5]); // no gzip header
     const entries = [
       { name: 'a.log', data: strToU8('@alice:matrix.org') },
@@ -56,11 +56,12 @@ describe('buildAnonymisedArchiveGz', () => {
     const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
     // Valid text member still anonymised.
     expect(strFromU8(byName['a.log'].data)).not.toContain('@alice:matrix.org');
-    // Undecompressable .gz preserved byte-for-byte.
-    expect(Array.from(byName['weird.gz'].data)).toEqual(Array.from(notGz));
+    // Undecompressable .gz dropped, marker left behind.
+    expect(byName['weird.gz']).toBeUndefined();
+    expect(strFromU8(byName['weird.gz.removed'].data)).toMatch(/could not be anonymized/);
   });
 
-  it('passes an extensionless binary member through unchanged (no text corruption)', async () => {
+  it('drops an extensionless binary member (no text corruption, no raw passthrough)', async () => {
     const binary = new Uint8Array([0, 1, 2, 0, 255, 100]); // null bytes → binary
     const entries = [
       { name: 'a.log', data: strToU8('@alice:matrix.org') },
@@ -69,10 +70,11 @@ describe('buildAnonymisedArchiveGz', () => {
     const tar = parseTar(decompressSync(await buildAnonymisedArchiveGz(entries, SALT)));
     const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
     expect(strFromU8(byName['a.log'].data)).not.toContain('@alice:matrix.org');
-    expect(Array.from(byName['coredump'].data)).toEqual(Array.from(binary));
+    expect(byName['coredump']).toBeUndefined();
+    expect(strFromU8(byName['coredump.removed'].data)).toMatch(/could not be anonymized/);
   });
 
-  it('passes a .gz member through unchanged when decompression throws', async () => {
+  it('drops a .gz member when decompression throws', async () => {
     // Valid gzip magic (1f 8b) but a truncated/corrupt body → decompressSync throws.
     const corruptGz = new Uint8Array([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0]);
     const entries = [
@@ -82,7 +84,40 @@ describe('buildAnonymisedArchiveGz', () => {
     const tar = parseTar(decompressSync(await buildAnonymisedArchiveGz(entries, SALT)));
     const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
     expect(strFromU8(byName['a.log'].data)).not.toContain('@alice:matrix.org');
-    expect(Array.from(byName['broken.log.gz'].data)).toEqual(Array.from(corruptGz));
+    expect(byName['broken.log.gz']).toBeUndefined();
+    expect(strFromU8(byName['broken.log.gz.removed'].data)).toMatch(/could not be anonymized/);
+  });
+
+  it('keeps an existing .removed marker as-is when re-anonymising', async () => {
+    const entries = [
+      { name: 'a.log', data: strToU8('@alice:matrix.org') },
+      { name: 'screenshot.png.removed', data: strToU8('Removed by shakeview anonymization: …\n') },
+    ];
+    const tar = parseTar(decompressSync(await buildAnonymisedArchiveGz(entries, SALT)));
+    expect(tar.map((e) => e.name).sort()).toEqual(['a.log', 'screenshot.png.removed']);
+  });
+
+  it('shortens the marker name rather than overflowing the ustar name field', async () => {
+    const longName = `${'x'.repeat(89)}.png`; // 93 chars, no '/' to split on
+    const entries = [
+      { name: 'a.log', data: strToU8('@alice:matrix.org') },
+      { name: longName, data: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 255]) },
+    ];
+    const tar = parseTar(decompressSync(await buildAnonymisedArchiveGz(entries, SALT)));
+    const marker = tar.find((e) => e.name.endsWith('.removed'));
+    expect(marker?.name).toBe(`${longName.slice(0, -'.removed'.length)}.removed`);
+    expect(marker!.name.length).toBeLessThanOrEqual(100);
+  });
+
+  it('keeps an empty .gz member as an empty file instead of marking it removed', async () => {
+    const entries = [
+      { name: 'a.log', data: strToU8('@alice:matrix.org') },
+      { name: 'empty.log.gz', data: new Uint8Array(0) },
+    ];
+    const tar = parseTar(decompressSync(await buildAnonymisedArchiveGz(entries, SALT)));
+    const byName = Object.fromEntries(tar.map((e) => [e.name, e]));
+    expect(byName['empty.log.gz.removed']).toBeUndefined();
+    expect(strFromU8(decompressSync(byName['empty.log.gz'].data))).toBe('');
   });
 
   it('yields to the event loop when the frame budget is exceeded', async () => {

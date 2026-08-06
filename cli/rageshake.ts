@@ -107,6 +107,13 @@ export interface Ingest {
   /** Every decodable text entry (for precheck). */
   readonly textEntries: readonly TextEntry[];
   /**
+   * Names of members the anonymizer dropped because it could not anonymize them
+   * (a screenshot, typically), with the `.removed` suffix stripped. Listed by
+   * `summary` so the content is known to be missing and can be asked for; a
+   * dropped *log* also raises a partial-view warning in `precheck`.
+   */
+  readonly removedEntries: readonly string[];
+  /**
    * Microseconds added to the logcat file's timestamps to align its
    * device-local clock with the UTC tracing logs (0 = no correction applied).
    * Surfaced in the `# files:` legend so the shift is never silent.
@@ -135,6 +142,7 @@ function decodeIfText(data: Uint8Array): string | null {
 export function ingest(rawBytes: Uint8Array, name: string): Ingest {
   const bytes = isValidGzipHeader(rawBytes) ? gunzipSync(rawBytes) : rawBytes;
   const textEntries: TextEntry[] = [];
+  const removedEntries: string[] = [];
   let details: Ingest['details'] = null;
 
   // Trust the archive extension first (parseTar handles non-ustar tars the magic
@@ -142,6 +150,12 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
   const nameIsTar = /\.tar$|\.tar\.gz$|\.tgz$/i.test(name);
   if (nameIsTar || isTarBytes(bytes)) {
     for (const entry of parseTar(bytes)) {
+      // A marker left by the anonymizer for a member it had to drop. Note it and
+      // move on: its body is a fixed explanatory note, never analysable content.
+      if (entry.name.endsWith('.removed')) {
+        removedEntries.push(basename(entry.name.slice(0, -'.removed'.length)));
+        continue;
+      }
       // A log file or details.json that can't be read is a broken archive, not
       // an unrelated binary member — fail loudly rather than analyse a partial
       // view. Other members (images, etc.) are skipped silently.
@@ -190,7 +204,7 @@ export function ingest(rawBytes: Uint8Array, name: string): Ingest {
     offsets.set(f.name, offset);
     offset += maxLineNumber(f.result);
   }
-  return { files, merged: mergeLogParserResults(files), offsets, details, textEntries, logcatSkewUs };
+  return { files, merged: mergeLogParserResults(files), offsets, details, textEntries, removedEntries, logcatSkewUs };
 }
 
 function loadInput(path: string): Ingest {
@@ -610,6 +624,12 @@ export function cmdPrecheck(ing: Ingest): { ok: boolean; report: string } {
     return { ok: false, report: lines.join('\n') };
   }
   lines.push(`PASS: anonymized (${markerCount} marker(s), ${aliasCount} alias signal(s), 0 raw identifiers).`);
+  // A log the anonymizer had to drop is gone before ingest sees it, so the
+  // fail-loud guard there can't fire. Say it here: the analysis is a partial view.
+  const droppedLogs = ing.removedEntries.filter(isAnalyzableEntry);
+  if (droppedLogs.length > 0) {
+    lines.push(`WARN: ${droppedLogs.length} log file(s) dropped by anonymization — analysis is a partial view: ${droppedLogs.join(', ')}`);
+  }
   return { ok: true, report: lines.join('\n') };
 }
 
@@ -620,7 +640,7 @@ export function cmdPrecheck(ing: Ingest): { ok: boolean; report: string } {
 const trim = (s: string, n = 160): string => (s.length > n ? `${s.slice(0, n)}…` : s);
 
 export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
-  const { merged, details, files } = ing;
+  const { merged, details, files, removedEntries } = ing;
   const lineIndex = new Map(merged.rawLogLines.map((l) => [l.lineNumber, l]));
   const stats = computeSummaryStats(
     merged.rawLogLines, merged.httpRequests, merged.requests, merged.connectionIds,
@@ -665,6 +685,9 @@ export function cmdSummary(ing: Ingest, flags: Flags = {}): string {
     },
     files: shownFiles,
     ...(sortedFiles.length > shownFiles.length ? { filesOmitted: sortedFiles.length - shownFiles.length } : {}),
+    // Dropped by the anonymizer, so the content is gone but its existence isn't:
+    // a screenshot here is worth asking the user to describe. Key omitted when empty.
+    ...(removedEntries.length ? { removedFiles: removedEntries } : {}),
     timeSpan: stats.timeSpan,
     totals: {
       lines: stats.totalLogLines,
