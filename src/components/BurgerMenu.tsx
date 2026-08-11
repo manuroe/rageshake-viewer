@@ -15,12 +15,14 @@ import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { LogSelectionDialog } from './LogSelectionDialog';
 import { AnonMappingDialog } from './AnonMappingDialog';
+import { AnonTextDialog } from './AnonTextDialog';
 import { SaveProgressModal } from './SaveProgressModal';
 import styles from './BurgerMenu.module.css';
 
 export function BurgerMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const burgerButtonRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -39,6 +41,7 @@ export function BurgerMenu() {
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const [showLogSelection, setShowLogSelection] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
+  const [showAnonText, setShowAnonText] = useState(false);
   const [anonOpen, setAnonOpen] = useState(false);
   const [saveProgress, setSaveProgress] = useState<{ phase: string; current: number; total: number; error?: string } | null>(null);
 
@@ -191,6 +194,7 @@ export function BurgerMenu() {
   return (
     <div className={styles.burgerMenu} ref={menuRef}>
       <button
+        ref={burgerButtonRef}
         className={styles.burgerButton}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Menu"
@@ -292,6 +296,12 @@ export function BurgerMenu() {
                 >
                   View mapping…
                 </button>
+                <button
+                  className={styles.burgerItem}
+                  onClick={() => { setShowAnonText(true); setIsOpen(false); setAnonOpen(false); }}
+                >
+                  Anonymise text…
+                </button>
                 <div className={styles.burgerDivider} />
                 <div className={styles.submenuSalt}>
                   <label className={styles.saltLabel} htmlFor="anon-salt-input">Salt</label>
@@ -353,6 +363,11 @@ export function BurgerMenu() {
           buildPreview={buildMappingPreview}
           onClose={() => setShowMapping(false)}
         />
+      )}
+      {showAnonText && (
+        // The menu item that opened the dialog is gone, so put focus back on the
+        // burger button rather than letting it fall to the body.
+        <AnonTextDialog onClose={() => { setShowAnonText(false); burgerButtonRef.current?.focus(); }} />
       )}
       {saveProgress && <SaveProgressModal {...saveProgress} onDismiss={() => setSaveProgress(null)} />}
     </div>

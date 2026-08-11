@@ -36,6 +36,14 @@ vi.mock('../AnonMappingDialog', () => ({
   },
 }));
 
+vi.mock('../AnonTextDialog', () => ({
+  AnonTextDialog: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="anon-text-dialog">
+      <button onClick={onClose}>close-anon-text-mock</button>
+    </div>
+  ),
+}));
+
 vi.mock('../../utils/extensionFileLoader', () => ({
   fetchExtensionFileBytes: vi.fn(),
 }));
@@ -444,6 +452,26 @@ describe('BurgerMenu', () => {
       fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
       fireEvent.click(screen.getByText(/view mapping/i));
       expect(screen.getByTestId('anon-mapping-dialog')).toBeInTheDocument();
+    });
+
+    it('opens the free-form text dialog and takes focus back when it closes', () => {
+      render(
+        <MemoryRouter initialEntries={['/logs']}>
+          <BurgerMenu />
+        </MemoryRouter>
+      );
+
+      const burgerButton = screen.getByRole('button', { name: /menu/i });
+      fireEvent.click(burgerButton);
+      fireEvent.click(screen.getByRole('button', { name: /^anonymisation$/i }));
+      fireEvent.click(screen.getByText(/anonymise text/i));
+      expect(screen.getByTestId('anon-text-dialog')).toBeInTheDocument();
+
+      // The menu item that opened the dialog is unmounted with the menu, so the
+      // burger button has to take focus back or it falls to the body.
+      fireEvent.click(screen.getByText('close-anon-text-mock'));
+      expect(screen.queryByTestId('anon-text-dialog')).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(burgerButton);
     });
 
     it('hides "Save anonymised log" when no logs are loaded', () => {
