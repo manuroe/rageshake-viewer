@@ -123,6 +123,29 @@ describe('AnonTextDialog', () => {
     expect(await screen.findByText('Copied')).toBeInTheDocument();
   });
 
+  it('stops showing "Working…" when the input is cleared mid-transform', async () => {
+    // A hash that never settles: the abandoned run cannot clear the flag itself.
+    vi.spyOn(crypto.subtle, 'digest').mockReturnValue(new Promise<ArrayBuffer>(() => {}));
+    render(<AnonTextDialog onClose={vi.fn()} />);
+    fireEvent.change(inputBox(), { target: { value: '@alice:example.org' } });
+    expect(await screen.findByText('Working…')).toBeInTheDocument();
+
+    fireEvent.change(inputBox(), { target: { value: '' } });
+    expect(await screen.findByText('Result')).toBeInTheDocument();
+  });
+
+  it('restores focus to the opener on close', () => {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    const { unmount } = render(<AnonTextDialog onClose={vi.fn()} />);
+    expect(document.activeElement).toBe(inputBox());
+
+    unmount();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
   it('switches back to anonymising after unanonymising', async () => {
     useLogStore.setState({
       rawLogLines: [createParsedLogLine({ lineNumber: 0, rawText: '@alice:example.org joined' })],

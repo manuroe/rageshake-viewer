@@ -80,6 +80,10 @@ export function AnonTextDialog({ onClose }: AnonTextDialogProps) {
   const debouncedInput = useDebouncedValue(input, 300);
 
   useEffect(() => {
+    // Any anonymise run still in flight is abandoned by this effect's cleanup, and
+    // its `finally` then skips clearing the flag — so clear it here. Only the async
+    // branch below sets it again, in the same batch, so there is no flicker.
+    setBusy(false);
     if (direction === 'unanonymise') {
       // Nothing to reverse: empty input, or no mapping available (yet).
       if (!debouncedInput || !logDict) {
@@ -132,7 +136,9 @@ export function AnonTextDialog({ onClose }: AnonTextDialogProps) {
     return shortcutCtx.registerDismiss(onClose);
   }, [shortcutCtx, onClose]);
 
-  // Focus the input on open; restore focus on close.
+  // Focus the input on open; restore focus on close. When the opener has unmounted in
+  // the meantime — the burger menu closes as it opens this dialog — this is a no-op and
+  // the opener is responsible for moving focus itself (see BurgerMenu's onClose).
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();

@@ -22,6 +22,7 @@ import styles from './BurgerMenu.module.css';
 export function BurgerMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const burgerButtonRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -193,6 +194,7 @@ export function BurgerMenu() {
   return (
     <div className={styles.burgerMenu} ref={menuRef}>
       <button
+        ref={burgerButtonRef}
         className={styles.burgerButton}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Menu"
@@ -362,7 +364,11 @@ export function BurgerMenu() {
           onClose={() => setShowMapping(false)}
         />
       )}
-      {showAnonText && <AnonTextDialog onClose={() => setShowAnonText(false)} />}
+      {showAnonText && (
+        // The menu item that opened the dialog is gone, so put focus back on the
+        // burger button rather than letting it fall to the body.
+        <AnonTextDialog onClose={() => { setShowAnonText(false); burgerButtonRef.current?.focus(); }} />
+      )}
       {saveProgress && <SaveProgressModal {...saveProgress} onDismiss={() => setSaveProgress(null)} />}
     </div>
   );
