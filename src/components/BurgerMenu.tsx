@@ -15,6 +15,7 @@ import { useKeyboardShortcutContextOptional } from './KeyboardShortcutContext';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { LogSelectionDialog } from './LogSelectionDialog';
 import { AnonMappingDialog } from './AnonMappingDialog';
+import { AnonTextDialog } from './AnonTextDialog';
 import { SaveProgressModal } from './SaveProgressModal';
 import styles from './BurgerMenu.module.css';
 
@@ -39,6 +40,7 @@ export function BurgerMenu() {
   const shortcutCtx = useKeyboardShortcutContextOptional();
   const [showLogSelection, setShowLogSelection] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
+  const [showAnonText, setShowAnonText] = useState(false);
   const [anonOpen, setAnonOpen] = useState(false);
   const [saveProgress, setSaveProgress] = useState<{ phase: string; current: number; total: number; error?: string } | null>(null);
 
@@ -292,6 +294,12 @@ export function BurgerMenu() {
                 >
                   View mapping…
                 </button>
+                <button
+                  className={styles.burgerItem}
+                  onClick={() => { setShowAnonText(true); setIsOpen(false); setAnonOpen(false); }}
+                >
+                  Anonymise text…
+                </button>
                 <div className={styles.burgerDivider} />
                 <div className={styles.submenuSalt}>
                   <label className={styles.saltLabel} htmlFor="anon-salt-input">Salt</label>
@@ -354,6 +362,7 @@ export function BurgerMenu() {
           onClose={() => setShowMapping(false)}
         />
       )}
+      {showAnonText && <AnonTextDialog onClose={() => setShowAnonText(false)} />}
       {saveProgress && <SaveProgressModal {...saveProgress} onDismiss={() => setSaveProgress(null)} />}
     </div>
   );

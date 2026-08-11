@@ -198,6 +198,44 @@
     font-size: var(--font-size-sm);
 }
 
+/* -------------------------------------------------------------------------
+   Free-form text anonymiser (AnonTextDialog)
+   ------------------------------------------------------------------------- */
+
+.textArea {
+    width: 100%;
+    min-height: 110px;
+    resize: vertical;
+    padding: 8px 10px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    box-sizing: border-box;
+    transition: border-color var(--transition-default);
+}
+
+.textArea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-muted);
+}
+
+.textAreaLabel {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin: 12px 0 4px;
+}
+
+/* Selected side of the anonymise/unanonymise toggle */
+.toggleActive {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
 /* Divider between options and export actions */
 .divider {
     border: none;
