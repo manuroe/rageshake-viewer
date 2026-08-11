@@ -14,6 +14,7 @@ import { isInputFocused, metaKey } from '../utils/shortcuts';
 import { generateGitHubSourceUrl, resolveSwiftFilenameToBlobUrl } from '../utils/githubLinkGenerator';
 import { detectCollapseGroups, type CollapseGroupInfo } from '../utils/logCollapsingUtils';
 import { getHttpStatusColor } from '../utils/httpStatusColors';
+import { HTTP_CLIENT_ERROR_RE } from '../utils/logParser';
 import { buildProcessColorMap } from '../utils/processColors';
 import { deriveAppStateSegments } from '../utils/lifecycleEvents';
 import { makeRowStripeColorer } from '../utils/laneStripe';
@@ -30,9 +31,8 @@ import { RowTimeAction } from '../components/RowTimeAction';
 import styles from './LogDisplayView.module.css';
 
 const HTTP_ERROR_RE = /\bstatus=(\d{3})\b/;
-const HTTP_CLIENT_ERROR_LOG_RE = /Error while sending request.*send\{request_id=/;
 function getHttpErrorStatus(rawText: string): string | null {
-  if (HTTP_CLIENT_ERROR_LOG_RE.test(rawText)) return 'client-error';
+  if (HTTP_CLIENT_ERROR_RE.test(rawText)) return 'client-error';
   const m = rawText.match(HTTP_ERROR_RE);
   if (!m) return null;
   const code = parseInt(m[1], 10);

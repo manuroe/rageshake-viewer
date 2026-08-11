@@ -26,16 +26,23 @@ type MutableParsedLogLine = { -readonly [K in keyof ParsedLogLine]: K extends 'c
 
 // Regex patterns for parsing HTTP requests - generic (all URIs)
 // request_size= is optional: some SDK log lines (e.g. API error responses) omit it from the span.
-const HTTP_RESP_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"(?:\s+request_size="(?<req_size>[^"]+)")?\s+status=(?<status>\S+)\s+response_size="(?<resp_size>[^"]+)"\s+request_duration=(?<duration_val>[0-9.]+)(?<duration_unit>ms|s)/;
-const HTTP_SEND_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"(?:\s+request_size="(?<req_size>[^"]+)")?(?![^}]*(?:status=|response_size=|request_duration=))/;
+// request_id= is not necessarily the first field of the send{} span: since matrix-rust-sdk
+// b8b4e9bb9 the span opens with `config=RequestConfig { … }`, whose own braces rule out a
+// `[^}]*` prefix — hence the lazy `.*?`, which stays inside the send{} field list because
+// request_id= appears there and nowhere later on the line.
+const SEND_SPAN = String.raw`send\{.*?request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"`;
+const HTTP_RESP_RE = new RegExp(SEND_SPAN + String.raw`(?:\s+request_size="(?<req_size>[^"]+)")?\s+status=(?<status>\S+)\s+response_size="(?<resp_size>[^"]+)"\s+request_duration=(?<duration_val>[0-9.]+)(?<duration_unit>ms|s)`);
+const HTTP_SEND_RE = new RegExp(SEND_SPAN + String.raw`(?:\s+request_size="(?<req_size>[^"]+)")?(?![^}]*(?:status=|response_size=|request_duration=))`);
 // Like HTTP_SEND_RE but without the negative lookahead — used for retry send lines
 // (num_attempt > 1) whose span context already contains status/response fields from
 // the previous attempt, which would otherwise prevent HTTP_SEND_RE from matching.
-const HTTP_RETRY_SEND_RE = /send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"(?:\s+request_size="(?<req_size>[^"]+)")?/;
+const HTTP_RETRY_SEND_RE = new RegExp(SEND_SPAN + String.raw`(?:\s+request_size="(?<req_size>[^"]+)")?`);
 
 // Regex for client-side transport errors (no HTTP response received, e.g. timeout, connection failure).
-// These log lines have the send{} span without request_size=.
-const HTTP_CLIENT_ERROR_RE = /Error while sending request.*send\{request_id="(?<id>[^"]+)"\s+method=(?<method>\S+)\s+uri="(?<uri>[^"]+)"\}/;
+// The span ends right after uri= (GET) or after request_size= (POST/PUT/PATCH, whose body size the
+// SDK records before sending); the closing `}` is what separates these from API-error lines, whose
+// span also carries status=/response_size=/request_duration= and belongs to the response path.
+export const HTTP_CLIENT_ERROR_RE = new RegExp(String.raw`Error while sending request.*` + SEND_SPAN + String.raw`(?:\s+request_size="[^"]+")?\}`);
 // Extracts the specific error source from reqwest-style errors (e.g. "source: TimedOut")
 const CLIENT_ERROR_SOURCE_RE = /\bsource:\s*([A-Za-z]\w*)/;
 

@@ -86,15 +86,27 @@ function parseSegment(element: string): SpanSegment {
  * Filter value for a click-to-filter span chip. A fielded segment's full text
  * varies line to line (fields are recorded progressively), so filtering by the
  * whole segment would match only the exact rendering that was clicked. Return
- * the stable prefix `name{firstField` — present in every rendering of that span
- * instance (e.g. `send{request_id="req-073"`) — so the filter catches all its
- * lines. Field-less segments scope by name.
+ * the stable prefix `name{…request_id` (or `name{firstField` when the segment has
+ * no request_id) — present in every rendering of that span instance (e.g.
+ * `send{request_id="req-073"`) — so the filter catches all its lines. Field-less
+ * segments scope by name.
  */
 export function spanFilterValue(segment: string): string {
   const brace = segment.indexOf('{');
   if (brace === -1 || !segment.endsWith('}')) return segment;
   const name = segment.slice(0, brace);
-  const [first] = splitFieldTokens(segment.slice(brace + 1, -1));
+  const body = segment.slice(brace + 1, -1);
+  // The first field is not always instance-specific: since matrix-rust-sdk b8b4e9bb9
+  // send{} opens with `config=RequestConfig { … }`, identical for every request, so
+  // `send{config=RequestConfig` would filter in every HTTP line. When a request_id
+  // field is present, stretch the prefix through it — still a literal prefix of the
+  // segment, and unique to this span instance.
+  const idAt = body.indexOf('request_id="');
+  if (idAt !== -1) {
+    const end = body.indexOf(' ', idAt); // request_id values are quoted and space-free
+    return `${name}{${end === -1 ? body : body.slice(0, end)}`;
+  }
+  const [first] = splitFieldTokens(body);
   return first ? `${name}{${first}` : name;
 }
 
