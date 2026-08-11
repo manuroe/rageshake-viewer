@@ -102,6 +102,17 @@ describe('spanFilterValue', () => {
     );
   });
 
+  it('stretches the prefix through request_id when it is not the first field', () => {
+    // Since matrix-rust-sdk b8b4e9bb9 send{} opens with config=RequestConfig { … },
+    // which is identical for every request — stopping at it would filter in every
+    // HTTP line instead of this one request's.
+    const segment = 'send{config=RequestConfig { timeout: Some(30s), retry_limit: 3 } request_id="req-073" method=GET status=200}';
+    expect(spanFilterValue(segment)).toBe(
+      'send{config=RequestConfig { timeout: Some(30s), retry_limit: 3 } request_id="req-073"',
+    );
+    expect(segment.startsWith(spanFilterValue(segment))).toBe(true);
+  });
+
   it('falls back to the name for an empty field body', () => {
     expect(spanFilterValue('op{}')).toBe('op');
   });

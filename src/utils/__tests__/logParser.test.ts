@@ -40,6 +40,12 @@ const RETRY_SEND_2_WITH_503_SPAN = `2026-03-11T08:15:40.000000Z DEBUG matrix_sdk
 // data in the same span field list (SDK accumulates fields from each nested span).
 const RETRY_RESPONSE_200_WITH_503_SPAN = `2026-03-11T08:15:42.000000Z DEBUG matrix_sdk::http_client: Got response | crates/matrix-sdk/src/http_client/mod.rs:214 | spans: root > send{request_id="REQ-1096" method=GET uri="${RETRY_URI}" request_size="0" status=503 response_size="71B" request_duration=30000ms status=200 response_size="2k" request_duration=2000ms}`;
 
+// Since matrix-rust-sdk b8b4e9bb9 ("Outline span creation in HttpClient::send") the send{} span
+// opens with config=RequestConfig { … } — braces and all — before request_id.
+const CONFIG_SPAN = 'send{config=RequestConfig { timeout: Some(30s), read_timeout: 60s, retry_limit: 3 } request_id=';
+const SEND_LINE_WITH_CONFIG = '2026-08-10T12:06:54.898000Z DEBUG matrix_sdk::http_client::native: Sending request num_attempt=1 | crates/matrix-sdk/src/http_client/native.rs:83 | spans: send_outgoing_requests > keys_upload{request_id="ced2a588c2784712943fe4231e622bf6"} > ' + CONFIG_SPAN + '"REQ-385" method=POST uri="https://matrix-client.matrix.org/_matrix/client/v3/keys/upload" request_size="587B"}';
+const RESPONSE_LINE_WITH_CONFIG = '2026-08-10T12:06:55.057000Z DEBUG matrix_sdk::http_client: Got response | crates/matrix-sdk/src/http_client/mod.rs:197 | spans: send_outgoing_requests > keys_upload{request_id="ced2a588c2784712943fe4231e622bf6"} > ' + CONFIG_SPAN + '"REQ-385" method=POST uri="https://matrix-client.matrix.org/_matrix/client/v3/keys/upload" request_size="587B" status=400 response_size="598B" request_duration=158.972542ms}';
+
 // Send line for REQ-99 (appears before the error)
 const SEND_LINE_REQ99 = '2026-01-26T17:02:45.000000Z  INFO matrix_sdk::http_client::native: Sending request | crates/matrix-sdk/src/http_client/native.rs:89 | spans: root > send{request_id="REQ-99" method=GET uri="https://matrix-client.matrix.org/_matrix/client/v3/rooms/!room:matrix.org/members" request_size="0"}';
 
@@ -98,6 +104,22 @@ describe('logParser', () => {
           status: '200',
           sendLineNumber: 0,
           responseLineNumber: 1,
+        });
+      });
+
+      it('parses a pair whose send{} span starts with config=RequestConfig { … }', () => {
+        const result = parseAllHttpRequests(`${SEND_LINE_WITH_CONFIG}\n${RESPONSE_LINE_WITH_CONFIG}`);
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-385',
+          method: 'POST',
+          uri: expect.stringContaining('/keys/upload'),
+          status: '400',
+          requestSizeString: '587B',
+          responseSizeString: '598B',
+          sendLineNumber: 1,
+          responseLineNumber: 2,
         });
       });
 
@@ -619,6 +641,33 @@ describe('logParser', () => {
           clientError: 'TimedOut',
           status: '',
           sendLineNumber: 0,
+          responseLineNumber: 1,
+        });
+      });
+
+      it('parses a POST client error whose span carries request_size', () => {
+        // The SDK records request_size for POST/PUT/PATCH before sending, so the span of a
+        // transport error on those methods ends with request_size=, not uri=.
+        const err = CLIENT_ERROR_CONNECT_LINE.replace('/keys/upload"}', '/keys/upload" request_size="512"}');
+        const result = parseAllHttpRequests([SEND_LINE_REQ100, err].join('\n'));
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-100',
+          clientError: 'ConnectError',
+          sendLineNumber: 1,
+          responseLineNumber: 2,
+        });
+      });
+
+      it('parses a client error whose send{} span starts with config=RequestConfig { … }', () => {
+        const result = parseAllHttpRequests(CLIENT_ERROR_TIMEOUT_LINE.replace('send{request_id=', CONFIG_SPAN));
+
+        expect(result.httpRequests).toHaveLength(1);
+        expect(result.httpRequests[0]).toMatchObject({
+          requestId: 'REQ-99',
+          method: 'GET',
+          clientError: 'TimedOut',
           responseLineNumber: 1,
         });
       });

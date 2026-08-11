@@ -30,7 +30,9 @@ import { RowTimeAction } from '../components/RowTimeAction';
 import styles from './LogDisplayView.module.css';
 
 const HTTP_ERROR_RE = /\bstatus=(\d{3})\b/;
-const HTTP_CLIENT_ERROR_LOG_RE = /Error while sending request.*send\{request_id=/;
+// request_id= is not always the first send{} field — since matrix-rust-sdk b8b4e9bb9
+// the span opens with config=RequestConfig { … }. Mirrors HTTP_CLIENT_ERROR_RE in logParser.
+const HTTP_CLIENT_ERROR_LOG_RE = /Error while sending request.*send\{.*?request_id=/;
 function getHttpErrorStatus(rawText: string): string | null {
   if (HTTP_CLIENT_ERROR_LOG_RE.test(rawText)) return 'client-error';
   const m = rawText.match(HTTP_ERROR_RE);
