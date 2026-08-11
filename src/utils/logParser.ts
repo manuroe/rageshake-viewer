@@ -42,7 +42,7 @@ const HTTP_RETRY_SEND_RE = new RegExp(SEND_SPAN + String.raw`(?:\s+request_size=
 // The span ends right after uri= (GET) or after request_size= (POST/PUT/PATCH, whose body size the
 // SDK records before sending); the closing `}` is what separates these from API-error lines, whose
 // span also carries status=/response_size=/request_duration= and belongs to the response path.
-const HTTP_CLIENT_ERROR_RE = new RegExp(String.raw`Error while sending request.*` + SEND_SPAN + String.raw`(?:\s+request_size="[^"]+")?\}`);
+export const HTTP_CLIENT_ERROR_RE = new RegExp(String.raw`Error while sending request.*` + SEND_SPAN + String.raw`(?:\s+request_size="[^"]+")?\}`);
 // Extracts the specific error source from reqwest-style errors (e.g. "source: TimedOut")
 const CLIENT_ERROR_SOURCE_RE = /\bsource:\s*([A-Za-z]\w*)/;
 
